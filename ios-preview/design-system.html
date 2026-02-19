@@ -85,37 +85,15 @@
     .mono { font-family: 'JetBrains Mono', monospace; }
 
     /* ============================================================ AURORA (light mode only) */
-    .aurora { position: fixed; inset: 0; pointer-events: none; z-index: 0; display: none; overflow: hidden; }
-    [data-mode="light"] .aurora { display: block; }
-    .aura-blob { position: absolute; border-radius: 50%; filter: blur(90px); }
-    .aura-1 {
-      width: 700px; height: 700px; top: -220px; left: -180px;
-      background: radial-gradient(circle, #34D399 0%, #059669 60%, transparent 100%);
-      opacity: 0.50; animation: aura-drift 14s ease-in-out infinite alternate;
-    }
-    .aura-2 {
-      width: 580px; height: 580px; top: 25%; right: -200px;
-      background: radial-gradient(circle, #0D9488 0%, #0891B2 60%, transparent 100%);
-      opacity: 0.38; animation: aura-drift 18s ease-in-out infinite alternate-reverse; animation-delay: -4s;
-    }
-    .aura-3 {
-      width: 480px; height: 480px; bottom: 5%; left: 20%;
-      background: radial-gradient(circle, #A7F3D0 0%, #6EE7B7 60%, transparent 100%);
-      opacity: 0.50; animation: aura-drift 15s ease-in-out infinite alternate; animation-delay: -8s;
-    }
-    .aura-4 {
-      width: 380px; height: 380px; top: 45%; left: 45%;
-      background: radial-gradient(circle, #EDE9FE 0%, #A5B4FC 60%, transparent 100%);
-      opacity: 0.16; animation: aura-drift 20s ease-in-out infinite alternate-reverse; animation-delay: -2s;
-    }
-    @keyframes aura-drift {
-      0%   { transform: translate(0,0) scale(1); }
-      50%  { transform: translate(45px,-35px) scale(1.08); }
-      100% { transform: translate(-35px,45px) scale(0.94); }
+    /* Soft static gradient matching the site's mist bg — no heavy blobs */
+    .aurora { display: none; }
+    [data-mode="light"] body {
+      background: linear-gradient(135deg, #e8faf2 0%, #ccfbf1 35%, #f0f9ff 70%, #ecfdf5 100%);
+      background-attachment: fixed;
     }
     /* ============================================================ LIGHT MODE OVERRIDES */
-    /* Section numbers: p400 (#10B981) is too low-contrast on mist; use primary (#059669) */
-    [data-mode="light"] .sec-num { color: var(--primary); }
+    /* Section labels: amber, matching "YOUR HEALTH, YOUR CHOICE" overline style on site */
+    [data-mode="light"] .sec-num { color: #92400E; letter-spacing: 3px; }
     /* Swatch starred outline: white is invisible on light bg */
     [data-mode="light"] .sw-block.starred { outline-color: rgba(5,150,105,0.35); }
     /* Tags */
@@ -163,15 +141,14 @@
       border-radius: 14px; display: flex; align-items: center; justify-content: center;
       font-size: 22px; box-shadow: 0 0 16px rgba(16,185,129,0.25);
     }
-    /* Wordmark — Cinzel + amber shimmer, matching amachhealth.com */
+    /* Wordmark — Cinzel: emerald in dark mode, deep forest in light mode */
     .wordmark {
       font-family: 'Cinzel', 'Times New Roman', serif;
       font-size: 22px; font-weight: 900; letter-spacing: 0.08em;
-      background: linear-gradient(105deg, var(--text) 0%, var(--text) 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: #10B981;        /* dark mode: emerald-400 */
       position: relative; display: inline-block; overflow: hidden;
     }
+    [data-mode="light"] .wordmark { color: #064E3B; }  /* light mode: deep forest green */
     .wordmark::after {
       content: 'AMACH';
       position: absolute; inset: 0;
@@ -360,14 +337,6 @@
   </style>
 </head>
 <body>
-
-<!-- Aurora mesh — visible in light mode only, matches amachhealth.com -->
-<div class="aurora" aria-hidden="true">
-  <div class="aura-blob aura-1"></div>
-  <div class="aura-blob aura-2"></div>
-  <div class="aura-blob aura-3"></div>
-  <div class="aura-blob aura-4"></div>
-</div>
 
 <button class="toggle" onclick="toggleMode()">
   <span id="ico">☀️</span><span id="lbl">Light mode</span>
