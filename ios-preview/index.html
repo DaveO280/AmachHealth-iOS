@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-mode="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Amach Health – iOS App</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Cinzel:wght@400;600;900&family=EB+Garamond:ital,wght@0,400;1,400&display=swap" rel="stylesheet" />
   <style>
-    /* === Design tokens matching globals.css dark mode === */
+    /* =============================================
+       DARK MODE TOKENS (default)
+    ============================================= */
     :root {
       --bg:              #0A0E1A;
       --surface:         #111827;
@@ -26,52 +28,249 @@
       --radius:          16px;
       --radius-sm:       10px;
       --radius-pill:     999px;
+
+      /* Aurora blobs (dark: subtle green glow) */
+      --blob-1: rgba(16, 185, 129, 0.07);
+      --blob-2: rgba(99, 102, 241, 0.05);
+      --blob-3: rgba(52, 211, 153, 0.06);
+      --blob-4: rgba(245, 158, 11, 0.03);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    /* =============================================
+       LIGHT MODE TOKENS
+    ============================================= */
+    [data-mode="light"] {
+      --bg:              #F0FDF4;
+      --surface:         #ffffff;
+      --surface-elev:    #ecfdf5;
+      --primary:         #059669;
+      --primary-bright:  #10B981;
+      --accent:          #D97706;
+      --gold:            #D97706;
+      --silver:          #64748B;
+      --bronze:          #92400E;
+      --text:            #064E3B;
+      --text-muted:      #6B7280;
+      --border:          rgba(5, 150, 105, 0.18);
+      --destructive:     #DC2626;
+      --sleep-color:     #7C3AED;
 
+      /* Aurora blobs (light: vivid emerald/teal/mist) */
+      --blob-1: rgba(52, 211, 153, 0.45);
+      --blob-2: rgba(13, 148, 136, 0.35);
+      --blob-3: rgba(167, 243, 208, 0.55);
+      --blob-4: rgba(165, 180, 252, 0.18);
+    }
+
+    /* =============================================
+       GLOBAL TRANSITIONS
+    ============================================= */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      transition:
+        background-color 0.6s ease,
+        color 0.4s ease,
+        border-color 0.4s ease,
+        box-shadow 0.4s ease;
+    }
+
+    /* =============================================
+       AURORA BACKGROUND
+    ============================================= */
     body {
-      background: var(--bg);
       color: var(--text);
       font-family: 'Inter', system-ui, sans-serif;
       -webkit-font-smoothing: antialiased;
       min-height: 100vh;
+      position: relative;
+      background: var(--bg);
     }
 
-    /* === Layout === */
-    .page { max-width: 480px; margin: 0 auto; padding: 40px 20px 80px; }
+    /* Aurora canvas — behind everything */
+    .aurora {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
 
-    /* === Brand header === */
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      animation: drift 16s ease-in-out infinite alternate;
+      transition: background 0.8s ease, opacity 0.8s ease;
+    }
+
+    /* Dark mode: nearly invisible */
+    [data-mode="dark"] .blob { opacity: 1; }
+
+    /* Light mode: vivid, animated */
+    [data-mode="light"] .blob { opacity: 1; }
+
+    .blob-1 {
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, var(--blob-1) 0%, transparent 70%);
+      top: -200px; left: -200px;
+      animation-duration: 18s;
+    }
+    .blob-2 {
+      width: 550px; height: 550px;
+      background: radial-gradient(circle, var(--blob-2) 0%, transparent 70%);
+      top: 20%; right: -180px;
+      animation-duration: 22s;
+      animation-delay: -6s;
+    }
+    .blob-3 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, var(--blob-3) 0%, transparent 70%);
+      bottom: -100px; left: 20%;
+      animation-duration: 20s;
+      animation-delay: -10s;
+    }
+    .blob-4 {
+      width: 350px; height: 350px;
+      background: radial-gradient(circle, var(--blob-4) 0%, transparent 70%);
+      top: 40%; left: 40%;
+      animation-duration: 26s;
+      animation-delay: -4s;
+    }
+
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      25%  { transform: translate(50px, -40px) scale(1.06); }
+      50%  { transform: translate(-30px, 55px) scale(0.96); }
+      75%  { transform: translate(40px, 30px) scale(1.04); }
+      100% { transform: translate(-20px, -25px) scale(1.02); }
+    }
+
+    /* Page content sits above aurora */
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    /* =============================================
+       MODE TOGGLE BUTTON
+    ============================================= */
+    .mode-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+      user-select: none;
+      transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.3s ease, transform 0.15s ease;
+    }
+    .mode-toggle:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.18); }
+    .mode-toggle:active { transform: translateY(0); }
+
+    .toggle-sun { display: none; }
+    .toggle-moon { display: inline; }
+    [data-mode="light"] .toggle-sun  { display: inline; }
+    [data-mode="light"] .toggle-moon { display: none; }
+
+    /* =============================================
+       BRAND HEADER
+    ============================================= */
     .brand {
       text-align: center;
       margin-bottom: 48px;
     }
+
     .brand-eyebrow {
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 3px;
       color: var(--primary-bright);
       text-transform: uppercase;
-      margin-bottom: 8px;
+      margin-bottom: 12px;
     }
+
+    /* Shimmer wordmark */
+    .brand-name-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 4px;
+    }
+
     .brand-name {
-      font-size: 32px;
+      font-family: 'Cinzel', serif;
+      font-size: 36px;
       font-weight: 900;
-      background: linear-gradient(135deg, var(--primary-bright), var(--primary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 10px;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      display: block;
+      position: relative;
     }
+
+    /* Gold shimmer sweep overlay */
+    .brand-name::after {
+      content: 'AMACH HEALTH';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 25%,
+        rgba(217, 119, 6, 0.9) 42%,
+        rgba(251, 191, 36, 1.0) 50%,
+        rgba(217, 119, 6, 0.8) 58%,
+        transparent 75%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-size: 300% 100%;
+      animation: shimmer 5s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: -100% 0; }
+      55%  { background-position: 220% 0; }
+      100% { background-position: 220% 0; }
+    }
+
+    .brand-health {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.35em;
+      color: var(--primary-bright);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      opacity: 0.8;
+    }
+
     .brand-tagline {
-      font-size: 14px;
+      font-family: 'EB Garamond', serif;
+      font-style: italic;
+      font-size: 16px;
       color: var(--text-muted);
       max-width: 320px;
       margin: 0 auto;
-      line-height: 1.5;
+      line-height: 1.6;
     }
 
-    /* === Section labels === */
+    /* =============================================
+       SECTION LABELS
+    ============================================= */
     .section-label {
       font-size: 10px;
       font-weight: 700;
@@ -81,7 +280,9 @@
       margin-bottom: 12px;
     }
 
-    /* === Cards === */
+    /* =============================================
+       CARDS
+    ============================================= */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -90,7 +291,13 @@
       margin-bottom: 12px;
     }
 
-    /* === Tab bar preview === */
+    [data-mode="light"] .card {
+      box-shadow: 0 2px 16px rgba(5, 150, 105, 0.07), 0 1px 4px rgba(5, 150, 105, 0.05);
+    }
+
+    /* =============================================
+       PHONE CHROME
+    ============================================= */
     .phone-chrome {
       background: var(--surface-elev);
       border: 1px solid var(--border);
@@ -99,6 +306,9 @@
       margin: 0 auto 48px;
       max-width: 320px;
       box-shadow: 0 0 40px rgba(16, 185, 129, 0.12);
+    }
+    [data-mode="light"] .phone-chrome {
+      box-shadow: 0 8px 40px rgba(5, 150, 105, 0.14), 0 2px 8px rgba(5, 150, 105, 0.08);
     }
     .phone-screen {
       background: var(--bg);
@@ -123,7 +333,9 @@
     .tab-item.active { color: var(--primary-bright); }
     .tab-icon { font-size: 18px; }
 
-    /* === Score ring === */
+    /* =============================================
+       SCORE RING
+    ============================================= */
     .score-ring-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
     .score-ring {
       width: 64px; height: 64px;
@@ -145,7 +357,9 @@
     }
     .score-tier { font-size: 8px; font-weight: 700; color: var(--accent); margin-top: 1px; }
 
-    /* === Metric grid === */
+    /* =============================================
+       METRIC GRID
+    ============================================= */
     .metric-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -174,7 +388,9 @@
     .metric-unit { font-size: 10px; color: var(--text-muted); font-weight: 500; }
     .metric-label { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
 
-    /* === Chat preview === */
+    /* =============================================
+       CHAT
+    ============================================= */
     .chat-bubble {
       max-width: 80%;
       padding: 10px 14px;
@@ -212,7 +428,9 @@
     .agent-name { font-size: 14px; font-weight: 600; }
     .agent-sub { font-size: 10px; color: var(--text-muted); }
 
-    /* === Tier badges === */
+    /* =============================================
+       TIER BADGES
+    ============================================= */
     .tier-badge {
       display: inline-block;
       font-size: 9px;
@@ -224,9 +442,11 @@
     }
     .tier-gold   { background: rgba(245,158,11,0.15); color: #F59E0B; border: 1px solid rgba(245,158,11,0.3); }
     .tier-silver { background: rgba(148,163,184,0.15); color: #94A3B8; border: 1px solid rgba(148,163,184,0.3); }
-    .tier-bronze { background: rgba(205,127,50,0.15); color: #CD7F32; border: 1px solid rgba(205,127,50,0.3); }
+    .tier-bronze { background: rgba(205,127,50,0.15);  color: #CD7F32; border: 1px solid rgba(205,127,50,0.3); }
 
-    /* === Feature list === */
+    /* =============================================
+       FEATURES
+    ============================================= */
     .features { list-style: none; }
     .features li {
       display: flex; align-items: flex-start; gap: 12px;
@@ -244,7 +464,9 @@
     .feat-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
     .feat-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
 
-    /* === Pill / CTA === */
+    /* =============================================
+       PILL / CTA
+    ============================================= */
     .pill {
       display: inline-flex; align-items: center; gap: 6px;
       background: rgba(16,185,129,0.12);
@@ -256,7 +478,9 @@
       color: var(--primary-bright);
     }
 
-    /* === Chart bar === */
+    /* =============================================
+       CHART
+    ============================================= */
     .mini-chart { display: flex; align-items: flex-end; gap: 3px; height: 48px; margin-top: 12px; }
     .bar {
       flex: 1; border-radius: 3px 3px 0 0;
@@ -264,7 +488,9 @@
       min-height: 4px;
     }
 
-    /* === Footer links === */
+    /* =============================================
+       FOOTER
+    ============================================= */
     .footer {
       text-align: center;
       padding-top: 40px;
@@ -275,20 +501,62 @@
     .footer a { color: var(--primary-bright); text-decoration: none; font-weight: 500; }
     .footer a:hover { text-decoration: underline; }
 
-    /* === Glow on headings === */
-    .glow { text-shadow: 0 0 20px rgba(52,211,153,0.4); }
+    /* =============================================
+       BRAND REF LINK
+    ============================================= */
+    .brand-ref-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--primary-bright);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 14px;
+      text-decoration: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .brand-ref-link:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.15);
+    }
   </style>
 </head>
 <body>
+
+  <!-- Aurora mesh background -->
+  <div class="aurora" aria-hidden="true">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <div class="blob blob-4"></div>
+  </div>
+
+  <!-- Light / Dark toggle -->
+  <button class="mode-toggle" onclick="toggleMode()" aria-label="Toggle light/dark mode">
+    <span class="toggle-sun">☀️</span>
+    <span class="toggle-moon">🌙</span>
+    <span id="mode-label">Light mode</span>
+  </button>
+
 <div class="page">
 
   <!-- Brand -->
   <div class="brand">
     <div class="brand-eyebrow">iOS App Preview</div>
-    <div class="brand-name glow">Amach Health</div>
+    <div class="brand-name-wrap">
+      <span class="brand-name">AMACH HEALTH</span>
+    </div>
+    <div class="brand-health">outward · into life</div>
     <div class="brand-tagline">
       Your health data — owned by you, verified on-chain, analyzed by AI.
     </div>
+    <a class="brand-ref-link" href="brand-reference.html">
+      ✦ Brand direction reference →
+    </a>
   </div>
 
   <!-- Phone chrome -->
@@ -297,7 +565,7 @@
 
       <!-- Dashboard preview -->
       <div style="margin-bottom:4px;">
-        <div class="brand-eyebrow" style="text-align:left;margin-bottom:4px;">AMACH HEALTH</div>
+        <div class="brand-eyebrow" style="text-align:left;margin-bottom:4px;font-family:'Cinzel',serif;letter-spacing:0.15em;">AMACH HEALTH</div>
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-size:17px;font-weight:700;margin-bottom:2px;">Good morning</div>
@@ -483,6 +751,33 @@
     <p>Amach Health · Own your health data</p>
   </div>
 
-</div>
+</div><!-- /page -->
+
+<script>
+  function toggleMode() {
+    const html = document.documentElement;
+    const label = document.getElementById('mode-label');
+    if (html.dataset.mode === 'dark') {
+      html.dataset.mode = 'light';
+      label.textContent = 'Dark mode';
+    } else {
+      html.dataset.mode = 'dark';
+      label.textContent = 'Light mode';
+    }
+    // Persist preference
+    try { localStorage.setItem('amach-mode', html.dataset.mode); } catch(e) {}
+  }
+
+  // Restore saved preference
+  try {
+    const saved = localStorage.getItem('amach-mode');
+    if (saved) {
+      document.documentElement.dataset.mode = saved;
+      document.getElementById('mode-label').textContent =
+        saved === 'dark' ? 'Light mode' : 'Dark mode';
+    }
+  } catch(e) {}
+</script>
+
 </body>
 </html>
