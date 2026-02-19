@@ -40,11 +40,7 @@ struct DashboardView: View {
     private var headerSection: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("AMACH HEALTH")
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.amachPrimaryBright)
-                    .tracking(2.5)
+                AmachBrandMark(layout: .compact)
 
                 Text(greeting)
                     .font(.title2)

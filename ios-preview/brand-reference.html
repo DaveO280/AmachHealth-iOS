@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amach Health — Brand Direction Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@300;400;500;600&family=Cinzel:wght@400;600;900&family=Uncial+Antiqua&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      /* Chosen palette: Emerald + Teal + Mist */
+      --em-deep:    #064E3B;
+      --em-mid:     #059669;
+      --em-bright:  #34D399;
+      --teal:       #0D9488;
+      --mist:       #F0FDF4;
+      --mist-blue:  #ECFDF5;
+      --seafoam:    #A7F3D0;
+      --silver:     #CBD5E1;
+      --gold:       #D97706;
+      --text-dark:  #1a2e1a;
+      --text-mid:   #374151;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--mist);
+      color: var(--text-dark);
+      font-family: 'Inter', system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* =============================================
+       HERO — Aurora Mesh Gradient (CHOSEN)
+    ============================================= */
+    .hero {
+      min-height: 100vh;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 40px 20px;
+    }
+
+    .aurora-bg {
+      position: absolute;
+      inset: 0;
+      background: #e8faf2;
+      z-index: 0;
+    }
+
+    /* Animated mesh blobs */
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.55;
+      animation: drift 12s ease-in-out infinite alternate;
+    }
+    .blob-1 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, #34D399 0%, #059669 60%, transparent 100%);
+      top: -200px; left: -150px;
+      animation-duration: 14s;
+    }
+    .blob-2 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, #0D9488 0%, #0891B2 60%, transparent 100%);
+      top: 30%; right: -200px;
+      animation-duration: 18s;
+      animation-delay: -4s;
+    }
+    .blob-3 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, #A7F3D0 0%, #6EE7B7 60%, transparent 100%);
+      bottom: -100px; left: 30%;
+      animation-duration: 16s;
+      animation-delay: -8s;
+    }
+    .blob-4 {
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, #F0ABFC 0%, #A78BFA 60%, transparent 100%);
+      top: 20%; left: 40%;
+      opacity: 0.2;
+      animation-duration: 20s;
+      animation-delay: -2s;
+    }
+
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      33%  { transform: translate(40px, -30px) scale(1.05); }
+      66%  { transform: translate(-20px, 40px) scale(0.97); }
+      100% { transform: translate(30px, 20px) scale(1.03); }
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+
+    /* =============================================
+       SHIMMER WORDMARK (CHOSEN ANIMATION)
+    ============================================= */
+    .wordmark-wrap {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+
+    .wordmark {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(48px, 10vw, 80px);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      color: var(--em-deep);
+      position: relative;
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    /* Golden shimmer sweep */
+    .wordmark::after {
+      content: 'AMACH';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(217, 119, 6, 0.85) 48%,
+        rgba(251, 191, 36, 0.95) 52%,
+        rgba(217, 119, 6, 0.7) 56%,
+        transparent 70%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-size: 300% 100%;
+      animation: shimmer 4s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: -100% 0; }
+      60%  { background-position: 200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    .wordmark-sub {
+      font-family: 'Inter', sans-serif;
+      font-size: clamp(12px, 2.5vw, 16px);
+      font-weight: 300;
+      letter-spacing: 0.35em;
+      color: var(--teal);
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    .hero-tagline {
+      font-family: 'EB Garamond', serif;
+      font-style: italic;
+      font-size: clamp(18px, 4vw, 26px);
+      color: var(--em-deep);
+      opacity: 0.75;
+      margin-top: 24px;
+      max-width: 400px;
+    }
+
+    /* =============================================
+       SECTION LAYOUT
+    ============================================= */
+    .section {
+      padding: 80px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--teal);
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-family: 'EB Garamond', serif;
+      font-size: clamp(28px, 5vw, 42px);
+      color: var(--em-deep);
+      margin-bottom: 48px;
+      line-height: 1.2;
+    }
+
+    .symbol-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 32px;
+    }
+
+    /* =============================================
+       SYMBOL CARDS
+    ============================================= */
+    .symbol-card {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 32px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(6, 78, 59, 0.08), 0 1px 4px rgba(6, 78, 59, 0.06);
+      border: 1.5px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .symbol-card:hover {
+      border-color: var(--em-bright);
+      box-shadow: 0 8px 40px rgba(52, 211, 153, 0.18);
+      transform: translateY(-3px);
+    }
+    .symbol-card.chosen {
+      border-color: var(--em-mid);
+      background: linear-gradient(135deg, #ffffff 60%, #ecfdf5 100%);
+    }
+    .symbol-card.chosen::before {
+      content: '← your pick?';
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--teal);
+      background: #d1fae5;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .symbol-svg-wrap {
+      width: 140px;
+      height: 140px;
+      margin: 0 auto 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .symbol-name {
+      font-family: 'Cinzel', serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      color: var(--em-deep);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+
+    .symbol-desc {
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--text-mid);
+    }
+
+    .symbol-application {
+      margin-top: 16px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--teal);
+      font-style: italic;
+    }
+
+    /* =============================================
+       SVG SYMBOLS
+    ============================================= */
+
+    /* 1 — Celtic Knotwork: A formed from interlaced paths */
+    .svg-celtic { animation: rotate-slow 30s linear infinite; }
+    @keyframes rotate-slow { to { transform: rotate(360deg); } }
+
+    /* 2 — Triskelion: triple spiral */
+    .svg-trisk { animation: pulse-scale 4s ease-in-out infinite; }
+    @keyframes pulse-scale {
+      0%, 100% { transform: scale(1); }
+      50%       { transform: scale(1.05); }
+    }
+
+    /* 3 — Ogham: vertical strokes */
+    .svg-ogham line { stroke-dasharray: 100; stroke-dashoffset: 100; }
+    .symbol-card:hover .svg-ogham line { animation: draw-in 0.6s ease forwards; }
+    .symbol-card:hover .svg-ogham line:nth-child(2) { animation-delay: 0.1s; }
+    .symbol-card:hover .svg-ogham line:nth-child(3) { animation-delay: 0.2s; }
+    .symbol-card:hover .svg-ogham line:nth-child(4) { animation-delay: 0.3s; }
+    .symbol-card:hover .svg-ogham line:nth-child(5) { animation-delay: 0.4s; }
+    .symbol-card:hover .svg-ogham line:nth-child(6) { animation-delay: 0.5s; }
+    @keyframes draw-in { to { stroke-dashoffset: 0; } }
+
+    /* 4 — Sacred Geometry: Flower of Life */
+    .svg-sacred circle { fill: none; stroke: var(--em-mid); stroke-width: 1.5; opacity: 0.6; }
+    .svg-sacred circle:first-child { opacity: 1; stroke-width: 2; }
+
+    /* =============================================
+       TYPOGRAPHY SECTION
+    ============================================= */
+    .type-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 24px;
+    }
+
+    .type-card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px 24px;
+      text-align: center;
+      box-shadow: 0 2px 12px rgba(6, 78, 59, 0.06);
+    }
+
+    .type-sample {
+      font-size: 36px;
+      color: var(--em-deep);
+      margin-bottom: 16px;
+      line-height: 1.2;
+    }
+
+    .type-name {
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-mid);
+      margin-bottom: 6px;
+    }
+
+    .type-use {
+      font-size: 12px;
+      color: var(--teal);
+      font-style: italic;
+    }
+
+    /* Shimmer on type samples */
+    .type-shimmer {
+      position: relative;
+      display: inline-block;
+    }
+    .type-shimmer::after {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(217, 119, 6, 0.9) 48%,
+        rgba(251, 191, 36, 1) 52%,
+        rgba(217, 119, 6, 0.7) 56%,
+        transparent 70%
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-size: 300% 100%;
+      animation: shimmer 3s ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+    }
+
+    /* =============================================
+       PALETTE SECTION
+    ============================================= */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 20px;
+    }
+
+    .swatch {
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .swatch-color {
+      height: 100px;
+    }
+
+    .swatch-info {
+      background: white;
+      padding: 12px 16px;
+    }
+
+    .swatch-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-dark);
+    }
+    .swatch-hex {
+      font-size: 11px;
+      color: var(--text-mid);
+      font-family: monospace;
+      margin-top: 2px;
+    }
+    .swatch-role {
+      font-size: 10px;
+      color: var(--teal);
+      margin-top: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    /* =============================================
+       DARK / LIGHT TOGGLE PREVIEW
+    ============================================= */
+    .mode-preview {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 40px;
+    }
+
+    .mode-card {
+      border-radius: 20px;
+      padding: 32px 24px;
+      text-align: center;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mode-card.light {
+      background: linear-gradient(135deg, #e8faf2 0%, #ccfbf1 35%, #f0f9ff 70%, #ecfdf5 100%);
+      box-shadow: 0 4px 24px rgba(5, 150, 105, 0.12);
+    }
+
+    .mode-card.dark {
+      background: linear-gradient(135deg, #0A0E1A 0%, #064e3b22 35%, #0A0E1A 100%);
+      border: 1px solid rgba(52, 211, 153, 0.15);
+    }
+
+    .mode-label {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .mode-card.light .mode-label { color: var(--teal); }
+    .mode-card.dark  .mode-label { color: #34D399; }
+
+    .mode-title {
+      font-family: 'Cinzel', serif;
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+    .mode-card.light .mode-title { color: var(--em-deep); }
+    .mode-card.dark  .mode-title { color: #F9FAFB; }
+
+    .mode-sub {
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+    }
+    .mode-card.light .mode-sub { color: var(--em-mid); }
+    .mode-card.dark  .mode-sub { color: #34D399; }
+
+    .dark-aurora {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(16, 185, 129, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* =============================================
+       FIGMA CTA
+    ============================================= */
+    .cta-section {
+      background: linear-gradient(135deg, var(--em-deep) 0%, #065F46 100%);
+      padding: 80px 24px;
+      text-align: center;
+      color: white;
+    }
+
+    .cta-title {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(24px, 5vw, 40px);
+      margin-bottom: 16px;
+      font-weight: 900;
+    }
+
+    .cta-body {
+      font-family: 'EB Garamond', serif;
+      font-size: clamp(16px, 3vw, 22px);
+      opacity: 0.8;
+      max-width: 560px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+      font-style: italic;
+    }
+
+    .cta-steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .cta-step {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      text-align: left;
+      flex: 1;
+      min-width: 180px;
+      max-width: 220px;
+    }
+
+    .step-num {
+      font-family: 'Cinzel', serif;
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--seafoam);
+      margin-bottom: 8px;
+    }
+
+    .step-text {
+      font-size: 13px;
+      line-height: 1.5;
+      opacity: 0.85;
+    }
+
+    /* =============================================
+       RESPONSIVE
+    ============================================= */
+    @media (max-width: 600px) {
+      .mode-preview { grid-template-columns: 1fr; }
+      .symbol-grid  { grid-template-columns: 1fr; }
+    }
+
+    /* Divider */
+    .divider {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(6,78,59,0.15), transparent);
+      margin: 0 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================
+       HERO: Aurora BG + Shimmer Wordmark
+  ============================================= -->
+  <section class="hero">
+    <div class="aurora-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <div class="blob blob-4"></div>
+    </div>
+
+    <div class="hero-content">
+      <p style="font-size:10px;letter-spacing:0.35em;text-transform:uppercase;color:var(--teal);font-weight:600;margin-bottom:20px;">Brand Direction Reference</p>
+
+      <div class="wordmark-wrap">
+        <div class="wordmark">AMACH</div>
+      </div>
+      <div class="wordmark-sub">HEALTH</div>
+
+      <p class="hero-tagline">"outward, into life"</p>
+
+      <p style="font-size:11px;color:var(--teal);margin-top:32px;letter-spacing:0.15em;">↓ Scroll to explore symbol directions</p>
+    </div>
+  </section>
+
+  <!-- ============================================
+       SYMBOL LANGUAGE OPTIONS
+  ============================================= -->
+  <section class="section">
+    <p class="section-label">Step 1 — Choose your mark</p>
+    <h2 class="section-title">Symbol Language Options</h2>
+
+    <div class="symbol-grid">
+
+      <!-- 1. Celtic Knotwork -->
+      <div class="symbol-card">
+        <div class="symbol-svg-wrap">
+          <svg width="120" height="120" viewBox="0 0 120 120" class="svg-celtic">
+            <!-- Continuous knotwork A formed from interlaced paths -->
+            <defs>
+              <linearGradient id="knotGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#059669"/>
+                <stop offset="100%" stop-color="#0D9488"/>
+              </linearGradient>
+            </defs>
+            <!-- Outer ring -->
+            <circle cx="60" cy="60" r="52" fill="none" stroke="url(#knotGrad)" stroke-width="3" stroke-dasharray="8 4" opacity="0.3"/>
+            <!-- Knotwork path — interlaced 'A' form -->
+            <path d="M60 12 L90 88 M60 12 L30 88" fill="none" stroke="url(#knotGrad)" stroke-width="8" stroke-linecap="round"/>
+            <path d="M60 12 L90 88 M60 12 L30 88" fill="none" stroke="#ecfdf5" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 12"/>
+            <!-- Crossbar of A with over-under weave -->
+            <path d="M40 60 L80 60" fill="none" stroke="url(#knotGrad)" stroke-width="8" stroke-linecap="round"/>
+            <path d="M50 60 L70 60" fill="none" stroke="#ecfdf5" stroke-width="3.5"/>
+            <!-- Corner spirals -->
+            <path d="M30 88 Q20 100 30 108 Q40 115 50 108" fill="none" stroke="url(#knotGrad)" stroke-width="3" stroke-linecap="round"/>
+            <path d="M90 88 Q100 100 90 108 Q80 115 70 108" fill="none" stroke="url(#knotGrad)" stroke-width="3" stroke-linecap="round"/>
+            <!-- Inner diamonds -->
+            <polygon points="60,40 67,52 60,64 53,52" fill="none" stroke="url(#knotGrad)" stroke-width="2" opacity="0.5"/>
+          </svg>
+        </div>
+        <p class="symbol-name">Celtic Knotwork</p>
+        <p class="symbol-desc">The letterform is drawn as a single continuous interlaced line — no start, no end. Represents the unbroken cycle of health, time, and nature.</p>
+        <p class="symbol-application">→ The 'A' in Amach becomes the knot. Highly ownable, unmistakably Celtic.</p>
+      </div>
+
+      <!-- 2. Triskelion -->
+      <div class="symbol-card">
+        <div class="symbol-svg-wrap">
+          <svg width="120" height="120" viewBox="0 0 120 120" class="svg-trisk">
+            <defs>
+              <linearGradient id="triskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#059669"/>
+                <stop offset="50%" stop-color="#0D9488"/>
+                <stop offset="100%" stop-color="#6EE7B7"/>
+              </linearGradient>
+            </defs>
+            <!-- Three-arm spiral (triskelion) -->
+            <g transform="translate(60,60)">
+              <!-- Arm 1: upward -->
+              <path d="M0,0 C0,-15 8,-28 12,-38 C16,-48 10,-55 0,-52 C-10,-49 -12,-38 -6,-28 C-2,-20 0,-10 0,0"
+                fill="none" stroke="url(#triskGrad)" stroke-width="5" stroke-linecap="round"/>
+              <!-- Arm 2: lower-right (rotated 120°) -->
+              <path d="M0,0 C0,-15 8,-28 12,-38 C16,-48 10,-55 0,-52 C-10,-49 -12,-38 -6,-28 C-2,-20 0,-10 0,0"
+                fill="none" stroke="url(#triskGrad)" stroke-width="5" stroke-linecap="round"
+                transform="rotate(120)"/>
+              <!-- Arm 3: lower-left (rotated 240°) -->
+              <path d="M0,0 C0,-15 8,-28 12,-38 C16,-48 10,-55 0,-52 C-10,-49 -12,-38 -6,-28 C-2,-20 0,-10 0,0"
+                fill="none" stroke="url(#triskGrad)" stroke-width="5" stroke-linecap="round"
+                transform="rotate(240)"/>
+              <!-- Center dot -->
+              <circle cx="0" cy="0" r="5" fill="url(#triskGrad)"/>
+              <!-- Outer ring -->
+              <circle cx="0" cy="0" r="52" fill="none" stroke="url(#triskGrad)" stroke-width="2" opacity="0.3"/>
+            </g>
+          </svg>
+        </div>
+        <p class="symbol-name">Triskelion</p>
+        <p class="symbol-desc">Ireland's oldest symbol — carved at Newgrange 5,000 years ago. Three spirals in perpetual motion: mind · body · spirit. Used as the icon mark beside a clean wordmark.</p>
+        <p class="symbol-application">→ Standalone icon + "Amach Health" wordmark in Cinzel serif. Classic lockup.</p>
+      </div>
+
+      <!-- 3. Ogham Script -->
+      <div class="symbol-card">
+        <div class="symbol-svg-wrap">
+          <svg width="120" height="120" viewBox="0 0 120 120" class="svg-ogham">
+            <defs>
+              <linearGradient id="oghamGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#059669"/>
+                <stop offset="100%" stop-color="#0D9488"/>
+              </linearGradient>
+            </defs>
+            <!-- Ogham stem line (vertical) -->
+            <line x1="60" y1="10" x2="60" y2="110" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <!-- Ogham notches — 'A' (vowel = cross-stroke) -->
+            <line x1="45" y1="35" x2="75" y2="35" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <!-- M (right strokes) -->
+            <line x1="60" y1="48" x2="78" y2="48" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="60" y1="56" x2="78" y2="56" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="60" y1="64" x2="78" y2="64" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <!-- C (left strokes) -->
+            <line x1="60" y1="77" x2="42" y2="77" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="60" y1="85" x2="42" y2="85" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round"/>
+            <!-- H (diagonal) -->
+            <line x1="46" y1="97" x2="74" y2="97" stroke="url(#oghamGrad)" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3"/>
+          </svg>
+        </div>
+        <p class="symbol-name">Ogham Script</p>
+        <p class="symbol-desc">The ancient Irish tree-alphabet, written on standing stones. Vertical stem with horizontal/diagonal notches. The geometry of Ogham informs abstract letterform proportions.</p>
+        <p class="symbol-application">→ The 'A' takes on vertical proportions and deliberate stroke geometry. Minimal, architectural.</p>
+      </div>
+
+      <!-- 4. Sacred Geometry -->
+      <div class="symbol-card">
+        <div class="symbol-svg-wrap">
+          <svg width="120" height="120" viewBox="0 0 120 120" class="svg-sacred">
+            <!-- Flower of Life / Vesica Piscis pattern -->
+            <!-- Center circle -->
+            <circle cx="60" cy="60" r="20" stroke="#059669" stroke-width="2" opacity="1"/>
+            <!-- 6 surrounding circles -->
+            <circle cx="60" cy="40" r="20"/>
+            <circle cx="60" cy="80" r="20"/>
+            <circle cx="77.3" cy="50" r="20"/>
+            <circle cx="77.3" cy="70" r="20"/>
+            <circle cx="42.7" cy="50" r="20"/>
+            <circle cx="42.7" cy="70" r="20"/>
+            <!-- Outer binding circle -->
+            <circle cx="60" cy="60" r="52" stroke="url(#knotGrad)" stroke-width="1.5" opacity="0.25" fill="none"/>
+            <!-- Golden ratio points -->
+            <circle cx="60" cy="60" r="34" stroke="#D97706" stroke-width="1" opacity="0.3" fill="none" stroke-dasharray="3 5"/>
+          </svg>
+        </div>
+        <p class="symbol-name">Sacred Geometry</p>
+        <p class="symbol-desc">Flower of Life — universal pattern found in ancient Celtic art, Tibetan temples, and DNA structure. The proportions govern the letterform. Science meets spirit.</p>
+        <p class="symbol-application">→ Logo built on golden ratio grid. Clean, precise letterforms with hidden geometric meaning.</p>
+      </div>
+
+    </div><!-- /symbol-grid -->
+  </section>
+
+  <hr class="divider"/>
+
+  <!-- ============================================
+       TYPOGRAPHY OPTIONS
+  ============================================= -->
+  <section class="section">
+    <p class="section-label">Step 2 — Typography (shimmer animation active)</p>
+    <h2 class="section-title">Wordmark Typeface Directions</h2>
+
+    <div class="type-grid">
+      <div class="type-card">
+        <div class="type-sample">
+          <span class="type-shimmer" data-text="Amach" style="font-family:'Cinzel',serif;font-weight:900;--delay:0s;">Amach</span>
+        </div>
+        <p class="type-name">Cinzel — Roman Monumental</p>
+        <p class="type-use">Regal, ancient, universal. Used in this page's hero.</p>
+      </div>
+      <div class="type-card">
+        <div class="type-sample">
+          <span class="type-shimmer" data-text="Amach" style="font-family:'EB Garamond',serif;font-style:italic;--delay:0.5s;">Amach</span>
+        </div>
+        <p class="type-name">EB Garamond — Italic Serif</p>
+        <p class="type-use">Warmth, wisdom, manuscripts. Body + tagline use.</p>
+      </div>
+      <div class="type-card">
+        <div class="type-sample">
+          <span class="type-shimmer" data-text="Amach" style="font-family:'Uncial Antiqua',serif;--delay:1s;">Amach</span>
+        </div>
+        <p class="type-name">Uncial Antiqua — Celtic Uncial</p>
+        <p class="type-use">Medieval Irish manuscripts. Maximum heritage feel.</p>
+      </div>
+      <div class="type-card">
+        <div class="type-sample">
+          <span class="type-shimmer" data-text="AMACH" style="font-family:'Inter',sans-serif;font-weight:800;letter-spacing:0.15em;font-size:32px;--delay:1.5s;">AMACH</span>
+        </div>
+        <p class="type-name">Inter Bold — Modern Sans</p>
+        <p class="type-use">Clean, digital-native. Good for UI labels.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider"/>
+
+  <!-- ============================================
+       COLOR PALETTE
+  ============================================= -->
+  <section class="section">
+    <p class="section-label">Step 3 — Palette (Emerald + Teal + Mist)</p>
+    <h2 class="section-title">Light Mode Color System</h2>
+
+    <div class="palette-grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#064E3B;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Deep Emerald</div>
+          <div class="swatch-hex">#064E3B</div>
+          <div class="swatch-role">Primary text, logo</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#059669;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Emerald</div>
+          <div class="swatch-hex">#059669</div>
+          <div class="swatch-role">Primary action</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#34D399;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Bright Emerald</div>
+          <div class="swatch-hex">#34D399</div>
+          <div class="swatch-role">Highlights, active</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#0D9488;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Teal</div>
+          <div class="swatch-hex">#0D9488</div>
+          <div class="swatch-role">Secondary action</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#A7F3D0;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Seafoam</div>
+          <div class="swatch-hex">#A7F3D0</div>
+          <div class="swatch-role">Card accents, tags</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#D97706;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Amber Gold</div>
+          <div class="swatch-hex">#D97706</div>
+          <div class="swatch-role">Shimmer, premium CTA</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:linear-gradient(135deg,#e8faf2,#ccfbf1,#f0f9ff);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Mist Aurora</div>
+          <div class="swatch-hex">gradient</div>
+          <div class="swatch-role">Main page background</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#F0FDF4;"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">Mist White</div>
+          <div class="swatch-hex">#F0FDF4</div>
+          <div class="swatch-role">Card backgrounds</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Light / Dark side-by-side -->
+    <h3 style="font-family:'EB Garamond',serif;font-size:24px;color:var(--em-deep);margin-top:56px;margin-bottom:24px;">Light ↔ Dark Preview</h3>
+    <div class="mode-preview">
+      <div class="mode-card light">
+        <p class="mode-label">Light Mode</p>
+        <p class="mode-title" style="position:relative;">
+          <span style="position:relative;display:inline-block;">AMACH
+            <span style="position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(217,119,6,0.85) 48%,rgba(251,191,36,0.95) 52%,rgba(217,119,6,0.7) 56%,transparent 70%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;background-size:300% 100%;animation:shimmer 4s ease-in-out infinite;">AMACH</span>
+          </span>
+        </p>
+        <p class="mode-sub">Health</p>
+        <p style="font-family:'EB Garamond',serif;font-style:italic;font-size:13px;color:var(--text-mid);margin-top:8px;">Aurora mesh gradient background</p>
+      </div>
+      <div class="mode-card dark">
+        <div class="dark-aurora"></div>
+        <p class="mode-label">Dark Mode</p>
+        <p class="mode-title" style="position:relative;">
+          <span style="position:relative;display:inline-block;">AMACH
+            <span style="position:absolute;inset:0;background:linear-gradient(105deg,transparent 30%,rgba(217,119,6,0.85) 48%,rgba(251,191,36,0.95) 52%,rgba(217,119,6,0.7) 56%,transparent 70%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;background-size:300% 100%;animation:shimmer 4s ease-in-out infinite 1s;">AMACH</span>
+          </span>
+        </p>
+        <p class="mode-sub">Health</p>
+        <p style="font-family:'EB Garamond',serif;font-style:italic;font-size:13px;color:#64748b;margin-top:8px;">Deep space + emerald glow</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider"/>
+
+  <!-- ============================================
+       FIGMA WORKFLOW CTA
+  ============================================= -->
+  <section class="cta-section">
+    <p style="font-size:10px;letter-spacing:0.35em;text-transform:uppercase;color:var(--seafoam);margin-bottom:12px;font-weight:600;">Next Steps</p>
+    <h2 class="cta-title">Take this into Figma</h2>
+    <p class="cta-body">Once you pick your symbol direction, Figma is exactly where to build the full design system — tokens, logo variants, animation specs, and handoff to Xcode.</p>
+
+    <div class="cta-steps">
+      <div class="cta-step">
+        <div class="step-num">01</div>
+        <p class="step-text">Pick your symbol direction above, then we build logo variants in Figma (icon · wordmark · stacked · dark/light).</p>
+      </div>
+      <div class="cta-step">
+        <div class="step-num">02</div>
+        <p class="step-text">Define color tokens as Figma variables → exported directly to iOS as Swift color assets.</p>
+      </div>
+      <div class="cta-step">
+        <div class="step-num">03</div>
+        <p class="step-text">Prototype the shimmer + aurora animations with Figma Smart Animate before writing SwiftUI code.</p>
+      </div>
+      <div class="cta-step">
+        <div class="step-num">04</div>
+        <p class="step-text">Export the final brand guide as a PDF to share with any collaborators or App Store review assets.</p>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>
