@@ -88,7 +88,7 @@
     /* Soft static gradient matching the site's mist bg — no heavy blobs */
     .aurora { display: none; }
     [data-mode="light"] body {
-      background: linear-gradient(135deg, #e8faf2 0%, #ccfbf1 35%, #f0f9ff 70%, #ecfdf5 100%);
+      background: linear-gradient(135deg, #f0fdf8 0%, #e4f9f2 35%, #f3fcff 70%, #f0fdf6 100%);
       background-attachment: fixed;
     }
     /* ============================================================ LIGHT MODE OVERRIDES */
@@ -152,22 +152,23 @@
     .wordmark::after {
       content: 'AMACH';
       position: absolute; inset: 0;
-      background: linear-gradient(105deg,
-        transparent 25%,
-        rgba(217,119,6,0.9) 42%,
-        rgba(251,191,36,1.0) 50%,
-        rgba(217,119,6,0.8) 58%,
-        transparent 75%
+      background: linear-gradient(
+        105deg,
+        transparent 30%,
+        rgba(217,119,6,0.85) 48%,
+        rgba(251,191,36,0.95) 52%,
+        rgba(217,119,6,0.7) 56%,
+        transparent 70%
       );
       background-size: 300% 100%;
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
-      animation: shimmer 5s ease-in-out infinite;
-      animation-delay: 1.5s;
+      animation: shimmer 4s ease-in-out infinite;
     }
     @keyframes shimmer {
-      0%,35% { background-position: -100% 0; }
-      65%,100% { background-position: 220% 0; }
+      0%   { background-position: -100% 0; }
+      60%  { background-position: 200% 0; }
+      100% { background-position: 200% 0; }
     }
     .wordmark-sub { font-size: 10px; font-weight: 400; letter-spacing: 0.35em; text-transform: uppercase; color: var(--primary); opacity: 0.7; margin-top: 1px; display: block; font-family: 'Inter', sans-serif; }
     .logo-sub { font-size: 11px; color: var(--text-sec); }
