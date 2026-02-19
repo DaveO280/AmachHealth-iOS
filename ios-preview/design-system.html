@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en" data-mode="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amach Health — Design System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+
+    /* ============================================================
+       DESIGN TOKENS — map 1:1 to AmachDesignSystem.swift
+    ============================================================ */
+    :root {
+      /* Primary */
+      --primary:      #006B4F;
+      --primary-dk:   #004D38;
+      --p400:         #10B981;
+      --p300:         #34D399;
+      --p200:         #6EE7B7;
+      --p100:         #D1FAE5;
+      --p50:          #ECFDF5;
+      /* Accent */
+      --accent:       #F59E0B;
+      --a600:         #D97706;
+      --a100:         #FEF3C7;
+      /* AI — Luma only */
+      --ai:           #6366F1;
+      --ai-dk:        #3730A3;
+      --ai-p400:      #818CF8;
+      --ai-p200:      #C7D2FE;
+      --ai-light:     #EEF2FF;
+      /* Semantic */
+      --success:      #10B981;
+      --warning:      #F59E0B;
+      --error:        #EF4444;
+      --info:         #3B82F6;
+      /* Health */
+      --optimal:      #059669;
+      --borderline:   #D97706;
+      --critical:     #DC2626;
+      /* Radius */
+      --r-xs:   6px;  --r-sm:  10px; --r-md:  14px;
+      --r-card: 16px; --r-lg:  20px; --r-xl:  24px;
+      --r-pill: 999px;
+      /* Dark mode (default) — green-tinted, NOT navy */
+      --bg:       #0A1A15;
+      --surface:  #111F1A;
+      --elevated: #1A2E26;
+      --text:     #F9FAFB;
+      --text-sec: #9CA3AF;
+      --text-ter: #6B7280;
+      --border:   rgba(0,107,79,0.18);
+      --ai-bub:   #3730A3;
+      --usr-bub:  #10B981;
+    }
+    [data-mode="light"] {
+      --bg:       #FFFFFF;
+      --surface:  #F9FAFB;
+      --elevated: #F3F4F6;
+      --text:     #111827;
+      --text-sec: #6B7280;
+      --text-ter: #9CA3AF;
+      --border:   rgba(0,107,79,0.12);
+      --ai-bub:   #EEF2FF;
+      --usr-bub:  #006B4F;
+    }
+
+    /* ============================================================ BASE */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      transition: background 0.4s, color 0.3s;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* ============================================================ LAYOUT */
+    .wrap   { max-width: 900px; margin: 0 auto; padding: 48px 24px 96px; }
+    .toggle {
+      position: fixed; top: 20px; right: 20px; z-index: 100;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r-pill); padding: 8px 16px;
+      cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text);
+      display: flex; align-items: center; gap: 8px;
+      transition: transform 0.15s; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    }
+    .toggle:hover { transform: translateY(-1px); }
+
+    /* ============================================================ SECTION */
+    .sec        { margin-bottom: 64px; }
+    .sec-num    { font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; color: var(--p400); margin-bottom: 4px; }
+    .sec-head   { font-size: 24px; font-weight: 700; letter-spacing: -0.4px; color: var(--text); margin-bottom: 4px; }
+    .sec-desc   { font-size: 14px; color: var(--text-sec); line-height: 1.6; margin-bottom: 28px; max-width: 560px; }
+    .divider    { border: none; border-top: 1px solid var(--border); margin-bottom: 48px; }
+
+    /* ============================================================ HEADER */
+    .ds-header  { margin-bottom: 64px; padding-bottom: 40px; border-bottom: 1px solid var(--border); }
+    .logo-wrap  { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .logo-mark  {
+      width: 44px; height: 44px; background: var(--primary);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 900; color: white; letter-spacing: -1px;
+    }
+    .logo-name  { font-size: 20px; font-weight: 800; color: var(--text); }
+    .logo-sub   { font-size: 11px; color: var(--text-sec); }
+    .ds-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
+    .ds-header p  { font-size: 15px; color: var(--text-sec); line-height: 1.6; max-width: 520px; }
+    .ai-pill {
+      display: inline-flex; align-items: center; gap: 6px; margin-top: 12px;
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25);
+      border-radius: var(--r-pill); padding: 4px 12px;
+      font-size: 12px; font-weight: 600; color: #818CF8;
+    }
+
+    /* ============================================================ SWATCHES */
+    .sw-group  { margin-bottom: 24px; }
+    .sw-label  { font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text-sec); margin-bottom: 10px; }
+    .sw-row    { display: flex; gap: 8px; flex-wrap: wrap; }
+    .swatch    { display: flex; flex-direction: column; }
+    .sw-block  {
+      width: 72px; height: 52px; border-radius: 10px; margin-bottom: 5px;
+      border: 1px solid rgba(0,0,0,0.07); transition: transform 0.15s;
+    }
+    [data-mode="dark"] .sw-block { border-color: rgba(255,255,255,0.07); }
+    .sw-block:hover { transform: scale(1.06); }
+    .sw-hex  { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sec); }
+    .sw-name { font-size: 10px; color: var(--text-ter); margin-top: 1px; }
+    .starred { outline: 2px solid rgba(255,255,255,0.25); outline-offset: 2px; }
+
+    /* ============================================================ TYPE SCALE */
+    .type-demo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+    .type-row  { display: flex; align-items: baseline; gap: 20px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .type-row:last-child { border-bottom: none; }
+    .type-tok  { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--p400); min-width: 110px; flex-shrink: 0; }
+    .type-spec { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-ter); min-width: 130px; flex-shrink: 0; line-height: 1.7; }
+
+    /* ============================================================ SPACING */
+    .sp-row  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    .sp-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .sp-block{ background: rgba(0,107,79,0.28); border: 1px solid rgba(0,107,79,0.45); border-radius: 3px; }
+    .sp-tok  { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-sec); white-space: nowrap; text-align: center; }
+
+    /* ============================================================ ELEVATION */
+    .elev-row  { display: flex; gap: 16px; flex-wrap: wrap; }
+    .elev-card { flex: 1; min-width: 130px; padding: 20px; border-radius: var(--r-card); }
+    .elev-1    { background: var(--surface);  border: 1px solid var(--border);                       box-shadow: 0 2px 8px rgba(0,0,0,.10); }
+    .elev-2    { background: var(--elevated); border: 1px solid rgba(0,107,79,.22);                  box-shadow: 0 6px 16px rgba(0,0,0,.18); }
+    .elev-3    { background: var(--elevated); border: 1px solid var(--border);                       box-shadow: 0 16px 32px rgba(0,0,0,.30); }
+    .elev-lbl  { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--p400); margin-bottom: 4px; }
+    .elev-name { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .elev-use  { font-size: 11px; color: var(--text-sec); line-height: 1.5; }
+
+    /* AI gradient border card */
+    .ai-card {
+      padding: 20px; border-radius: var(--r-card);
+      background: var(--surface); position: relative;
+    }
+    .ai-card::before {
+      content: ''; position: absolute; inset: 0;
+      border-radius: var(--r-card); padding: 1px;
+      background: linear-gradient(135deg, rgba(0,107,79,.6), rgba(99,102,241,.6));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+    }
+    [data-mode="dark"] .ai-card { background: var(--elevated); }
+
+    /* ============================================================ COMPONENTS */
+    .comp-demo  { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 24px; margin-bottom: 16px; }
+    .comp-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-ter); margin-bottom: 16px; }
+
+    /* Metric grid */
+    .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .m-card {
+      background: var(--elevated); border: 1px solid var(--border);
+      border-radius: var(--r-card); padding: 14px;
+      transition: transform 0.15s;
+    }
+    [data-mode="light"] .m-card { background: var(--surface); }
+    .m-card:hover { transform: scale(0.98); }
+    .m-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-bottom: 10px; }
+    .m-val  { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; }
+    .m-unit { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-sec); font-weight: 400; }
+    .m-lbl  { font-size: 11px; color: var(--text-sec); margin-top: 3px; }
+    .m-status { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: var(--r-pill); margin-top: 7px; }
+    .s-opt  { background: rgba(5,150,105,.12); color: #047857; }
+    .s-brd  { background: rgba(217,119,6,.12); color: #92400E; }
+    .s-crit { background: rgba(220,38,38,.12); color: #991B1B; }
+    .s-nd   { background: rgba(156,163,175,.12); color: #6B7280; }
+    [data-mode="dark"] .s-opt  { color: #34D399; }
+    [data-mode="dark"] .s-brd  { color: #FCD34D; }
+    [data-mode="dark"] .s-crit { color: #FCA5A5; }
+    [data-mode="dark"] .s-nd   { color: #9CA3AF; }
+    .range-track { width: 100%; height: 5px; background: rgba(156,163,175,.18); border-radius: 99px; margin-top: 8px; }
+    .range-fill  { height: 100%; border-radius: 99px; }
+
+    /* Chat */
+    .chat-wrap   { display: flex; flex-direction: column; gap: 10px; }
+    .luma-hdr    { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .luma-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--ai); display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 0 10px rgba(99,102,241,.3); }
+    .bubble      { max-width: 76%; padding: 11px 15px; font-size: 14px; line-height: 1.55; }
+    .bub-luma    { background: var(--ai-bub); color: var(--text); border-radius: var(--r-lg) var(--r-lg) var(--r-lg) 4px; border: 1px solid rgba(99,102,241,.28); align-self: flex-start; }
+    [data-mode="dark"] .bub-luma { color: #E0E7FF; }
+    .bub-user    { background: var(--usr-bub); color: white; border-radius: var(--r-lg) var(--r-lg) 4px var(--r-lg); align-self: flex-end; margin-left: auto; }
+    .typing      { display: flex; align-items: center; gap: 4px; padding: 10px 14px; background: var(--ai-bub); border: 1px solid rgba(99,102,241,.22); border-radius: var(--r-lg) var(--r-lg) var(--r-lg) 4px; width: fit-content; }
+    .t-dot       { width: 7px; height: 7px; border-radius: 50%; background: var(--ai); animation: tbounce 0.6s ease-in-out infinite; }
+    .t-dot:nth-child(2) { animation-delay: .15s; }
+    .t-dot:nth-child(3) { animation-delay: .30s; }
+    @keyframes tbounce { 0%,100%{transform:translateY(0);opacity:.5} 50%{transform:translateY(-4px);opacity:1} }
+
+    /* Tier + Source badges */
+    .badge-row   { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .tier-badge  { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--r-xs); font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; border: 1px solid; }
+    .t-gold      { background: #FEF3C7; color: #B45309; border-color: #FCD34D; }
+    .t-silver    { background: #F1F5F9; color: #475569; border-color: #CBD5E1; }
+    .t-bronze    { background: #FDF0E6; color: #9A4B1C; border-color: #E8A87C; }
+    .t-none      { background: #F3F4F6; color: #6B7280; border-color: #D1D5DB; }
+    .src-badge   { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--r-pill); font-size: 11px; font-weight: 600; border: 1px solid var(--border); background: var(--elevated); color: var(--text-sec); }
+
+    /* Buttons */
+    .btn-p { display: inline-flex; align-items: center; gap: 8px; background: var(--primary); color: white; font-size: 15px; font-weight: 600; padding: 14px 24px; border-radius: var(--r-md); border: none; cursor: pointer; transition: all .15s; box-shadow: 0 2px 8px rgba(0,107,79,.28); }
+    .btn-p:hover  { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,107,79,.35); }
+    .btn-p:active { transform: scale(.97); }
+    .btn-p.dis    { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-s { display: inline-flex; align-items: center; gap: 8px; background: transparent; color: var(--primary); font-size: 15px; font-weight: 600; padding: 13px 20px; border-radius: var(--r-sm); border: 1.5px solid var(--primary); cursor: pointer; transition: all .15s; }
+    [data-mode="dark"] .btn-s { color: var(--p300); border-color: var(--p300); }
+    .btn-s:hover  { background: rgba(0,107,79,.06); transform: translateY(-1px); }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+    /* Toasts */
+    .toast      { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--r-card); border-left: 3px solid; box-shadow: 0 4px 24px rgba(0,0,0,.15); background: var(--elevated); margin-bottom: 10px; }
+    .t-success  { border-left-color: #10B981; }
+    .t-warning  { border-left-color: #F59E0B; }
+    .t-error    { border-left-color: #EF4444; }
+    .t-info     { border-left-color: #3B82F6; }
+    .toast-ico  { font-size: 17px; flex-shrink: 0; margin-top: 1px; }
+    .toast-ttl  { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .toast-bod  { font-size: 13px; color: var(--text-sec); line-height: 1.4; }
+
+    /* Motion cards */
+    .motion-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+    .motion-card { flex: 1; min-width: 120px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); cursor: pointer; transition: transform .25s ease, box-shadow .25s ease; }
+    .motion-card:hover  { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,.15); }
+    .motion-card:active { transform: scale(.97); transition-duration: .15s; }
+    .motion-tok  { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--p400); font-weight: 600; margin-bottom: 6px; }
+    .motion-desc { font-size: 12px; color: var(--text-sec); line-height: 1.4; }
+
+    /* Phone mock */
+    .phone      { max-width: 320px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border); border-radius: 44px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+    .ph-notch   { background: var(--surface); height: 44px; display: flex; align-items: center; justify-content: center; }
+    .ph-island  { background: #000; width: 112px; height: 30px; border-radius: 18px; }
+    .ph-screen  { padding: 18px 14px 0; }
+    .ph-greeting{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .score-ring { width: 54px; height: 54px; border-radius: 50%; background: conic-gradient(var(--p300) 0% 78%, rgba(52,211,153,.1) 78% 100%); box-shadow: 0 0 14px rgba(52,211,153,.3); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .score-inner{ width: 42px; height: 42px; background: var(--bg); border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ph-grid    { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .ph-card    { background: var(--elevated); border: 1px solid var(--border); border-radius: 14px; padding: 11px; }
+    [data-mode="light"] .ph-card { background: var(--surface); }
+    .ph-tabbar  { border-top: 1px solid var(--border); display: flex; padding: 8px 4px 20px; }
+    .ph-tab     { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 9px; color: var(--text-sec); font-weight: 500; }
+    .ph-tab.on  { color: var(--p400); }
+    [data-mode="dark"] .ph-tab.on { color: var(--p300); }
+    .ph-tab-ico { font-size: 16px; }
+
+    /* misc */
+    .tag { display: inline-block; background: rgba(0,107,79,.1); border: 1px solid rgba(0,107,79,.2); color: var(--p400); border-radius: 4px; font-size: 10px; font-weight: 600; padding: 2px 6px; }
+    [data-mode="dark"] .tag { background: rgba(52,211,153,.07); border-color: rgba(52,211,153,.18); color: var(--p300); }
+    .note { font-size: 11px; color: var(--text-sec); line-height: 1.6; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<button class="toggle" onclick="toggleMode()">
+  <span id="ico">☀️</span><span id="lbl">Light mode</span>
+</button>
+
+<div class="wrap">
+
+  <!-- HEADER -->
+  <div class="ds-header">
+    <div class="logo-wrap">
+      <div class="logo-mark">AH</div>
+      <div>
+        <div class="logo-name">Amach Health</div>
+        <div class="logo-sub">Design System v1.0 · AmachDesignSystem.swift</div>
+      </div>
+    </div>
+    <h1>Design System Reference</h1>
+    <p>Every token maps 1:1 to <span class="mono" style="font-size:13px;color:var(--p400);">AmachDesignSystem.swift</span>.
+       Toggle light/dark. This page IS the visual spec.</p>
+    <div class="ai-pill">✦ Luma · AI health companion · Soft Indigo #6366F1</div>
+  </div>
+
+  <!-- ====================================================== 01 COLORS -->
+  <div class="sec">
+    <div class="sec-num">01</div>
+    <div class="sec-head">Color System</div>
+    <div class="sec-desc">All tokens defined with exact hex, light/dark variants, WCAG AA ratios. ★ = brand anchor value.</div>
+
+    <div class="sw-group">
+      <div class="sw-label">Primary — Earthy Emerald (Color.Amach.primary)</div>
+      <div class="sw-row">
+        <div class="swatch"><div class="sw-block" style="background:#004D38;"></div><div class="sw-hex">#004D38</div><div class="sw-name">primaryDark</div></div>
+        <div class="swatch"><div class="sw-block starred" style="background:#006B4F;"></div><div class="sw-hex">#006B4F</div><div class="sw-name">primary ★</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#008C66;"></div><div class="sw-hex">#008C66</div><div class="sw-name">p500</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#10B981;"></div><div class="sw-hex">#10B981</div><div class="sw-name">p400 dark↑</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#34D399;"></div><div class="sw-hex">#34D399</div><div class="sw-name">p300</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#6EE7B7;"></div><div class="sw-hex">#6EE7B7</div><div class="sw-name">p200</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#D1FAE5;"></div><div class="sw-hex">#D1FAE5</div><div class="sw-name">p100</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#ECFDF5;"></div><div class="sw-hex">#ECFDF5</div><div class="sw-name">p50</div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <div class="sw-label">Accent — Amber · use sparingly, 1 per screen max</div>
+      <div class="sw-row">
+        <div class="swatch"><div class="sw-block" style="background:#D97706;"></div><div class="sw-hex">#D97706</div><div class="sw-name">a600 text</div></div>
+        <div class="swatch"><div class="sw-block starred" style="background:#F59E0B;"></div><div class="sw-hex">#F59E0B</div><div class="sw-name">accent ★</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#FEF3C7;"></div><div class="sw-hex">#FEF3C7</div><div class="sw-name">a100 fill</div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <div class="sw-label">AI Secondary — Soft Indigo · Luma ONLY 🔒 (Color.Amach.AI)</div>
+      <div class="sw-row">
+        <div class="swatch"><div class="sw-block" style="background:#3730A3;"></div><div class="sw-hex">#3730A3</div><div class="sw-name">AI.dark</div></div>
+        <div class="swatch"><div class="sw-block starred" style="background:#6366F1;"></div><div class="sw-hex">#6366F1</div><div class="sw-name">AI.base ★</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#818CF8;"></div><div class="sw-hex">#818CF8</div><div class="sw-name">AI.p400</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#C7D2FE;"></div><div class="sw-hex">#C7D2FE</div><div class="sw-name">AI.p200</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#EEF2FF;"></div><div class="sw-hex">#EEF2FF</div><div class="sw-name">AI.light</div></div>
+      </div>
+      <div class="note">⚠ Indigo is <strong>reserved for Luma only</strong>. Applying it to any non-AI element breaks the "indigo = AI-generated" signal. Guard this.</div>
+    </div>
+
+    <div class="sw-group">
+      <div class="sw-label">Surfaces — dark is GREEN-TINTED, not navy (Color.Amach.Surface)</div>
+      <div class="sw-row">
+        <div class="swatch"><div class="sw-block" style="background:#0A1A15;border-color:rgba(255,255,255,0.1);"></div><div class="sw-hex">#0A1A15</div><div class="sw-name">bg dark</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#111F1A;border-color:rgba(255,255,255,0.09);"></div><div class="sw-hex">#111F1A</div><div class="sw-name">surface dark</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#1A2E26;border-color:rgba(255,255,255,0.09);"></div><div class="sw-hex">#1A2E26</div><div class="sw-name">elevated dark</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#FFFFFF;"></div><div class="sw-hex">#FFFFFF</div><div class="sw-name">bg light</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#F9FAFB;"></div><div class="sw-hex">#F9FAFB</div><div class="sw-name">surface light</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#F3F4F6;"></div><div class="sw-hex">#F3F4F6</div><div class="sw-name">elevated light</div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <div class="sw-label">Health Status — distinct from Semantic (Color.Amach.Health)</div>
+      <div class="sw-row">
+        <div class="swatch"><div class="sw-block" style="background:#059669;width:90px;"></div><div class="sw-hex">#059669</div><div class="sw-name">Optimal</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#D97706;width:90px;"></div><div class="sw-hex">#D97706</div><div class="sw-name">Borderline</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#DC2626;width:90px;"></div><div class="sw-hex">#DC2626</div><div class="sw-name">Critical</div></div>
+        <div class="swatch"><div class="sw-block" style="background:#9CA3AF;width:90px;"></div><div class="sw-hex">#9CA3AF</div><div class="sw-name">No Data</div></div>
+      </div>
+    </div>
+
+    <div class="sw-group">
+      <div class="sw-label">Tier Colors (Color.Amach.Tier) — always use BG/Text/Border together</div>
+      <div class="badge-row">
+        <span class="tier-badge t-gold">⬢ GOLD</span>
+        <span class="tier-badge t-silver">⬢ SILVER</span>
+        <span class="tier-badge t-bronze">⬢ BRONZE</span>
+        <span class="tier-badge t-none">⬢ NONE</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ====================================================== 02 TYPOGRAPHY -->
+  <div class="sec">
+    <div class="sec-num">02</div>
+    <div class="sec-head">Typography System</div>
+    <div class="sec-desc">SF Pro (iOS) / Inter (web). SF Mono for all numeric data. H3 and Body are both 16pt — differentiated by weight only. Unit labels are always smaller and lighter than values.</div>
+
+    <div class="type-demo">
+      <div class="type-row">
+        <div class="type-tok">AmachType.h1</div>
+        <div class="type-spec">28pt Bold<br>track -0.3 · lh 34</div>
+        <div style="font-size:28px;font-weight:700;letter-spacing:-0.3px;">Health Dashboard</div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">AmachType.h2</div>
+        <div class="type-spec">20pt Semibold<br>track -0.2 · lh 26</div>
+        <div style="font-size:20px;font-weight:600;letter-spacing:-0.2px;">Today's Metrics</div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">AmachType.h3</div>
+        <div class="type-spec">16pt Semibold<br>track -0.1 · lh 22</div>
+        <div style="font-size:16px;font-weight:600;letter-spacing:-0.1px;">Heart Rate Variability</div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">AmachType.body</div>
+        <div class="type-spec">16pt Regular<br>track 0 · lh 24</div>
+        <div style="font-size:16px;font-weight:400;line-height:1.5;max-width:380px;color:var(--text);">Your HRV improved 12% this week. Higher values signal better recovery and stress resilience.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">AmachType.caption</div>
+        <div class="type-spec">14pt Regular<br>track 0 · lh 20</div>
+        <div style="font-size:14px;font-weight:400;color:var(--text-sec);">Last synced from Apple Health · 2h ago</div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">AmachType.tiny</div>
+        <div class="type-spec">12pt Medium<br>track +0.2 · lh 16</div>
+        <div style="font-size:12px;font-weight:500;letter-spacing:0.2px;color:var(--text-sec);">SYNCED · GOLD TIER · 2H AGO</div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">dataValue(28)</div>
+        <div class="type-spec">Mono Bold 28pt<br>biomarker numbers</div>
+        <div style="display:flex;align-items:baseline;gap:5px;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;line-height:1;">72</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--text-sec);">bpm</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">dataValue(48)</div>
+        <div class="type-spec">Mono Bold 48pt<br>health score</div>
+        <div style="display:flex;align-items:baseline;gap:6px;">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:48px;font-weight:700;line-height:1;">87</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--text-sec);">/100</span>
+        </div>
+      </div>
+      <div class="type-row">
+        <div class="type-tok">dataMono</div>
+        <div class="type-spec">Mono Medium 12pt<br>hashes, addresses</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--text-sec);">0x3f4a8c...d91b</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ====================================================== 03 SPACING -->
+  <div class="sec">
+    <div class="sec-num">03</div>
+    <div class="sec-head">Spacing System</div>
+    <div class="sec-desc">4pt base grid. Never hardcode spacing. Generous spacing builds trust — this is a consumer health app, not a clinical portal.</div>
+    <div class="comp-demo">
+      <div class="sp-row">
+        <div class="sp-item"><div class="sp-block" style="width:4px;height:4px;"></div><div class="sp-tok">xs<br>4</div></div>
+        <div class="sp-item"><div class="sp-block" style="width:8px;height:8px;"></div><div class="sp-tok">sm<br>8</div></div>
+        <div class="sp-item"><div class="sp-block" style="width:16px;height:16px;"></div><div class="sp-tok">md<br>16</div></div>
+        <div class="sp-item"><div class="sp-block" style="width:24px;height:24px;"></div><div class="sp-tok">lg<br>24</div></div>
+        <div class="sp-item"><div class="sp-block" style="width:32px;height:32px;"></div><div class="sp-tok">xl<br>32</div></div>
+        <div class="sp-item"><div class="sp-block" style="width:48px;height:48px;"></div><div class="sp-tok">xxl<br>48</div></div>
+        <div class="sp-item"><div class="sp-block" style="width:64px;height:64px;"></div><div class="sp-tok">xxxl<br>64</div></div>
+      </div>
+      <div class="note" style="margin-top:20px;">
+        Fixed: Card padding 24 · Card gap 16 · Section spacing 32 · Screen edge 16 · Chat gap 16–24 · Tab bar 83 · Status bar clear 59
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ====================================================== 04 ELEVATION -->
+  <div class="sec">
+    <div class="sec-num">04</div>
+    <div class="sec-head">Elevation & Depth</div>
+    <div class="sec-desc">Three levels. Glass treatment (blur + opacity) only on Level 2+. AI gradient border strictly reserved for Luma content.</div>
+
+    <div class="elev-row" style="margin-bottom:24px;">
+      <div class="elev-card elev-1">
+        <div class="elev-lbl">Level 1 — Base</div>
+        <div class="elev-name">shadow 10%, r:8, y:2</div>
+        <div class="elev-use">MetricCard, list rows, StorageItemCard, AttestationCard. No glass.</div>
+      </div>
+      <div class="elev-card elev-2">
+        <div class="elev-lbl">Level 2 — Raised</div>
+        <div class="elev-name">shadow 18%, r:16, y:6</div>
+        <div class="elev-use">Featured cards, Luma FAB, active states. Glass: blur 16, 70% opacity.</div>
+      </div>
+      <div class="elev-card elev-3">
+        <div class="elev-lbl">Level 3 — Floating</div>
+        <div class="elev-name">shadow 30%, r:32, y:16</div>
+        <div class="elev-use">Modals, Luma half-sheet, toasts. Glass: blur 24, 88%. Scrim: 40%.</div>
+      </div>
+    </div>
+
+    <div class="comp-label">AI gradient border — primary→AI.base at 135°, 1pt (Luma insight cards only)</div>
+    <div class="ai-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--ai);display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 0 8px rgba(99,102,241,.4);">✦</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;">Luma Insight</div>
+          <div style="font-size:11px;color:var(--text-sec);">AI-generated analysis</div>
+        </div>
+      </div>
+      <div style="font-size:14px;line-height:1.55;">
+        Your sleep consistency improved this week. Going to bed within a 30-minute window correlates with your highest HRV readings.
+      </div>
+      <div style="margin-top:10px;"><span class="tag">✦ Generated by Luma</span></div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ====================================================== 05 COMPONENTS -->
+  <div class="sec">
+    <div class="sec-num">05</div>
+    <div class="sec-head">Components</div>
+    <div class="sec-desc">All tokens in practice. Hover cards to see press interaction. Switch modes to see adaptive behaviour.</div>
+
+    <!-- Metric Cards -->
+    <div class="comp-demo">
+      <div class="comp-label">Health Metric Cards — 2-column LazyVGrid, AmachRadius.card (16)</div>
+      <div class="m-grid">
+        <div class="m-card" style="border-color:rgba(52,211,153,.2);">
+          <div class="m-icon" style="background:rgba(52,211,153,.12);">🫀</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><span class="m-val">68</span><span class="m-unit">bpm</span></div>
+          <div class="m-lbl">Resting HR</div>
+          <div class="m-status s-opt">● Optimal</div>
+          <div class="range-track"><div class="range-fill" style="width:55%;background:#059669;"></div></div>
+        </div>
+        <div class="m-card" style="border-color:rgba(217,119,6,.2);">
+          <div class="m-icon" style="background:rgba(217,119,6,.1);">📊</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><span class="m-val">34</span><span class="m-unit">ms</span></div>
+          <div class="m-lbl">HRV</div>
+          <div class="m-status s-brd">● Borderline</div>
+          <div class="range-track"><div class="range-fill" style="width:42%;background:#D97706;"></div></div>
+        </div>
+        <div class="m-card" style="border-color:rgba(99,102,241,.18);">
+          <div class="m-icon" style="background:rgba(99,102,241,.1);">🌙</div>
+          <div style="display:flex;align-items:baseline;gap:4px;"><span class="m-val">7.4</span><span class="m-unit">hrs</span></div>
+          <div class="m-lbl">Sleep</div>
+          <div class="m-status s-opt">● Optimal</div>
+          <div class="range-track"><div class="range-fill" style="width:80%;background:#059669;"></div></div>
+        </div>
+        <div class="m-card" style="border-color:rgba(156,163,175,.18);">
+          <div class="m-icon" style="background:rgba(156,163,175,.1);">🩸</div>
+          <div class="m-val" style="font-size:20px;color:var(--text-sec);">--</div>
+          <div class="m-lbl">Glucose</div>
+          <div class="m-status s-nd">● No Data</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="comp-demo">
+      <div class="comp-label">Luma Chat — Indigo (AI) vs Emerald (user). Role is visually unambiguous.</div>
+      <div class="luma-hdr">
+        <div class="luma-avatar">✦</div>
+        <div>
+          <div style="font-size:14px;font-weight:600;">Luma</div>
+          <div style="font-size:11px;color:var(--text-sec);">AI health companion · Venice AI</div>
+        </div>
+      </div>
+      <div class="chat-wrap">
+        <div class="bubble bub-luma">Good morning. Your HRV dropped 18% last night vs your 30-day baseline. How did you sleep?</div>
+        <div class="bubble bub-user">Pretty rough — went to bed late. Show me the trend.</div>
+        <div class="bubble bub-luma">Your HRV trends down on nights with sleep onset after midnight. <strong>Going to bed by 11pm</strong> correlates with 22% higher HRV the next morning in your data.</div>
+        <div class="typing"><div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div></div>
+      </div>
+      <div class="note">Luma: indigo bg (#3730A3 dark / #EEF2FF light) · AI gradient border · User: emerald (#10B981 dark / #006B4F light) · white text</div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="comp-demo">
+      <div class="comp-label">Buttons — primary (radius 14, pad H:24 V:14) · secondary (radius 10, border 1.5pt)</div>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn-p">Sync Health Data</button>
+        <button class="btn-p">✦ Chat with Luma</button>
+        <button class="btn-p dis" disabled>Syncing…</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn-s">View Proofs</button>
+        <button class="btn-s">Connect Wallet</button>
+      </div>
+    </div>
+
+    <!-- Badges -->
+    <div class="comp-demo">
+      <div class="comp-label">Tier Badges & Source Badges</div>
+      <div class="badge-row" style="margin-bottom:14px;">
+        <span class="tier-badge t-gold">⬢ GOLD</span>
+        <span class="tier-badge t-silver">⬢ SILVER</span>
+        <span class="tier-badge t-bronze">⬢ BRONZE</span>
+        <span class="tier-badge t-none">⬢ NONE</span>
+      </div>
+      <div class="badge-row">
+        <span class="src-badge">❤️ Apple Health</span>
+        <span class="src-badge">💉 Bloodwork</span>
+        <span class="src-badge">📡 CGM</span>
+        <span class="src-badge">🦴 DEXA</span>
+      </div>
+    </div>
+
+    <!-- Toasts -->
+    <div class="comp-demo">
+      <div class="comp-label">Toast System — left border signals type · auto-dismiss 3s · spring entry</div>
+      <div class="toast t-success"><div class="toast-ico">✓</div><div><div class="toast-ttl">Sync Complete</div><div class="toast-bod">42 days uploaded to Storj. GOLD tier achieved.</div></div></div>
+      <div class="toast t-warning"><div class="toast-ico">⚠</div><div><div class="toast-ttl">Borderline HRV</div><div class="toast-bod">Below your 30-day baseline. Consider reviewing sleep.</div></div></div>
+      <div class="toast t-error"><div class="toast-ico">✕</div><div><div class="toast-ttl">Sync Failed</div><div class="toast-bod">Unable to connect to Storj. Check connection.</div></div></div>
+      <div class="toast t-info" style="margin-bottom:0;"><div class="toast-ico">ℹ</div><div><div class="toast-ttl">What is HRV?</div><div class="toast-bod">Heart Rate Variability — variation in time between heartbeats.</div></div></div>
+    </div>
+
+    <!-- Motion -->
+    <div class="comp-demo">
+      <div class="comp-label">Animation Tokens — hover/click to feel the timings</div>
+      <div class="motion-grid">
+        <div class="motion-card"><div class="motion-tok">fast · 150ms</div><div class="motion-desc">Toggles, micro-interactions</div></div>
+        <div class="motion-card"><div class="motion-tok">normal · 250ms</div><div class="motion-desc">State changes, card transitions</div></div>
+        <div class="motion-card"><div class="motion-tok">spring · r0.3 d0.7</div><div class="motion-desc">Card press, FAB, drag-release</div></div>
+        <div class="motion-card"><div class="motion-tok">slow · 400ms</div><div class="motion-desc">Page transitions</div></div>
+      </div>
+      <div class="note">Card press: scale(0.97) · Button: scale(0.96) · Chart draw: 800ms · Count-up: 500ms · Toast: slide+fade 300ms, auto-dismiss 3s · Shimmer: 1.5s repeat</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- ====================================================== 06 SCREEN MOCK -->
+  <div class="sec">
+    <div class="sec-num">06</div>
+    <div class="sec-head">Dashboard — In Context</div>
+    <div class="sec-desc">New design tokens applied: green-tinted dark bg, range indicators, Luma tab (not Cosaint). Toggle light/dark.</div>
+
+    <div class="phone">
+      <div class="ph-notch"><div class="ph-island"></div></div>
+      <div class="ph-screen">
+        <div class="ph-greeting">
+          <div>
+            <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:var(--p400);text-transform:uppercase;margin-bottom:2px;">AMACH HEALTH</div>
+            <div style="font-size:17px;font-weight:700;">Good morning</div>
+            <div style="font-size:10px;color:var(--text-sec);margin-top:2px;">● Synced 2h ago</div>
+          </div>
+          <div class="score-ring">
+            <div class="score-inner">
+              <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;">87</span>
+              <span class="tier-badge t-gold" style="font-size:8px;padding:1px 4px;margin-top:2px;">G</span>
+            </div>
+          </div>
+        </div>
+        <div class="ph-grid">
+          <div class="ph-card" style="border-color:rgba(52,211,153,.2);">
+            <div style="font-size:12px;margin-bottom:6px;">🚶</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;line-height:1;">8.4k</div>
+            <div style="font-size:10px;color:var(--text-sec);margin-top:2px;">Steps</div>
+            <div class="range-track" style="margin-top:6px;"><div class="range-fill" style="width:72%;background:#059669;"></div></div>
+          </div>
+          <div class="ph-card" style="border-color:rgba(52,211,153,.2);">
+            <div style="font-size:12px;margin-bottom:6px;">🫀</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;line-height:1;">68</div>
+            <div style="font-size:10px;color:var(--text-sec);margin-top:2px;">HR bpm</div>
+            <div class="range-track" style="margin-top:6px;"><div class="range-fill" style="width:55%;background:#059669;"></div></div>
+          </div>
+          <div class="ph-card" style="border-color:rgba(99,102,241,.18);">
+            <div style="font-size:12px;margin-bottom:6px;">🌙</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;line-height:1;">7.4</div>
+            <div style="font-size:10px;color:var(--text-sec);margin-top:2px;">Sleep hrs</div>
+            <div class="range-track" style="margin-top:6px;"><div class="range-fill" style="width:80%;background:#059669;"></div></div>
+          </div>
+          <div class="ph-card" style="border-color:rgba(217,119,6,.18);">
+            <div style="font-size:12px;margin-bottom:6px;">📊</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;line-height:1;">34</div>
+            <div style="font-size:10px;color:var(--text-sec);margin-top:2px;">HRV ms</div>
+            <div class="range-track" style="margin-top:6px;"><div class="range-fill" style="width:42%;background:#D97706;"></div></div>
+          </div>
+        </div>
+        <div style="margin:6px 0 10px;">
+          <div style="font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-sec);margin-bottom:5px;">STEPS — 7D</div>
+          <div style="display:flex;align-items:flex-end;gap:4px;height:36px;">
+            <div style="flex:1;background:linear-gradient(to top,var(--p400),rgba(52,211,153,.2));border-radius:3px 3px 0 0;height:40%;"></div>
+            <div style="flex:1;background:linear-gradient(to top,var(--p400),rgba(52,211,153,.2));border-radius:3px 3px 0 0;height:60%;"></div>
+            <div style="flex:1;background:linear-gradient(to top,var(--p400),rgba(52,211,153,.2));border-radius:3px 3px 0 0;height:50%;"></div>
+            <div style="flex:1;background:linear-gradient(to top,var(--p400),rgba(52,211,153,.2));border-radius:3px 3px 0 0;height:85%;"></div>
+            <div style="flex:1;background:linear-gradient(to top,var(--p400),rgba(52,211,153,.2));border-radius:3px 3px 0 0;height:65%;"></div>
+            <div style="flex:1;background:linear-gradient(to top,var(--p400),rgba(52,211,153,.2));border-radius:3px 3px 0 0;height:95%;"></div>
+            <div style="flex:1;background:linear-gradient(to top,var(--p300),rgba(52,211,153,.35));border-radius:3px 3px 0 0;height:78%;outline:1px solid var(--p300);"></div>
+          </div>
+        </div>
+      </div>
+      <div class="ph-tabbar">
+        <div class="ph-tab on"><div class="ph-tab-ico">📊</div><div>Dashboard</div></div>
+        <div class="ph-tab"><div class="ph-tab-ico" style="color:var(--ai-p400);">✦</div><div>Luma</div></div>
+        <div class="ph-tab"><div class="ph-tab-ico">⟳</div><div>Sync</div></div>
+        <div class="ph-tab"><div class="ph-tab-ico">✓</div><div>Proofs</div></div>
+        <div class="ph-tab"><div class="ph-tab-ico">⚙</div><div>Settings</div></div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:14px;" class="note">
+      Toggle light/dark (top right) · Note the green-tinted dark bg vs old navy · Luma tab uses AI indigo
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div style="text-align:center;color:var(--text-sec);font-size:12px;line-height:2.2;">
+    <div style="font-weight:700;color:var(--text);margin-bottom:4px;">Amach Health Design System v1.0</div>
+    <div>Primary <span class="mono">#006B4F</span> · Accent <span class="mono">#F59E0B</span> · AI/Luma <span class="mono">#6366F1</span></div>
+    <div style="color:var(--text-ter);">"Earthy palette, modern execution" — Clarity Over Cleverness · Your Data, Your Health</div>
+  </div>
+
+</div>
+
+<script>
+  function toggleMode() {
+    const h = document.documentElement;
+    const dark = h.dataset.mode === 'dark';
+    h.dataset.mode = dark ? 'light' : 'dark';
+    document.getElementById('ico').textContent  = dark ? '🌙' : '☀️';
+    document.getElementById('lbl').textContent  = dark ? 'Dark mode' : 'Light mode';
+    try { localStorage.setItem('amach-ds', h.dataset.mode); } catch(e){}
+  }
+  try {
+    const s = localStorage.getItem('amach-ds');
+    if (s) {
+      document.documentElement.dataset.mode = s;
+      document.getElementById('ico').textContent = s==='dark'?'☀️':'🌙';
+      document.getElementById('lbl').textContent = s==='dark'?'Light mode':'Dark mode';
+    }
+  } catch(e){}
+</script>
+</body>
+</html>
