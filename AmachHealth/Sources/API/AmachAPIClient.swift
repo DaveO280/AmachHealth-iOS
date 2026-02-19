@@ -138,6 +138,54 @@ final class AmachAPIClient {
         return summary
     }
 
+    // MARK: - AI Chat
+
+    /// Send a message to Cosaint via /api/ai/chat
+    func sendChatMessage(
+        _ message: String,
+        history: [AIChatHistoryMessage],
+        context: AIChatContext? = nil
+    ) async throws -> AIChatResponse {
+        let request = AIChatRequest(
+            message: message,
+            context: context,
+            history: history,
+            options: AIChatOptions(mode: "quick")
+        )
+        return try await post(path: "/api/ai/chat", body: request)
+    }
+
+    /// Save a chat session to Storj (encrypted)
+    func storeChatSession(
+        _ session: ChatSession,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> String {
+        let request = StorjRequest(
+            action: "storage/store",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            data: AnyCodable(session),
+            dataType: "chat-session",
+            options: StorjStoreOptions(
+                metadata: [
+                    "sessionId": session.id.uuidString,
+                    "messageCount": String(session.messages.count),
+                    "createdAt": ISO8601DateFormatter().string(from: session.createdAt),
+                    "platform": "ios"
+                ]
+            )
+        )
+
+        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
+
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Failed to store chat session")
+        }
+
+        return result.storjUri
+    }
+
     // MARK: - Attestation API
 
     /// Get user's attestations from chain
