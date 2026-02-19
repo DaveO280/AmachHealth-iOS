@@ -75,8 +75,24 @@ final class WalletService: ObservableObject {
         }
         */
 
-        // Placeholder for development
-        throw WalletError.notImplemented
+        // DEV MOCK: Use a hardcoded development address until Privy iOS SDK ships.
+        // Replace this block with the commented Privy SDK flow above when ready.
+        let devAddress = "0xDev0000000000000000000000000000AmachDev1"
+        let devKey = String(repeating: "a", count: 64) // 64-char hex placeholder
+        let devSignature = "0xmock_signature_for_dev"
+        let ts = Int(Date().timeIntervalSince1970 * 1000)
+
+        let key = WalletEncryptionKey(
+            walletAddress: devAddress,
+            encryptionKey: devKey,
+            signature: devSignature,
+            timestamp: ts
+        )
+        saveEncryptionKeyToKeychain(key)
+
+        self.encryptionKey = key
+        self.address = devAddress
+        self.isConnected = true
     }
 
     /// Disconnect wallet
