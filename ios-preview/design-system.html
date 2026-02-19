@@ -88,7 +88,7 @@
     /* Soft static gradient matching the site's mist bg — no heavy blobs */
     .aurora { display: none; }
     [data-mode="light"] body {
-      background: linear-gradient(135deg, #f0fdf8 0%, #e4f9f2 35%, #f3fcff 70%, #f0fdf6 100%);
+      background: linear-gradient(160deg, #FFFBEB 0%, #FEF3C7 30%, #FFFDE7 65%, #FFFFFF 100%);
       background-attachment: fixed;
     }
     /* ============================================================ LIGHT MODE OVERRIDES */
@@ -141,24 +141,25 @@
       border-radius: 14px; display: flex; align-items: center; justify-content: center;
       font-size: 22px; box-shadow: 0 0 16px rgba(16,185,129,0.25);
     }
-    /* Wordmark — Cinzel: emerald in dark mode, deep forest in light mode */
+    /* Wordmark — EB Garamond italic: emerald in dark mode, deep forest in light mode */
     .wordmark {
-      font-family: 'Cinzel', 'Times New Roman', serif;
-      font-size: 22px; font-weight: 900; letter-spacing: 0.08em;
+      font-family: 'EB Garamond', Georgia, serif;
+      font-style: italic; font-weight: 400;
+      font-size: 26px; letter-spacing: 0.04em;
       color: #10B981;        /* dark mode: emerald-400 */
       position: relative; display: inline-block; overflow: hidden;
     }
     [data-mode="light"] .wordmark { color: #064E3B; }  /* light mode: deep forest green */
     .wordmark::after {
-      content: 'AMACH';
+      content: 'Amach';
       position: absolute; inset: 0;
       background: linear-gradient(
         105deg,
-        transparent 30%,
-        rgba(217,119,6,0.85) 48%,
-        rgba(251,191,36,0.95) 52%,
-        rgba(217,119,6,0.7) 56%,
-        transparent 70%
+        transparent 28%,
+        rgba(180, 120, 10, 0.5) 43%,
+        rgba(255, 248, 220, 0.82) 50%,
+        rgba(180, 120, 10, 0.45) 57%,
+        transparent 72%
       );
       background-size: 300% 100%;
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -350,7 +351,7 @@
     <div class="logo-wrap">
       <div class="logo-mark">☘</div>
       <div>
-        <span class="wordmark">AMACH</span>
+        <span class="wordmark">Amach</span>
         <span class="wordmark-sub">Health</span>
         <div class="logo-sub">Design System v1.0 · AmachDesignSystem.swift</div>
       </div>
