@@ -1,7 +1,7 @@
 // ChatView.swift
 // AmachHealth
 //
-// Cosaint AI chat interface — routes through Amach backend → Venice AI
+// Luma AI chat interface — routes through Amach backend → Venice AI
 
 import SwiftUI
 
@@ -45,7 +45,7 @@ struct ChatView: View {
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("Cosaint")
+                Text("Luma")
                     .font(.headline)
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.amachTextPrimary)
@@ -143,7 +143,7 @@ struct ChatView: View {
             }
 
             VStack(spacing: 8) {
-                Text("Ask Cosaint")
+                Text("Ask Luma")
                     .font(.title3)
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.amachTextPrimary)
@@ -252,7 +252,7 @@ struct ChatView: View {
             Divider().overlay(Color.amachPrimary.opacity(0.08))
 
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Ask Cosaint...", text: $messageText, axis: .vertical)
+                TextField("Ask Luma...", text: $messageText, axis: .vertical)
                     .lineLimit(1...5)
                     .font(.subheadline)
                     .foregroundStyle(Color.amachTextPrimary)

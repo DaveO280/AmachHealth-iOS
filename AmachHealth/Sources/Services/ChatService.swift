@@ -1,7 +1,7 @@
 // ChatService.swift
 // AmachHealth
 //
-// Manages Cosaint AI chat sessions:
+// Manages Luma AI chat sessions:
 // - Real-time message state
 // - Local persistence (documents directory JSON)
 // - Batched Storj saves when sessions grow (every 10 messages) or on new session
