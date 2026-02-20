@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Amach Health – iOS App</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Cinzel:wght@400;600;900&family=EB+Garamond:ital,wght@0,400;1,400&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cinzel:wght@400;600;900&family=EB+Garamond:ital,wght@0,400;1,400&display=swap" rel="stylesheet" />
   <style>
     /* =============================================
        DARK MODE TOKENS (default)
@@ -215,11 +215,13 @@
       margin-bottom: 4px;
     }
 
+    /* AmachType.companyName — matches Design System Reference lettering + shimmer */
     .brand-name {
-      font-family: 'Cinzel', serif;
-      font-size: 36px;
-      font-weight: 900;
-      letter-spacing: 0.1em;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
       color: var(--text);
       display: block;
       position: relative;
@@ -227,7 +229,7 @@
 
     /* Gold shimmer sweep overlay */
     .brand-name::after {
-      content: 'AMACH HEALTH';
+      content: 'Amach Health';
       position: absolute;
       inset: 0;
       background: linear-gradient(
@@ -556,7 +558,7 @@
   <div class="brand">
     <div class="brand-eyebrow">iOS App Preview</div>
     <div class="brand-name-wrap">
-      <span class="brand-name">AMACH HEALTH</span>
+      <span class="brand-name">Amach Health</span>
     </div>
     <div class="brand-health">outward · into life</div>
     <div class="brand-tagline">

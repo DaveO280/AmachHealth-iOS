@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <!-- Vibrant green circle with subtle top-left glow -->
+    <radialGradient id="circleGrad" cx="35%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="60%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </radialGradient>
+  </defs>
+  <circle cx="200" cy="200" r="200" fill="url(#circleGrad)"/>
+  <text x="200" y="268" text-anchor="middle" fill="white" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="168" letter-spacing="-5">AH</text>
+</svg>

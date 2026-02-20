@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Amach Health — AH Logo Export</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@800&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      background: #1a1a1a;
+      padding: 32px;
+      font-family: system-ui, sans-serif;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+    .export-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 32px;
+      justify-content: center;
+      align-items: flex-end;
+    }
+    .export-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-wrap {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse 70% 70% at 35% 35%, #34D399, #10B981 50%, #059669);
+      box-shadow: 0 0 60px rgba(16, 185, 129, 0.3);
+    }
+    .logo-wrap.light-mode {
+      background: radial-gradient(ellipse 70% 70% at 35% 35%, #059669, #047857 50%, #065F46);
+      box-shadow: 0 0 40px rgba(5, 150, 105, 0.25), 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .logo-wrap.size-400 {
+      width: 400px; height: 400px;
+    }
+    .logo-wrap.size-1024 {
+      width: 1024px; height: 1024px;
+    }
+    .logo-wrap span {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-weight: 800;
+      color: white;
+      line-height: 1;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.15);
+    }
+    .logo-wrap.size-400 span {
+      font-size: 168px;
+      letter-spacing: -5px;
+    }
+    .logo-wrap.size-1024 span {
+      font-size: 430px;
+      letter-spacing: -12px;
+    }
+    .export-label { font-weight: 600; color: #e5e7eb; }
+    p { max-width: 520px; text-align: center; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="export-row">
+    <div class="export-item">
+      <div class="logo-wrap size-400"><span>AH</span></div>
+      <span class="export-label">400×400 — X profile, favicon (dark)</span>
+    </div>
+    <div class="export-item">
+      <div class="logo-wrap size-1024"><span>AH</span></div>
+      <span class="export-label">1024×1024 — iOS app icon</span>
+    </div>
+  </div>
+  <div class="export-row">
+    <div class="export-item">
+      <div class="logo-wrap size-400 light-mode"><span>AH</span></div>
+      <span class="export-label">400×400 — Light mode variant</span>
+    </div>
+    <div class="export-item">
+      <div class="logo-wrap size-1024 light-mode"><span>AH</span></div>
+      <span class="export-label">1024×1024 — Light mode app icon</span>
+    </div>
+  </div>
+  <p>Right-click each logo → Save image as… (or screenshot) to export. Dark variant for X/dark UIs. Light variant (deeper green) for light backgrounds.</p>
+</body>
+</html>

@@ -8,7 +8,7 @@
 //
 // HOW TO USE:
 //   Colors:     Color.Amach.primary, Color.Amach.AI.base
-//   Type:       AmachType.h1, AmachType.dataValue(size: 36)
+//   Type:       AmachType.h1, AmachType.companyName, AmachType.dataValue(size: 36)
 //   Spacing:    AmachSpacing.md (16), AmachSpacing.lg (24)
 //   Radius:     AmachRadius.card (16), AmachRadius.bubble (20)
 //   Elevation:  AmachElevation.Level1.shadowColor, etc.
@@ -287,6 +287,10 @@ extension Color {
 enum AmachType {
     /// 28pt Bold — page titles only
     static var h1: Font { .system(size: 28, weight: .bold) }
+
+    /// 32pt ExtraBold — company name / wordmark only
+    /// Matches ds-header h1 lettering. Use with shimmer overlay.
+    static var companyName: Font { .system(size: 32, weight: .heavy) }
 
     /// 20pt Semibold — section headers, modal titles
     static var h2: Font { .system(size: 20, weight: .semibold) }
