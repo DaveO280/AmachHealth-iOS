@@ -533,14 +533,14 @@ extension View {
 
     // ── Card Styles ──────────────────────────────────────────
 
-    /// Level 1 card. Solid surface, subtle border.
+    /// Level 1 card. Solid surface, subtle border. Adaptive light/dark.
     /// Use: MetricCard, StorageItemCard, list cards.
     func amachCard() -> some View {
         self
-            .background(Color.Amach.Surface.surfaceDark)
+            .background(Color.amachSurface)
             .clipShape(RoundedRectangle(cornerRadius: AmachRadius.card))
             .overlay(RoundedRectangle(cornerRadius: AmachRadius.card)
-                .stroke(Color.Amach.primary.opacity(AmachElevation.Level1.borderOpacity),
+                .stroke(Color.amachPrimary.opacity(AmachElevation.Level1.borderOpacity),
                         lineWidth: 1))
             .shadow(color: AmachElevation.Level1.shadowColor,
                     radius: AmachElevation.Level1.shadowRadius,
@@ -548,14 +548,14 @@ extension View {
                     y: AmachElevation.Level1.shadowY)
     }
 
-    /// Level 2 card. More prominent shadow.
+    /// Level 2 card. More prominent shadow. Adaptive light/dark.
     /// Use: health score card, featured metric, sync progress.
     func amachCardElevated() -> some View {
         self
-            .background(Color.Amach.Surface.elevatedDark)
+            .background(Color.amachElevated)
             .clipShape(RoundedRectangle(cornerRadius: AmachRadius.card))
             .overlay(RoundedRectangle(cornerRadius: AmachRadius.card)
-                .stroke(Color.Amach.primary.opacity(AmachElevation.Level2.borderOpacity),
+                .stroke(Color.amachPrimary.opacity(AmachElevation.Level2.borderOpacity),
                         lineWidth: 1))
             .shadow(color: AmachElevation.Level2.shadowColor,
                     radius: AmachElevation.Level2.shadowRadius,
@@ -662,3 +662,482 @@ extension View {
 // │ border: Semantic.* border matching toast type           │
 // │ appear: toastAppear (slide down + fade), 3s auto-dismiss│
 // └─────────────────────────────────────────────────────────┘
+
+
+// ============================================================
+// MARK: - ADAPTIVE COLOR API
+// ============================================================
+//
+// Semantic convenience layer. Use these in views — they resolve
+// to the correct value in both light and dark mode.
+//
+// Maps 1:1 to CSS custom properties in design-system.html.
+//
+// These replace the static Color.amach* properties that were
+// previously scattered across AmachHealthApp.swift.
+// ─────────────────────────────────────────────────────────────
+
+extension Color {
+
+    // ── Surfaces ──────────────────────────────────────────────
+
+    /// Screen background. Green-tinted dark (#0A1A15) / mist (#F0FDF4).
+    static var amachBg: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.Surface.bgDark)
+                : UIColor(Amach.Surface.bgLight)
+        })
+    }
+
+    /// Card surface. (#111F1A dark / #FFFFFF light)
+    static var amachSurface: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.Surface.surfaceDark)
+                : UIColor(Amach.Surface.surfaceLight)
+        })
+    }
+
+    /// Elevated surface. (#1A2E26 dark / #ECFDF5 light)
+    static var amachElevated: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.Surface.elevatedDark)
+                : UIColor(Amach.Surface.elevatedLight)
+        })
+    }
+
+    // ── Primary ───────────────────────────────────────────────
+
+    /// Adaptive emerald.
+    /// dark → p400 #10B981 (legible on dark green surface)
+    /// light→ primary #006B4F (WCAG AA on white)
+    static var amachPrimary: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.p400)
+                : UIColor(Amach.primary)
+        })
+    }
+
+    /// Always p400 (#10B981) — chart fills, icon tints, glows.
+    /// Not adaptive. Use only where the surface provides contrast.
+    static let amachPrimaryBright = Amach.p400
+
+    // ── Accent ────────────────────────────────────────────────
+
+    /// Adaptive amber.
+    /// dark → accent #F59E0B · light → a600 #D97706 (more legible)
+    static var amachAccent: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.accent)
+                : UIColor(Amach.a600)
+        })
+    }
+
+    // ── Tier metals (non-adaptive — always render on own bg) ──
+
+    static let amachGold   = Amach.accent              // #F59E0B
+    static let amachSilver = Color(hex: "94A3B8")       // slate-400
+    static let amachBronze = Color(hex: "CD7F32")       // classic bronze
+
+    // ── AI / Luma ─────────────────────────────────────────────
+
+    /// Soft indigo. Luma-only. Never apply to non-AI elements.
+    static let amachAI = Amach.AI.base
+
+    // ── Text ──────────────────────────────────────────────────
+
+    /// Primary text. dark → #F9FAFB · light → #111827
+    static var amachTextPrimary: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.Text.primaryD)
+                : UIColor(Amach.Text.primaryL)
+        })
+    }
+
+    /// Secondary text. dark → #9CA3AF · light → #6B7280
+    static var amachTextSecondary: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.Text.secondaryD)
+                : UIColor(Amach.Text.secondaryL)
+        })
+    }
+
+    /// Tertiary text. 14pt+ only. dark → #6B7280 · light → #9CA3AF
+    static var amachTextTertiary: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.Text.tertiaryD)
+                : UIColor(Amach.Text.tertiaryL)
+        })
+    }
+
+    // ── Semantic shorthands ───────────────────────────────────
+
+    static let amachDestructive = Amach.Semantic.error
+    static let amachWarning     = Amach.Semantic.warning
+    static let amachSuccess     = Amach.Semantic.success
+}
+
+
+// ============================================================
+// MARK: - ICON TOKEN MAP
+// ============================================================
+//
+// All SF Symbols used in the app. Use these tokens rather than
+// inline string literals — findable, refactorable, documented.
+
+enum AmachIcon {
+    // ── Health metrics ────────────────────────────────────────
+    static let steps       = "figure.walk"
+    static let heartRate   = "heart.fill"
+    static let hrv         = "waveform.path.ecg"
+    static let sleep       = "moon.fill"
+    static let glucose     = "drop.fill"
+    static let calories    = "flame.fill"
+    static let exercise    = "figure.run"
+    static let oxygen      = "lungs.fill"
+    static let weight      = "scalemass.fill"
+
+    // ── App tabs & features ───────────────────────────────────
+    static let dashboard   = "chart.xyaxis.line"
+    static let luma        = "sparkles"          // Luma AI companion tab
+    static let sync        = "arrow.triangle.2.circlepath"
+    static let proofs      = "checkmark.seal.fill"
+    static let settings    = "gearshape.fill"
+
+    // ── Data sources ──────────────────────────────────────────
+    static let appleHealth = "heart.fill"
+    static let bloodwork   = "medical.thermometer.fill"
+    static let dexa        = "figure.stand"
+    static let cgm         = "chart.dots.scatter"
+
+    // ── Platform ──────────────────────────────────────────────
+    static let wallet      = "wallet.pass.fill"
+    static let storage     = "lock.shield.fill"
+    static let network     = "link.circle.fill"
+    static let privacy     = "hand.raised.fill"
+
+    // ── UI states ─────────────────────────────────────────────
+    static let info        = "info.circle.fill"
+    static let warning     = "exclamationmark.triangle.fill"
+    static let errorIcon   = "xmark.circle.fill"
+    static let successIcon = "checkmark.circle.fill"
+}
+
+
+// ============================================================
+// MARK: - ACCESSIBILITY
+// ============================================================
+
+enum AmachAccessibility {
+    /// Apple HIG minimum interactive touch target (44×44pt).
+    static let minTouchTarget: CGFloat = 44
+
+    /// Body text minimum. Never render body smaller than this.
+    static let minBodySize: CGFloat = 16
+
+    /// Data values (biomarkers) stay fixed — Dynamic Type
+    /// must not reflow a blood glucose reading mid-card.
+    /// Use .font(AmachType.dataValue(size:)) which is always fixed.
+    static let dataValuesFixed = true
+
+    /// Returns true when system Reduce Motion is enabled.
+    /// Always check before complex animations.
+    static func isReduceMotionEnabled() -> Bool {
+        UIAccessibility.isReduceMotionEnabled
+    }
+}
+
+
+// ============================================================
+// MARK: - BUTTON STYLES
+// ============================================================
+
+/// Full-width primary CTA.
+/// bg: Amach.primary · radius: md (14) · haptic: .medium on press
+struct AmachPrimaryButtonStyle: ButtonStyle {
+    var isLoading: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: AmachSpacing.sm) {
+            if isLoading {
+                ProgressView()
+                    .tint(Color.Amach.Text.onPrimary)
+                    .scaleEffect(0.85)
+            }
+            configuration.label
+        }
+        .font(AmachType.h3)
+        .fontWeight(.semibold)
+        .padding(.horizontal, AmachSpacing.lg)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .background(Color.Amach.primary)
+        .foregroundStyle(Color.Amach.Text.onPrimary)
+        .clipShape(RoundedRectangle(cornerRadius: AmachRadius.md))
+        .shadow(color: Color.Amach.primary.opacity(0.28), radius: 8, y: 2)
+        .scaleEffect(configuration.isPressed ? AmachAnimation.buttonPressScale : 1)
+        .animation(AmachAnimation.ifMotion(AmachAnimation.spring), value: configuration.isPressed)
+        .onChange(of: configuration.isPressed) { _, pressed in
+            if pressed { AmachHaptics.buttonPress() }
+        }
+    }
+}
+
+/// Ghost secondary button: clear bg, primary border + text.
+/// radius: sm (10) · border: 1.5pt primary
+struct AmachSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(AmachType.h3)
+            .fontWeight(.semibold)
+            .padding(.horizontal, AmachSpacing.lg)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(.clear)
+            .foregroundStyle(Color.amachPrimary)
+            .overlay(
+                RoundedRectangle(cornerRadius: AmachRadius.sm)
+                    .stroke(Color.amachPrimary, lineWidth: 1.5)
+            )
+            .scaleEffect(configuration.isPressed ? AmachAnimation.cardPressScale : 1)
+            .animation(AmachAnimation.ifMotion(AmachAnimation.spring), value: configuration.isPressed)
+    }
+}
+
+extension View {
+    func amachPrimaryButtonStyle(isLoading: Bool = false) -> some View {
+        buttonStyle(AmachPrimaryButtonStyle(isLoading: isLoading))
+    }
+    func amachSecondaryButtonStyle() -> some View {
+        buttonStyle(AmachSecondaryButtonStyle())
+    }
+}
+
+
+// ============================================================
+// MARK: - HEALTH STATUS PILL
+// ============================================================
+//
+// Inline status badge. Colored dot + label.
+// Uses full Bg/Text triplet per mode for WCAG contrast.
+
+struct HealthStatusPill: View {
+
+    enum Status {
+        case optimal, borderline, critical, noData
+
+        /// Parse a raw health metric string to Status.
+        static func from(_ string: String) -> Status {
+            switch string.lowercased() {
+            case "optimal":    return .optimal
+            case "borderline": return .borderline
+            case "critical":   return .critical
+            default:           return .noData
+            }
+        }
+    }
+
+    let status: Status
+    @Environment(\.colorScheme) private var scheme
+
+    private var label: String {
+        switch status {
+        case .optimal:    return "Optimal"
+        case .borderline: return "Borderline"
+        case .critical:   return "Critical"
+        case .noData:     return "No Data"
+        }
+    }
+
+    private var tint: Color {
+        switch status {
+        case .optimal:    return Color.Amach.Health.optimal
+        case .borderline: return Color.Amach.Health.borderline
+        case .critical:   return Color.Amach.Health.critical
+        case .noData:     return Color.Amach.Health.noData
+        }
+    }
+
+    private var bg: Color {
+        switch (status, scheme) {
+        case (.optimal, .dark):    return Color.Amach.Health.optimalBgD
+        case (.optimal, _):        return Color.Amach.Health.optimalBgL
+        case (.borderline, .dark): return Color.Amach.Health.borderlineBgD
+        case (.borderline, _):     return Color.Amach.Health.borderlineBgL
+        case (.critical, .dark):   return Color.Amach.Health.criticalBgD
+        case (.critical, _):       return Color.Amach.Health.criticalBgL
+        case (.noData, .dark):     return Color.Amach.Health.noDataBgD
+        case (.noData, _):         return Color.Amach.Health.noDataBgL
+        }
+    }
+
+    private var textColor: Color {
+        switch (status, scheme) {
+        case (.optimal, .dark):    return Color.Amach.Health.optimalTextD
+        case (.optimal, _):        return Color.Amach.Health.optimalTextL
+        case (.borderline, .dark): return Color.Amach.Health.borderlineTextD
+        case (.borderline, _):     return Color.Amach.Health.borderlineTextL
+        case (.critical, .dark):   return Color.Amach.Health.criticalTextD
+        case (.critical, _):       return Color.Amach.Health.criticalTextL
+        case (.noData, .dark):     return Color.Amach.Health.noDataTextD
+        case (.noData, _):         return Color.Amach.Health.noDataTextL
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+            Text(label)
+                .font(AmachType.tiny)
+                .fontWeight(.semibold)
+        }
+        .foregroundStyle(textColor)
+        .padding(.horizontal, AmachSpacing.sm)
+        .padding(.vertical, 3)
+        .background(bg)
+        .clipShape(Capsule())
+    }
+}
+
+
+// ============================================================
+// MARK: - TIER BADGE (Design-System canonical version)
+// ============================================================
+//
+// Uses the full BG/Text/Border triplet — always light-mode safe.
+// Name: AmachTierBadge to distinguish from the legacy TierBadge
+// in AmachHealthApp.swift during migration.
+
+struct AmachTierBadge: View {
+    let tier: String  // "GOLD" | "SILVER" | "BRONZE" | other
+
+    private var config: (bg: Color, text: Color, border: Color) {
+        switch tier.uppercased() {
+        case "GOLD":
+            return (Color.Amach.Tier.goldBg,   Color.Amach.Tier.goldText,   Color.Amach.Tier.goldBorder)
+        case "SILVER":
+            return (Color.Amach.Tier.silverBg, Color.Amach.Tier.silverText, Color.Amach.Tier.silverBorder)
+        case "BRONZE":
+            return (Color.Amach.Tier.bronzeBg, Color.Amach.Tier.bronzeText, Color.Amach.Tier.bronzeBorder)
+        default:
+            return (Color.Amach.Tier.noneBg,   Color.Amach.Tier.noneText,   Color.Amach.Tier.noneBorder)
+        }
+    }
+
+    var body: some View {
+        Text(tier.uppercased())
+            .font(AmachType.tiny)
+            .fontWeight(.bold)
+            .tracking(0.5)
+            .padding(.horizontal, AmachSpacing.sm)
+            .padding(.vertical, 4)
+            .background(config.bg)
+            .foregroundStyle(config.text)
+            .clipShape(RoundedRectangle(cornerRadius: AmachRadius.xs))
+            .overlay(
+                RoundedRectangle(cornerRadius: AmachRadius.xs)
+                    .stroke(config.border, lineWidth: 1)
+            )
+    }
+}
+
+
+// ============================================================
+// MARK: - RANGE BAR
+// ============================================================
+//
+// Horizontal health range indicator.
+// value: 0.0–1.0 normalized position within the metric's range.
+
+struct AmachRangeBar: View {
+    let value: Double
+    let status: HealthStatusPill.Status
+
+    private var fillColor: Color {
+        switch status {
+        case .optimal:    return Color.Amach.Health.optimal
+        case .borderline: return Color.Amach.Health.borderline
+        case .critical:   return Color.Amach.Health.critical
+        case .noData:     return Color.Amach.Health.noData
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let barWidth  = geo.size.width
+            let fillWidth = barWidth * min(max(value, 0), 1)
+            ZStack(alignment: .leading) {
+                // Track
+                RoundedRectangle(cornerRadius: AmachRadius.pill)
+                    .fill(Color.amachTextSecondary.opacity(0.18))
+                    .frame(height: 5)
+                // Fill
+                RoundedRectangle(cornerRadius: AmachRadius.pill)
+                    .fill(fillColor)
+                    .frame(width: fillWidth, height: 5)
+                // Position dot
+                Circle()
+                    .fill(Color.amachElevated)
+                    .frame(width: 12, height: 12)
+                    .shadow(color: fillColor.opacity(0.5), radius: 4)
+                    .offset(x: max(fillWidth - 6, 0))
+            }
+        }
+        .frame(height: 12)
+    }
+}
+
+
+// ============================================================
+// MARK: - LUMA TYPING INDICATOR
+// ============================================================
+//
+// Animated three-dot bounce — shown while Luma generates a reply.
+// Dots cycle through AI indigo, staggered by lumaTypingStagger.
+// Respects Reduce Motion: skips scale animation, keeps opacity cycle.
+
+struct LumaTypingIndicator: View {
+    @State private var activeDot: Int = 0
+
+    private let timer = Timer.publish(
+        every: AmachAnimation.lumaTypingDotDuration / 3,
+        on: .main,
+        in: .common
+    ).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.Amach.AI.base)
+                    .frame(width: 7, height: 7)
+                    .opacity(activeDot == i ? 1.0 : 0.4)
+                    .scaleEffect(activeDot == i ? 1.4 : 1.0)
+                    .animation(
+                        UIAccessibility.isReduceMotionEnabled ? nil : AmachAnimation.spring,
+                        value: activeDot
+                    )
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.Amach.AI.dark)
+        .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AmachRadius.lg, style: .continuous)
+                .stroke(Color.Amach.AI.base.opacity(0.22), lineWidth: 1)
+        )
+        .onReceive(timer) { _ in
+            withAnimation { activeDot = (activeDot + 1) % 3 }
+        }
+    }
+}

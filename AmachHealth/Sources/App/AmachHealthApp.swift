@@ -41,7 +41,7 @@ struct ContentView: View {
 
             ChatView()
                 .tabItem {
-                    Label("Cosaint", systemImage: "sparkles")
+                    Label("Luma", systemImage: AmachIcon.luma)
                 }
 
             HealthSyncView()
@@ -449,98 +449,12 @@ struct SettingsView: View {
 
 // MARK: - Shared UI Components
 
-struct TierBadge: View {
-    let tier: String
+// TierBadge: delegates to AmachTierBadge from AmachDesignSystem.swift
+// Uses the full BG/Text/Border triplet with correct WCAG contrast ratios.
+typealias TierBadge = AmachTierBadge
 
-    private var config: (bg: Color, fg: Color) {
-        switch tier.uppercased() {
-        case "GOLD":   return (Color.amachAccent.opacity(0.15), Color.amachAccent)
-        case "SILVER": return (Color.amachSilver.opacity(0.15), Color.amachSilver)
-        case "BRONZE": return (Color.amachBronze.opacity(0.15), Color.amachBronze)
-        default:       return (Color.amachSurface, Color.amachTextSecondary)
-        }
-    }
-
-    var body: some View {
-        Text(tier.uppercased())
-            .font(.caption2)
-            .fontWeight(.bold)
-            .tracking(0.5)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(config.bg)
-            .foregroundStyle(config.fg)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
-            .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .stroke(config.fg.opacity(0.3), lineWidth: 1)
-            )
-    }
-}
-
-// MARK: - Color Extension
-
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3:
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6:
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8:
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 0)
-        }
-        self.init(
-            .sRGB,
-            red: Double(r) / 255,
-            green: Double(g) / 255,
-            blue: Double(b) / 255,
-            opacity: Double(a) / 255
-        )
-    }
-
-    // MARK: Dark Premium Palette
-    static let amachBg             = Color(hex: "0A0E1A")  // Deep navy background
-    static let amachSurface        = Color(hex: "111827")  // Card surface
-    static let amachSurfaceElevated = Color(hex: "1A2234") // Elevated card
-
-    static let amachPrimary        = Color(hex: "10B981")  // Emerald (web: hsl 142 76% 36%)
-    static let amachPrimaryBright  = Color(hex: "34D399")  // Emerald-400, pops on dark bg
-
-    static let amachAccent         = Color(hex: "F59E0B")  // Amber-500
-    static let amachGold           = Color(hex: "F59E0B")
-    static let amachSilver         = Color(hex: "94A3B8")
-    static let amachBronze         = Color(hex: "CD7F32")
-
-    static let amachTextPrimary    = Color(hex: "F9FAFB")  // Near white
-    static let amachTextSecondary  = Color(hex: "9CA3AF")  // Muted gray
-
-    static let amachDestructive    = Color(hex: "F87171")  // Red-400
-}
-
-// MARK: - View Helpers
-
-extension View {
-    func amachCard() -> some View {
-        self
-            .background(Color.amachSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.amachPrimary.opacity(0.12), lineWidth: 1)
-            )
-    }
-
-    func amachGlow() -> some View {
-        self.shadow(color: Color.amachPrimary.opacity(0.3), radius: 12, x: 0, y: 4)
-    }
-}
+// Color tokens, view modifiers, and reusable components are defined in:
+// AmachDesignSystem.swift — single source of truth for all design tokens.
 
 // MARK: - Preview
 
