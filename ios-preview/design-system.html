@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Amach Health — Design System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@1,400&family=Inter:wght@300;400;500;600;700;900&family=Cinzel:wght@400;600;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Uncial+Antiqua&family=EB+Garamond:ital,wght@1,400&family=Inter:wght@300;400;500;600;700;900&family=Cinzel:wght@400;600;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <style>
 
     /* ============================================================
@@ -141,17 +141,17 @@
       border-radius: 14px; display: flex; align-items: center; justify-content: center;
       font-size: 22px; box-shadow: 0 0 16px rgba(16,185,129,0.25);
     }
-    /* Wordmark — EB Garamond italic: emerald in dark mode, deep forest in light mode */
+    /* Wordmark — Uncial Antiqua: Celtic uncial, maximum heritage feel */
     .wordmark {
-      font-family: 'EB Garamond', Georgia, serif;
-      font-style: italic; font-weight: 400;
-      font-size: 26px; letter-spacing: 0.04em;
+      font-family: 'Uncial Antiqua', serif;
+      font-weight: 400;
+      font-size: 24px; letter-spacing: 0.03em;
       color: #10B981;        /* dark mode: emerald-400 */
       position: relative; display: inline-block; overflow: hidden;
     }
     [data-mode="light"] .wordmark { color: #064E3B; }  /* light mode: deep forest green */
     .wordmark::after {
-      content: 'Amach';
+      content: 'Amach Health';
       position: absolute; inset: 0;
       background: linear-gradient(
         105deg,
@@ -351,8 +351,7 @@
     <div class="logo-wrap">
       <div class="logo-mark">☘</div>
       <div>
-        <span class="wordmark">Amach</span>
-        <span class="wordmark-sub">Health</span>
+        <span class="wordmark">Amach Health</span>
         <div class="logo-sub">Design System v1.0 · AmachDesignSystem.swift</div>
       </div>
     </div>
