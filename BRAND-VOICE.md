@@ -159,30 +159,19 @@ The Sage sees clearly what others refuse to see. The Outlaw builds outside the s
 
 ## V. Tagline System
 
-### Primary Tagline — Rebuilt
+### Primary Tagline
 
-The anchor line "Own your data." stays. It's direct, declarative, and names the claim before anyone can dispute it. The following three lines are rebuilt options.
+> **Own your data. Keep the value. Read the signals.**
 
----
+Three lines, three distinct claims that build on each other.
 
-**Option A — Value-forward** *(Recommended)*
-> Own your data. Keep the value. Know yourself.
+"Own your data." — the premise. Declarative, unambiguous. Names the ownership claim before anyone can dispute it.
 
-"Keep the value" does the most ideological work of any option — it names the shadow enemy (data extractors) without naming them. "Know yourself" is the ancient promise delivered through modern intelligence. Works at every scale: tagline, headline, spoken word.
+"Keep the value." — the edge. Does the most ideological work of the three: names the shadow enemy (data extractors) without naming them. The value of your health data is real. Most platforms take it. We don't.
 
----
+"Read the signals." — the promise. Plural matters — health data is never one signal, it's an ecology of overlapping patterns. "Read" implies intelligence, not just display. This is what Luma does.
 
-**Option B — Sovereignty-forward**
-> Own your data. Set the terms. Read the signal.
-
-"Set the terms" implies control without using the word "control." "Read the signal" is precision language — health data framed as signal, not noise. Skews technical. Best for developer/protocol contexts.
-
----
-
-**Option C — Closest to original structure**
-> Own your data. Decide who benefits. Get real answers.
-
-"Who benefits" is the sharpest anti-extractor line in any of the options. "Real answers" upgrades "real insights" — answers implies specific questions were asked and specifically answered. The strongest version of the original intent.
+Works at every scale: tagline, headline, spoken word, social.
 
 ---
 
