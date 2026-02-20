@@ -19,6 +19,9 @@
 10. [Competitive Differentiation Language](#x-competitive-differentiation-language)
 11. [Brand Guardrails](#xi-brand-guardrails)
 12. [Application Examples](#xii-application-examples)
+13. [Brand Architecture](#xiii-brand-architecture)
+14. [Visual Identity System](#xiv-visual-identity-system)
+15. [Application Guidelines](#xv-application-guidelines)
 
 ---
 
@@ -545,5 +548,311 @@ Warm, light humor is appropriate — the kind that makes someone smile, not laug
 
 ---
 
-*Document version: 1.0 — for iteration and refinement.*
+---
+
+## XIII. Brand Architecture
+
+### Naming System
+
+**Product name — by context**
+
+| Context | Usage | Example |
+|---|---|---|
+| **First mention, any document** | Amach Health | "Amach Health is a decentralized health data protocol..." |
+| **Ongoing conversation / social** | Amach | "Amach connects to Apple Health in one tap." |
+| **Technical / developer / grant** | Amach Protocol | "The Amach Protocol uses ZKsync Era for on-chain verification..." |
+| **App UI references** | Amach | Avoid "the app" — just "Amach" |
+
+**Never:** "the Amach" / "Amach app" / "Amach.Health" (as text) / "the platform"
+
+---
+
+**AI companion**
+
+- Always: **Luma** — not "the AI," not "our AI assistant," not "the chatbot"
+- Extended form (first mention in onboarding / marketing): "Luma, your health intelligence companion"
+- UI: "Luma" only — no article, no descriptor
+- Gender: Luma uses she/her in brand narrative. Product UI avoids pronouns entirely — "Luma reads your data" not "she reads your data." Both are acceptable; UI defaults to pronoun-free.
+
+---
+
+**Feature naming conventions**
+
+The rule: simple and direct. No clever portmanteaus, no trademark-bait suffixes, no branded verbs.
+
+| Feature | Correct | Never |
+|---|---|---|
+| Data synchronisation | Health Sync | SyncIQ / DataSync™ / AmachSync |
+| AI conversation | Chat with Luma | LumaChat / AI Assistant / HealthBot |
+| Data storage | Your Data / Encrypted Storage | DataVault™ / SecureCore |
+| Verification | On-chain verification | BlockVerify™ / ChainProof |
+| User tier | Gold / Silver / Bronze | Gold Tier™ / Elite / Premium Plus |
+| Score | Health Score | AmachScore / Vitality Index / Biometric IQ |
+
+---
+
+**Tier naming**
+
+Gold, Silver, Bronze, None — as established. No renaming, no suffixes, no "member" or "level" appended. The tier name stands alone.
+
+In copy: "You're on Gold" not "You're a Gold member" or "Gold tier access."
+
+---
+
+### How the Names Interact
+
+Amach is the protocol and the product. Luma is the intelligence inside it. The relationship matters for how they're introduced:
+
+- On marketing: lead with Amach, introduce Luma within one or two beats
+- In onboarding: introduce Luma by name, as a person — not "our AI" or "the assistant"
+- In technical docs: Amach Protocol throughout; Luma referenced as the AI layer, not separated out
+- In press: "Luma, Amach Health's AI health companion" on first mention
+
+---
+
+## XIV. Visual Identity System
+
+### Logo Usage Rules
+
+**The primary mark**
+White AH lettermark on an emerald circle (#006B4F). This is the default form. Used in the iOS app icon, on dark surfaces, on photography, in favicon and social profile images. The circle is structural — it contains and grounds the mark.
+
+**Secondary (reversed)**
+Emerald AH (#006B4F) on white or light surface. Used for light-background contexts: print collateral, light email headers, co-branding on white, light-mode web. The circle becomes a white or light-grey stroke outline only — do not fill it on light backgrounds.
+
+**Monochrome variants**
+- White AH on transparent: dark overlays, watermark use, embossing
+- Black AH on transparent: single-color print, light backgrounds where emerald is unavailable
+
+**Clear space**
+Minimum 1/4 of the logo width on all four sides. The clear space should be free of text, other marks, and busy visual elements. On photography, the circle provides its own visual isolation — respect it.
+
+**Minimum size**
+- Digital: 32px diameter
+- Print: 8mm diameter
+- Below these sizes, use the wordmark ("Amach Health" in Inter ExtraBold) only
+
+**Never:**
+- Stretch or distort the proportions
+- Recolor outside the defined palette (no gradient fills on the mark itself)
+- Add drop shadow, glow, emboss, or any effect to the lettermark
+- Place the lettermark without the circle in app or product contexts
+- Use an old or modified version of the mark alongside current brand materials
+- Rotate the mark
+- Place on a visually busy background without the circle container
+
+---
+
+### Luma Visual Identity
+
+**The Luma mark**
+A four-point sparkle (✦) in indigo (#6366F1). Clean, geometric, precise — a single point of light, not a starburst. The mark suggests clarity and illumination without organic softness. It should read as intelligent, not decorative.
+
+**Color family**
+- Default (dark surfaces): #6366F1 indigo-500
+- Active / highlighted: #818CF8 indigo-400 (slightly lighter for tap states)
+- Dark bubble background: #3730A3 indigo-800
+- Light bubble background: #EEF2FF indigo-50
+
+**How Luma elements are visually distinguished**
+Emerald (#006B4F) is Amach. Indigo (#6366F1) is Luma. Every surface, every card, every bubble that belongs to Luma uses the indigo family. The visual system makes the source legible without labeling it — you know when Luma is speaking because the color shifts.
+
+| UI element | Amach treatment | Luma treatment |
+|---|---|---|
+| Card background | #111F1A surface / glassmorphism | #3730A3 dark / #EEF2FF light bubble |
+| Border / accent | #006B4F emerald | #6366F1 indigo |
+| Primary action | Emerald CTA | Indigo CTA |
+| Typography highlight | Amber (#F59E0B) | Indigo-400 (#818CF8) |
+
+**The gradient border**
+Applied to Luma insight cards and AI-generated content surfaces only. Direction: emerald (#006B4F) → indigo (#6366F1). This gradient signals the seam between user data (emerald) and Luma's intelligence (indigo). It is used sparingly — one or two instances per screen maximum. Not applied to standard UI cards.
+
+**Luma thinking state**
+Three dots, indigo (#6366F1), cycling at 0.6s with 0.15s stagger between each dot. Subtle fade-in/fade-out — not a bounce. The animation is quiet. The patience it communicates is intentional. Luma thinking should feel like waiting for a thoughtful answer, not a loading bar.
+
+---
+
+### Photography Direction
+
+**Style principles**
+Natural light, warm tones, slightly desaturated. Real people in real environments. Active living, not posing. Devices visible but never the subject — health is a backdrop, not a performance. Edit toward the Amach palette: slight emerald grade in shadows (+5–8° green channel shift), amber warmth in highlights.
+
+**Never:** medical settings, white coats, stock-photo diversity casting, gym-culture fitness aesthetics, meditation/yoga clichés, staged "looking at the camera while exercising" imagery.
+
+---
+
+**Five key brand photography descriptions**
+
+**1. Hero / Landing**
+A person at a kitchen counter in early morning light. Phone resting face-up, health dashboard visible but not centered in frame. Coffee nearby, unhurried. Sunlight through a window. Slightly desaturated overall, warmth in the highlights. The feeling: this is someone whose morning includes their health data the way it includes their coffee — naturally, without drama.
+
+**2. Movement**
+Someone mid-stride on a trail, not a track or gym. Apple Watch visible on the wrist but not foregrounded. Shot from the side or slightly behind — we see movement, not a pose. Golden hour or early morning light. Emerald grade in the shadows of the surrounding trees or grass. The message: active without being performative.
+
+**3. Recovery / Morning**
+A person sitting up in bed, morning light, phone in hand looking at their overnight data. Wearable on wrist. The scene is calm, slightly disheveled — authentic morning, not an ad for the wearable. Warm light, desaturated linens. Health data as part of the start-of-day routine.
+
+**4. Data engagement**
+A close shot of hands — fingers scrolling a trend chart on a phone or tablet. Warm light on skin. Focus on the interaction between the human and the data, not the device itself. The chart partially visible. A ring or wearable may be present. Conveys: intelligence, curiosity, engagement. Health data as a thing worth paying attention to.
+
+**5. Conversation / Handoff**
+Two people in a relaxed setting — could be friends, could be a patient and a clinician. One is sharing their phone screen with the other. Candid, not posed. The data visible on screen. This image represents the moment Amach enables: arriving at a health conversation with a year of longitudinal data instead of a symptom description.
+
+---
+
+### Illustration Direction
+
+**Style**
+Clean, geometric, minimal line work. Thin strokes (1–2pt), minimal fill, emergent negative space. Not character-heavy — conceptual and abstract. The illustrations should feel like diagrams that have been made beautiful, not decorations trying to explain things.
+
+**Color palette**
+Emerald (#006B4F) primary, amber (#F59E0B) secondary, indigo (#6366F1) for Luma-related illustrations. Never full saturation — use the palette at 70–85% opacity or in tinted line work against dark surfaces.
+
+**Use cases:** onboarding flows, empty states, explainer content, error states. Never in the dashboard or health data views — those surfaces carry real data and illustrations compete with it.
+
+---
+
+**Five key illustration descriptions**
+
+**1. Onboarding welcome**
+Abstract concentric rings — three layers suggesting the health data ecosystem (outer: activity and wearables in emerald, middle: metabolic and bloodwork in amber, inner: AI insight and pattern in indigo). The rings are not perfectly circular — slight organic variation, like a topographic contour. Radiating but orderly. Suggests depth and interconnection without being medical.
+
+**2. Empty state — no data yet**
+A minimal standing figure (just the outline — no features, no detail) surrounded by thin dotted arcs that suggest data waiting to flow in. The figure is open, not diminished. The dotted arcs pulse toward it. The feeling: potential, not emptiness. "Connect your data and this fills in" without saying it.
+
+**3. Sync in progress**
+Thin parallel vertical lines that rise and begin to dissolve at the top into individual nodes — a network-meets-nature aesthetic. The nodes are connected by hairline paths suggesting a mycelial or cellular pattern. Emerald lines, amber nodes. Conveys: data moving from device to cloud, structure emerging from flow.
+
+**4. Data ownership**
+A minimal hand outline (geometric — just the silhouette) cupping a cluster of data nodes. The nodes sit within the hand, contained, organized. Slight indigo glow at the center node where Luma intelligence sits. The hand is not gripping — it's holding with open palm. Ownership as curation, not control.
+
+**5. Luma introduction**
+The Luma sparkle mark (✦) at center, with radiating hairline data paths emanating outward. At the perimeter, the lines resolve into small readable forms — a waveform, a number, a small trend line. Like light diffracting into its component colors, but in data. Indigo at center diffusing to emerald at the edges — the intelligence reads the data and what returns is clarity.
+
+---
+
+### Pattern & Texture System
+
+**Primary texture: topographic contours**
+Thin contour lines drawn at even intervals, curved organically, suggesting terrain elevation. Emerald-tinted (#006B4F at 4% opacity on dark surfaces, 6% on light). The pattern evokes landscape, the Irish countryside, the natural world underneath the data. It should be nearly invisible — a whisper of texture that you notice only when there is nothing else on the surface.
+
+**Secondary texture: cellular grid**
+A hexagonal pattern at hairline weight — evokes cellular biology, data structure, the architecture of living systems. Amber at 3–5% opacity. Even more restrained than the topographic — this one should essentially disappear into the background.
+
+**Usage rules**
+- Full-bleed section backgrounds on marketing pages
+- Presentation slide backgrounds (dark surface + topo texture is the standard slide canvas)
+- Email header areas (very light, 3% max)
+- Behind pull-quote sections, not behind body text
+- Never on dashboard, data view, or chat surfaces — the data is the texture there
+
+**The test:** If you can read the pattern without looking for it, it's too loud. Reduce opacity until it's only visible when the surface is bare.
+
+---
+
+## XV. Application Guidelines
+
+### Social Media
+
+**X / Twitter — @amachhealth**
+
+*Profile image:* AH logo (white lettermark, emerald circle). No text, no tagline. The mark alone at full bleed. Profile image is 400×400px — the circle should fill it.
+
+*Header image:* 1500×500px. Dark surface (#0A1A15). Primary tagline in Inter ExtraBold left-aligned, emerald + white. Or: topographic texture at 3% opacity with the tagline centered. No stock photography. The header should feel like a title card — confident, unhurried.
+
+*Post visual style:* Text-first. Dark background with Inter when image posts are used. Specific numbers, specific data points, specific observations as the hook. Never generic health advice. Quote any data in monospace treatment when possible. One clear thought per post — not a thread unless the thought genuinely requires it.
+
+*Voice calibration for X:* The most rebellious surface in the mix. This is where the signal flares for those paying attention. Observations about health data ownership, the extraction economy, what Amach does differently — delivered without explanation. Trust the audience to close the loop.
+
+---
+
+**LinkedIn — founder personal account**
+
+*Banner:* 1584×396px. Slightly more considered than X — a longer-form statement on the right half, AH logo top-left corner. Dark or light surface depending on the post cycle. The banner should change occasionally to reflect what the founder is building or thinking about.
+
+*Post style:* Longer than X, shorter than an essay. The entire argument lives in the first line — the rest is unpacking for those who want it. No "I've been thinking about..." openers. No "here's what I learned..." closers. Start in the middle of the thought, as if continuing a conversation.
+
+*Voice:* Founder voice is context-dependent, always human. More personal than the brand voice but never disconnected from it. The founder can share uncertainty, process, decision-making. The brand doesn't — but the founder does. This distinction is the value of the personal account.
+
+---
+
+### Email Templates
+
+**Standard brand email**
+
+*Header:* Dark surface (#111F1A), AH logo left-aligned at 40px height, tagline "Own your data. Keep the value. Read the signals." in Inter Regular 12pt, text-secondary color. Clean top bar — no imagery.
+
+*Body:* Light surface (#FFFFFF or #F9FAFB) for maximum email client compatibility. Inter Regular 16pt body. Emerald (#006B4F) for hyperlinks and CTAs. Amber (#D97706, the text-on-light version) for any highlighted callouts. Single-column layout, 600px max-width.
+
+*Footer:* "Amach Health · @amachhealth · amachhealth.com" in Inter Regular 12pt, text-secondary. Unsubscribe link in same style. One horizontal rule above the footer in emerald at 10% opacity.
+
+*Color in email:* Never use dark surface colors (#0A1A15, #111F1A) as the primary email body background — too many clients won't render it. Use light background as the default. Apply the dark treatment only to the header and footer bars where it's a contained block.
+
+---
+
+**Luma insight emails**
+
+Triggered when Luma surfaces a significant pattern or the user requests a summary.
+
+*Header:* 4px top border in indigo-to-emerald gradient (#6366F1 → #006B4F). AH logo left, "Luma noticed something" as the pre-header / subject line pattern. Never "Health Update" or "Your Weekly Summary" — too generic.
+
+*Subject line pattern:* Specific, not categorical.
+- "Your HRV dropped this week — here's what I see"
+- "Something in your glucose data worth looking at"
+- "Your recovery trend changed. Want to talk about it?"
+
+*Body:* Opens with Luma's observation in first person, specific data referenced in the first sentence. No preamble. Uses the same language rules as in-product Luma responses — correlation-conscious, individually calibrated, humble. Ends with an invitation to open the app and explore further.
+
+---
+
+### Document Templates
+
+**Grant applications**
+
+*Layout:* White background. AH logo top-left, 32px height. Inter throughout — ExtraBold for the document title, Semibold for section headers (emerald #006B4F), Regular for body. 11pt body, 1.5 line height.
+
+*Data tables:* SF Mono Regular for values — same monospace treatment as in the product. Emerald left-column header, light surface row alternation.
+
+*Tone:* Confident + Precise voice register (see Voice Chart). Name the full stack on first mention: "ZKsync Era," "Storj," "Venice AI." Subsequent mentions can shorten. Lead with what the protocol enables, not how it works.
+
+---
+
+**One-pager**
+
+Two format options depending on audience:
+
+*Dark format (design / tech audience):* #0A1A15 background. Glassmorphism card treatment for content blocks. Topographic texture at 3% opacity. Emerald section headers, amber for emphasis pulls. Used for conferences, pitch decks, design-forward contexts.
+
+*Light format (grant / institutional audience):* White background, emerald structural elements, clean Inter typography. Used for medical, academic, and institutional contexts where dark backgrounds read as aggressive or informal.
+
+Both formats use the same content hierarchy — only the surface treatment differs.
+
+---
+
+**Technical documentation**
+
+GitHub-flavored Markdown with Amach typographic additions. Code blocks in SF Mono. Headers in Inter Semibold. Inline code in SF Mono with a subtle emerald-tinted background (#006B4F at 8% opacity). Diagrams use the Amach palette: emerald for data flows, indigo for AI/Luma components, amber for user-facing elements.
+
+---
+
+**Presentation slides**
+
+*Canvas:* #0A1A15 full-bleed dark surface. Topographic contour texture at 3% opacity.
+
+*Typography:* Inter ExtraBold for slide titles (36–48pt), Semibold for section markers, Regular for body. SF Mono for any quoted data values.
+
+*Color usage:* Emerald for structural elements and primary emphasis. Amber for secondary emphasis and data callouts. Indigo reserved for Luma / AI slides only — when the slide is about Luma's role or AI intelligence, the color shifts to indigo. This makes the architecture of the product legible in a presentation.
+
+*Card treatment:* Content blocks use glassmorphism cards — semi-transparent surface with the emerald gradient border on the leading edge. Not every slide needs cards — use them for content-heavy slides, let full-bleed text breathe on simpler ones.
+
+*Slide types:*
+- Title slide: Full-bleed topo texture, AH logo centered, tagline below, nothing else
+- Section divider: Single line of text, emerald, centered — no card, no border
+- Content slide: Left-aligned headline, glassmorphism card for body content
+- Data slide: Monospace values large in emerald or amber, context in regular weight below
+- Luma slide: Indigo accent treatment, sparkle mark present
+
+---
+
+*Document version: 1.1 — voice, identity, architecture, and application complete.*
 *Paired with: DESIGN-SYSTEM.md*
