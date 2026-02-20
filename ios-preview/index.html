@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Amach Health – iOS App</title>
+  <title>Amach Health – iOS App Preview</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Cinzel:wght@400;600;900&family=EB+Garamond:ital,wght@0,400;1,400&display=swap" rel="stylesheet" />
   <style>
@@ -26,12 +26,12 @@
       --destructive:     #F87171;
       --sleep-color:     #818CF8;
       --ai:              #6366F1;
+      --ai-dark:         #3730A3;
       --ai-bubble:       #3730A3;
       --radius:          16px;
       --radius-sm:       10px;
       --radius-pill:     999px;
 
-      /* Aurora blobs (dark: subtle green glow) */
       --blob-1: rgba(16, 185, 129, 0.07);
       --blob-2: rgba(99, 102, 241, 0.05);
       --blob-3: rgba(52, 211, 153, 0.06);
@@ -57,9 +57,9 @@
       --destructive:     #DC2626;
       --sleep-color:     #7C3AED;
       --ai:              #6366F1;
+      --ai-dark:         #312E81;
       --ai-bubble:       #EEF2FF;
 
-      /* Aurora blobs (light: vivid emerald/teal/mist) */
       --blob-1: rgba(52, 211, 153, 0.45);
       --blob-2: rgba(13, 148, 136, 0.35);
       --blob-3: rgba(167, 243, 208, 0.55);
@@ -67,7 +67,7 @@
     }
 
     /* =============================================
-       GLOBAL TRANSITIONS
+       GLOBAL
     ============================================= */
     *, *::before, *::after {
       box-sizing: border-box;
@@ -80,9 +80,6 @@
         box-shadow 0.4s ease;
     }
 
-    /* =============================================
-       AURORA BACKGROUND
-    ============================================= */
     body {
       color: var(--text);
       font-family: 'Inter', system-ui, sans-serif;
@@ -92,7 +89,9 @@
       background: var(--bg);
     }
 
-    /* Aurora canvas — behind everything */
+    /* =============================================
+       AURORA BACKGROUND
+    ============================================= */
     .aurora {
       position: fixed;
       inset: 0;
@@ -109,10 +108,7 @@
       transition: background 0.8s ease, opacity 0.8s ease;
     }
 
-    /* Dark mode: nearly invisible */
     [data-mode="dark"] .blob { opacity: 1; }
-
-    /* Light mode: vivid, animated */
     [data-mode="light"] .blob { opacity: 1; }
 
     .blob-1 {
@@ -151,7 +147,9 @@
       100% { transform: translate(-20px, -25px) scale(1.02); }
     }
 
-    /* Page content sits above aurora */
+    /* =============================================
+       PAGE LAYOUT
+    ============================================= */
     .page {
       position: relative;
       z-index: 1;
@@ -161,7 +159,7 @@
     }
 
     /* =============================================
-       MODE TOGGLE BUTTON
+       MODE TOGGLE
     ============================================= */
     .mode-toggle {
       position: fixed;
@@ -208,14 +206,12 @@
       margin-bottom: 12px;
     }
 
-    /* Shimmer wordmark */
     .brand-name-wrap {
       position: relative;
       display: inline-block;
       margin-bottom: 4px;
     }
 
-    /* AmachType.companyName — matches Design System Reference lettering + shimmer */
     .brand-name {
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 32px;
@@ -227,7 +223,6 @@
       position: relative;
     }
 
-    /* Gold shimmer sweep overlay */
     .brand-name::after {
       content: 'Amach Health';
       position: absolute;
@@ -253,7 +248,7 @@
       100% { background-position: 220% 0; }
     }
 
-    .brand-health {
+    .brand-sub {
       font-family: 'Inter', sans-serif;
       font-size: 11px;
       font-weight: 400;
@@ -302,7 +297,7 @@
     }
 
     /* =============================================
-       PHONE CHROME
+       PHONE CHROME  (shared wrapper)
     ============================================= */
     .phone-chrome {
       background: var(--surface-elev);
@@ -312,19 +307,26 @@
       margin: 0 auto 48px;
       max-width: 320px;
       box-shadow: 0 0 40px rgba(16, 185, 129, 0.12);
+      position: relative;   /* for FAB positioning */
     }
     [data-mode="light"] .phone-chrome {
       box-shadow: 0 8px 40px rgba(5, 150, 105, 0.14), 0 2px 8px rgba(5, 150, 105, 0.08);
     }
+
     .phone-screen {
       background: var(--bg);
-      padding: 24px 16px 16px;
+      padding: 24px 16px 8px;
     }
+
+    /* =============================================
+       TAB BAR  (4 tabs)
+    ============================================= */
     .tab-bar {
       background: var(--bg);
       border-top: 1px solid var(--border);
       display: flex;
-      padding: 8px 4px 12px;
+      padding: 8px 4px 14px;
+      position: relative;
     }
     .tab-item {
       flex: 1;
@@ -340,28 +342,52 @@
     .tab-icon { font-size: 18px; }
 
     /* =============================================
+       LUMA FAB
+    ============================================= */
+    .luma-fab {
+      position: absolute;
+      bottom: 52px;             /* sits above tab bar */
+      right: 14px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow:
+        0 4px 20px rgba(99, 102, 241, 0.45),
+        0 0 0 2px rgba(99, 102, 241, 0.15);
+      animation: fab-pulse 3s ease-in-out infinite;
+      z-index: 10;
+    }
+
+    @keyframes fab-pulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(99,102,241,0.45), 0 0 0 2px rgba(99,102,241,0.15); }
+      50%       { box-shadow: 0 4px 28px rgba(99,102,241,0.65), 0 0 0 4px rgba(99,102,241,0.25); }
+    }
+
+    /* =============================================
        SCORE RING
     ============================================= */
-    .score-ring-wrap { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
     .score-ring {
-      width: 64px; height: 64px;
+      width: 52px; height: 52px;
       border-radius: 50%;
-      border: 5px solid rgba(16,185,129,0.12);
+      background: conic-gradient(var(--primary-bright) 0% 78%, rgba(16,185,129,0.1) 78% 100%);
+      box-shadow: 0 0 14px rgba(52, 211, 153, 0.28);
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
-      background: conic-gradient(var(--primary-bright) 0% 78%, rgba(16,185,129,0.1) 78% 100%);
-      box-shadow: 0 0 16px rgba(52, 211, 153, 0.3);
-      position: relative;
     }
     .score-inner {
-      width: 52px; height: 52px;
+      width: 42px; height: 42px;
       background: var(--bg);
       border-radius: 50%;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      font-size: 16px; font-weight: 800;
+      font-size: 13px; font-weight: 800;
     }
-    .score-tier { font-size: 8px; font-weight: 700; color: var(--accent); margin-top: 1px; }
+    .score-tier { font-size: 7px; font-weight: 700; color: var(--accent); }
 
     /* =============================================
        METRIC GRID
@@ -369,74 +395,395 @@
     .metric-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 8px;
+      margin-bottom: 10px;
     }
     .metric-card {
       background: var(--surface);
-      border-radius: var(--radius);
-      padding: 14px;
+      border-radius: var(--radius-sm);
+      padding: 12px;
       border: 1px solid;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
+    .metric-card:hover { transform: scale(1.02); }
     .metric-icon {
-      font-size: 16px;
-      width: 28px; height: 28px;
-      border-radius: 8px;
+      font-size: 14px;
+      width: 26px; height: 26px;
+      border-radius: 7px;
       display: flex; align-items: center; justify-content: center;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .metric-value {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 800;
       font-variant-numeric: tabular-nums;
       line-height: 1;
     }
-    .metric-unit { font-size: 10px; color: var(--text-muted); font-weight: 500; }
-    .metric-label { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .metric-unit { font-size: 9px; color: var(--text-muted); font-weight: 500; }
+    .metric-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Status pill (Optimal / Borderline / Critical) */
+    .status-pill {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+    .pill-optimal   { background: rgba(52,211,153,0.15); color: #34D399; }
+    .pill-borderline{ background: rgba(251,191,36,0.15);  color: #FBBF24; }
+    .pill-critical  { background: rgba(248,113,113,0.15); color: #F87171; }
 
     /* =============================================
-       CHAT
+       LUMA INSIGHT CARD
+    ============================================= */
+    .luma-insight {
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      margin-bottom: 10px;
+      background: rgba(99, 102, 241, 0.06);
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .luma-insight-icon {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(79,70,229,0.15) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .luma-insight-text {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--text-muted);
+      flex: 1;
+    }
+    .luma-insight-ask {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--ai);
+      margin-top: 5px;
+      display: block;
+    }
+
+    /* =============================================
+       SYNC STATUS LINE
+    ============================================= */
+    .sync-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .sync-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+    .dot-synced { background: var(--primary-bright); }
+    .dot-warning { background: var(--accent); }
+
+    /* =============================================
+       MINI CHART BARS
+    ============================================= */
+    .mini-chart { display: flex; align-items: flex-end; gap: 3px; height: 40px; margin-top: 8px; }
+    .bar {
+      flex: 1; border-radius: 3px 3px 0 0;
+      background: linear-gradient(to top, var(--primary-bright), rgba(52,211,153,0.3));
+      min-height: 3px;
+    }
+    .bar.highlight {
+      background: linear-gradient(to top, #34D399, rgba(52,211,153,0.8));
+    }
+
+    /* =============================================
+       CHAT BUBBLES (Luma)
     ============================================= */
     .chat-bubble {
       max-width: 80%;
-      padding: 10px 14px;
-      border-radius: 14px;
-      font-size: 13px;
+      padding: 9px 12px;
+      border-radius: 13px;
+      font-size: 12px;
       line-height: 1.45;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
-    .bubble-assistant {
+    .bubble-luma {
       background: var(--ai-bubble);
-      border: 1px solid rgba(99, 102, 241, 0.28);
-      color: #E0E7FF;  /* dark mode: light on dark indigo */
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      color: #E0E7FF;
       align-self: flex-start;
     }
-    [data-mode="light"] .bubble-assistant {
-      color: #3730A3;  /* light mode: dark indigo on light indigo bg */
+    [data-mode="light"] .bubble-luma {
+      color: #3730A3;
     }
     .bubble-user {
       background: var(--primary);
       color: white;
       align-self: flex-end;
       margin-left: auto;
-      box-shadow: 0 2px 12px rgba(16, 185, 129, 0.3);
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.28);
     }
-    .chat-messages { display: flex; flex-direction: column; gap: 4px; margin: 16px 0; }
-    .chat-agent {
+    .chat-messages { display: flex; flex-direction: column; gap: 3px; margin: 12px 0; }
+    .chat-header {
       display: flex; align-items: center; gap: 10px;
-      padding-bottom: 12px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+    .luma-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(79,70,229,0.18) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.28);
+    }
+    .luma-name { font-size: 13px; font-weight: 600; }
+    .luma-sub { font-size: 9px; color: var(--text-muted); }
+
+    /* Context chips (data source bar) */
+    .context-chips { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+    .context-chip {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(16,185,129,0.1);
+      border: 1px solid rgba(16,185,129,0.2);
+      color: var(--primary-bright);
+    }
+
+    /* =============================================
+       QUICK SUGGESTION PILLS
+    ============================================= */
+    .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(16,185,129,0.10);
+      border: 1px solid rgba(16,185,129,0.22);
+      border-radius: var(--radius-pill);
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--primary-bright);
+    }
+
+    /* =============================================
+       TRENDS VIEW
+    ============================================= */
+    .trend-filter { display: flex; gap: 6px; margin-bottom: 12px; overflow-x: auto; }
+    .trend-chip {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+    .trend-chip.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .trend-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
       margin-bottom: 8px;
     }
-    .agent-avatar {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: rgba(99, 102, 241, 0.18);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-      box-shadow: 0 0 12px rgba(99, 102, 241, 0.30);
+    .trend-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .trend-metric { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .trend-stats {
+      display: flex; gap: 10px; margin-top: 6px;
     }
-    .agent-name { font-size: 14px; font-weight: 600; }
-    .agent-sub { font-size: 10px; color: var(--text-muted); }
+    .trend-stat { font-size: 9px; color: var(--text-muted); }
+    .trend-stat strong { color: var(--text); font-size: 10px; }
+
+    /* Line-style mini chart */
+    .line-chart {
+      height: 36px;
+      margin-top: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .line-chart svg { width: 100%; height: 100%; }
+
+    /* =============================================
+       METRIC DETAIL VIEW
+    ============================================= */
+    .metric-hero {
+      text-align: center;
+      padding: 16px 0 12px;
+    }
+    .metric-hero-value {
+      font-size: 48px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      font-family: 'SF Mono', 'Courier New', monospace;
+      line-height: 1;
+    }
+    .metric-hero-unit {
+      font-size: 16px;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-left: 4px;
+    }
+
+    /* Range bar */
+    .range-bar-wrap { margin: 12px 0 6px; }
+    .range-bar-labels {
+      display: flex; justify-content: space-between;
+      font-size: 8px; color: var(--text-muted); margin-bottom: 4px;
+    }
+    .range-bar {
+      height: 6px;
+      border-radius: 3px;
+      position: relative;
+      overflow: visible;
+      background: linear-gradient(to right,
+        rgba(248,113,113,0.4) 0%,
+        rgba(251,191,36,0.5) 25%,
+        rgba(52,211,153,0.6) 45%,
+        rgba(52,211,153,0.6) 70%,
+        rgba(251,191,36,0.5) 82%,
+        rgba(248,113,113,0.4) 100%
+      );
+    }
+    .range-indicator {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px; height: 12px;
+      background: white;
+      border: 2px solid var(--primary-bright);
+      border-radius: 50%;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.3);
+    }
+    .range-label {
+      text-align: center;
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Time range picker */
+    .time-range {
+      display: flex;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .time-btn {
+      flex: 1;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 6px 0;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    .time-btn.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* Data info strip */
+    .data-strip {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--text-muted);
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+      margin-top: 8px;
+    }
+
+    /* =============================================
+       PROFILE VIEW
+    ============================================= */
+    .profile-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0 12px;
+      gap: 8px;
+      text-align: center;
+    }
+    .profile-avatar {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      background: conic-gradient(var(--primary-bright) 0% 78%, rgba(16,185,129,0.1) 78% 100%);
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 16px rgba(52,211,153,0.25);
+    }
+    .profile-avatar-inner {
+      width: 50px; height: 50px;
+      background: var(--bg);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .wallet-address {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'SF Mono', 'Courier New', monospace;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+    }
+
+    .sources-list { display: flex; flex-direction: column; gap: 8px; }
+    .source-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px;
+    }
+    .source-left { display: flex; align-items: center; gap: 8px; }
+    .source-icon {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px;
+    }
+    .source-status {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .status-connected { background: rgba(52,211,153,0.15); color: #34D399; }
+    .status-soon { background: rgba(148,163,184,0.12); color: #94A3B8; }
+
+    /* =============================================
+       TIER TABLE (Profile)
+    ============================================= */
+    .tier-table { width: 100%; font-size: 10px; border-collapse: collapse; }
+    .tier-table th {
+      text-align: center; padding: 4px 6px;
+      font-size: 9px; font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .tier-table td {
+      text-align: center; padding: 5px 6px;
+      border-bottom: 1px solid rgba(16,185,129,0.04);
+      font-size: 10px; color: var(--text-muted);
+    }
+    .tier-table td:first-child { text-align: left; color: var(--text); font-weight: 500; }
+    .check { color: #34D399; }
+    .cross { color: rgba(148,163,184,0.4); }
 
     /* =============================================
        TIER BADGES
@@ -455,48 +802,58 @@
     .tier-bronze { background: rgba(205,127,50,0.15);  color: #CD7F32; border: 1px solid rgba(205,127,50,0.3); }
 
     /* =============================================
+       ONBOARDING STEP
+    ============================================= */
+    .onboard-screen {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 20px 12px 12px;
+      text-align: center;
+      gap: 10px;
+    }
+    .onboard-icon {
+      width: 56px; height: 56px;
+      border-radius: 16px;
+      background: rgba(16,185,129,0.12);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 0 20px rgba(16,185,129,0.15);
+    }
+    .onboard-title { font-size: 15px; font-weight: 700; }
+    .onboard-body { font-size: 11px; color: var(--text-muted); line-height: 1.5; max-width: 220px; }
+    .onboard-progress { display: flex; gap: 5px; }
+    .onboard-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+    .onboard-dot.active { background: var(--primary-bright); }
+    .onboard-btn {
+      background: linear-gradient(135deg, var(--primary-bright), #059669);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 12px;
+      padding: 10px 40px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(16,185,129,0.3);
+    }
+
+    /* =============================================
        FEATURES
     ============================================= */
     .features { list-style: none; }
     .features li {
       display: flex; align-items: flex-start; gap: 12px;
-      padding: 14px 0;
+      padding: 12px 0;
       border-bottom: 1px solid rgba(16,185,129,0.06);
     }
     .features li:last-child { border-bottom: none; }
     .feat-icon {
       width: 32px; height: 32px;
-      background: rgba(16,185,129,0.1);
+      background: rgba(16,185,129,0.10);
       border-radius: 9px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 16px; flex-shrink: 0; margin-top: 2px;
+      font-size: 15px; flex-shrink: 0; margin-top: 1px;
     }
-    .feat-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
-    .feat-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
-
-    /* =============================================
-       PILL / CTA
-    ============================================= */
-    .pill {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: rgba(16,185,129,0.12);
-      border: 1px solid rgba(16,185,129,0.25);
-      border-radius: var(--radius-pill);
-      padding: 5px 12px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--primary-bright);
-    }
-
-    /* =============================================
-       CHART
-    ============================================= */
-    .mini-chart { display: flex; align-items: flex-end; gap: 3px; height: 48px; margin-top: 12px; }
-    .bar {
-      flex: 1; border-radius: 3px 3px 0 0;
-      background: linear-gradient(to top, var(--primary-bright), rgba(52,211,153,0.3));
-      min-height: 4px;
-    }
+    .feat-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .feat-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
 
     /* =============================================
        FOOTER
@@ -511,9 +868,6 @@
     .footer a { color: var(--primary-bright); text-decoration: none; font-weight: 500; }
     .footer a:hover { text-decoration: underline; }
 
-    /* =============================================
-       BRAND REF LINK
-    ============================================= */
     .brand-ref-link {
       display: inline-flex;
       align-items: center;
@@ -533,6 +887,10 @@
       transform: translateY(-1px);
       box-shadow: 0 4px 16px rgba(16, 185, 129, 0.15);
     }
+
+    /* spacer */
+    .gap { height: 32px; }
+    .gap-sm { height: 16px; }
   </style>
 </head>
 <body>
@@ -554,13 +912,13 @@
 
 <div class="page">
 
-  <!-- Brand -->
+  <!-- ===== BRAND HEADER ===== -->
   <div class="brand">
     <div class="brand-eyebrow">iOS App Preview</div>
     <div class="brand-name-wrap">
       <span class="brand-name">Amach Health</span>
     </div>
-    <div class="brand-health">outward · into life</div>
+    <div class="brand-sub">outward · into life</div>
     <div class="brand-tagline">
       Your health data — owned by you, verified on-chain, analyzed by AI.
     </div>
@@ -569,94 +927,463 @@
     </a>
   </div>
 
-  <!-- Phone chrome -->
+  <!-- ===== SECTION: ONBOARDING ===== -->
+  <div class="section-label">Onboarding</div>
+  <div class="phone-chrome">
+    <div class="phone-screen" style="padding-bottom:16px;">
+      <div class="onboard-screen">
+        <div class="onboard-icon">🌿</div>
+        <div class="onboard-title">Own Your Health Data</div>
+        <div class="onboard-body">
+          Amach Health stores your data encrypted on Storj — no servers, no middlemen.
+          Only your wallet key can unlock it.
+        </div>
+        <div class="onboard-progress">
+          <div class="onboard-dot active"></div>
+          <div class="onboard-dot active"></div>
+          <div class="onboard-dot"></div>
+          <div class="onboard-dot"></div>
+          <div class="onboard-dot"></div>
+        </div>
+        <button class="onboard-btn">Continue</button>
+        <div style="font-size:9px;color:var(--text-muted);">Step 2 of 5</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SECTION: DASHBOARD ===== -->
+  <div class="section-label">Dashboard</div>
   <div class="phone-chrome">
     <div class="phone-screen">
 
-      <!-- Dashboard preview -->
-      <div style="margin-bottom:4px;">
-        <div class="brand-eyebrow" style="text-align:left;margin-bottom:4px;font-family:'Cinzel',serif;letter-spacing:0.15em;">AMACH HEALTH</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <div style="font-size:17px;font-weight:700;margin-bottom:2px;">Good morning</div>
-            <div style="font-size:9px;color:var(--text-muted);">● Synced 2h ago</div>
-          </div>
-          <!-- Score ring -->
-          <div class="score-ring" style="width:52px;height:52px;font-size:0;">
-            <div class="score-inner" style="width:42px;height:42px;font-size:13px;">
-              87
-              <div class="score-tier">G</div>
-            </div>
-          </div>
+      <!-- Nav header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div>
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.15em;color:var(--primary-bright);font-family:'Cinzel',serif;margin-bottom:2px;">AMACH HEALTH</div>
+          <div style="font-size:16px;font-weight:700;">Good morning</div>
+        </div>
+        <div class="score-ring">
+          <div class="score-inner">87<div class="score-tier">G</div></div>
         </div>
       </div>
 
-      <div style="height:12px;"></div>
+      <!-- Sync status -->
+      <div class="sync-status">
+        <div class="sync-dot dot-synced"></div>
+        Synced 2h ago via HealthKit
+      </div>
 
-      <!-- Metric mini-grid -->
+      <!-- Luma Insight Card -->
+      <div class="luma-insight">
+        <div class="luma-insight-icon">✦</div>
+        <div style="flex:1;">
+          <div class="luma-insight-text">
+            Your HRV is trending up +12% this week. Recovery is strong — your sleep consistency is paying off.
+          </div>
+          <span class="luma-insight-ask">Ask Luma →</span>
+        </div>
+      </div>
+
+      <!-- Metric grid (2×2) -->
       <div class="metric-grid">
         <div class="metric-card" style="border-color:rgba(52,211,153,0.15);">
           <div class="metric-icon" style="background:rgba(52,211,153,0.12);color:var(--primary-bright);">🚶</div>
-          <div class="metric-value" style="color:var(--text);">8.4k</div>
+          <div class="metric-value" style="color:var(--text);">8,412</div>
           <div class="metric-label">Steps</div>
-        </div>
-        <div class="metric-card" style="border-color:rgba(245,158,11,0.15);">
-          <div class="metric-icon" style="background:rgba(245,158,11,0.12);color:var(--accent);">🔥</div>
-          <div class="metric-value" style="color:var(--text);">412</div>
-          <div class="metric-unit">kcal</div>
-          <div class="metric-label">Active Cal</div>
-        </div>
-        <div class="metric-card" style="border-color:rgba(248,113,113,0.15);">
-          <div class="metric-icon" style="background:rgba(248,113,113,0.12);color:#F87171;">❤️</div>
-          <div class="metric-value" style="color:var(--text);">68 <span class="metric-unit">bpm</span></div>
-          <div class="metric-label">Heart Rate</div>
+          <div class="status-pill pill-optimal">Optimal</div>
         </div>
         <div class="metric-card" style="border-color:rgba(129,140,248,0.15);">
           <div class="metric-icon" style="background:rgba(129,140,248,0.12);color:var(--sleep-color);">🌙</div>
-          <div class="metric-value" style="color:var(--text);">7.4 <span class="metric-unit">hrs</span></div>
+          <div class="metric-value" style="color:var(--text);">7.4<span class="metric-unit"> hrs</span></div>
           <div class="metric-label">Sleep</div>
+          <div class="status-pill pill-optimal">Optimal</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(248,113,113,0.15);">
+          <div class="metric-icon" style="background:rgba(248,113,113,0.12);color:#F87171;">❤️</div>
+          <div class="metric-value" style="color:var(--text);">68<span class="metric-unit"> bpm</span></div>
+          <div class="metric-label">Heart Rate</div>
+          <div class="status-pill pill-optimal">Optimal</div>
+        </div>
+        <div class="metric-card" style="border-color:rgba(251,191,36,0.15);">
+          <div class="metric-icon" style="background:rgba(251,191,36,0.12);color:var(--accent);">⚡</div>
+          <div class="metric-value" style="color:var(--text);">42<span class="metric-unit"> ms</span></div>
+          <div class="metric-label">HRV</div>
+          <div class="status-pill pill-borderline">Borderline</div>
         </div>
       </div>
 
-      <!-- Mini trend chart -->
+      <!-- Mini chart -->
       <div class="mini-chart">
-        <div class="bar" style="height:40%;"></div>
-        <div class="bar" style="height:60%;"></div>
+        <div class="bar" style="height:42%;"></div>
+        <div class="bar" style="height:58%;"></div>
         <div class="bar" style="height:50%;"></div>
-        <div class="bar" style="height:80%;"></div>
-        <div class="bar" style="height:65%;"></div>
-        <div class="bar" style="height:90%;"></div>
-        <div class="bar" style="height:75%;"></div>
+        <div class="bar highlight" style="height:82%;"></div>
+        <div class="bar" style="height:68%;"></div>
+        <div class="bar highlight" style="height:91%;"></div>
+        <div class="bar" style="height:76%;"></div>
       </div>
 
     </div>
 
-    <!-- Tab bar -->
-    <div class="tab-bar">
+    <!-- Luma FAB + 4-tab bar -->
+    <div class="tab-bar" style="position:relative;">
+      <div class="luma-fab">✦</div>
       <div class="tab-item active">
         <div class="tab-icon">📊</div>
         <div>Dashboard</div>
       </div>
       <div class="tab-item">
-        <div class="tab-icon">✦</div>
-        <div>Luma</div>
+        <div class="tab-icon">📈</div>
+        <div>Trends</div>
       </div>
-      <div class="tab-item">
+      <div class="tab-item" style="margin-right:44px;"><!-- space for FAB -->
         <div class="tab-icon">⟳</div>
         <div>Sync</div>
       </div>
       <div class="tab-item">
-        <div class="tab-icon">✓</div>
-        <div>Proofs</div>
-      </div>
-      <div class="tab-item">
-        <div class="tab-icon">⚙</div>
-        <div>Settings</div>
+        <div class="tab-icon">👤</div>
+        <div>Profile</div>
       </div>
     </div>
   </div>
 
-  <!-- Features section -->
+  <!-- ===== SECTION: METRIC DETAIL ===== -->
+  <div class="section-label">Metric Detail</div>
+  <div class="phone-chrome">
+    <div class="phone-screen">
+
+      <!-- Back nav + title -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:13px;color:var(--primary-bright);">‹</span>
+        <span style="font-size:13px;font-weight:600;">HRV</span>
+        <span class="status-pill pill-borderline" style="margin-left:auto;">Borderline</span>
+      </div>
+
+      <!-- Hero value -->
+      <div class="metric-hero">
+        <span class="metric-hero-value" style="color:var(--text);">42</span>
+        <span class="metric-hero-unit">ms</span>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Heart Rate Variability (RMSSD)</div>
+      </div>
+
+      <!-- Range bar -->
+      <div class="range-bar-wrap">
+        <div class="range-bar-labels">
+          <span>Critical</span>
+          <span>Optimal Zone</span>
+          <span>Critical</span>
+        </div>
+        <div class="range-bar">
+          <div class="range-indicator" style="left: 45%;"></div>
+        </div>
+        <div class="range-label">42 ms — lower end of optimal range (38–60 ms)</div>
+      </div>
+
+      <!-- Time range picker -->
+      <div class="time-range">
+        <div class="time-btn active">7D</div>
+        <div class="time-btn">30D</div>
+        <div class="time-btn">90D</div>
+        <div class="time-btn">1Y</div>
+      </div>
+
+      <!-- Mini line chart (SVG) -->
+      <div class="line-chart">
+        <svg viewBox="0 0 200 36" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(52,211,153,0.3)"/>
+              <stop offset="100%" stop-color="rgba(52,211,153,0)"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,30 L28,26 L57,20 L85,22 L114,14 L142,10 L171,12 L200,8"
+                fill="none" stroke="#34D399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M0,30 L28,26 L57,20 L85,22 L114,14 L142,10 L171,12 L200,8 L200,36 L0,36 Z"
+                fill="url(#area-grad)"/>
+        </svg>
+      </div>
+
+      <!-- Data info strip -->
+      <div class="data-strip">
+        <span>Source: Apple Watch</span>
+        <span>Updated 2h ago</span>
+        <span>7 readings</span>
+      </div>
+
+      <!-- Luma insight -->
+      <div class="luma-insight" style="margin-top:8px;margin-bottom:0;">
+        <div class="luma-insight-icon">✦</div>
+        <div style="flex:1;">
+          <div class="luma-insight-text">
+            HRV below 50 ms can indicate incomplete recovery. Try consistent sleep timing this week.
+          </div>
+          <span class="luma-insight-ask">Ask Luma about HRV →</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon">📊</div><div>Dashboard</div>
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon">📈</div><div>Trends</div>
+      </div>
+      <div class="tab-item" style="margin-right:44px;">
+        <div class="tab-icon">⟳</div><div>Sync</div>
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon">👤</div><div>Profile</div>
+      </div>
+      <div class="luma-fab">✦</div>
+    </div>
+  </div>
+
+  <!-- ===== SECTION: TRENDS ===== -->
+  <div class="section-label">Trends</div>
+  <div class="phone-chrome">
+    <div class="phone-screen">
+
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px;">Trends</div>
+
+      <!-- Category filter chips -->
+      <div class="trend-filter">
+        <div class="trend-chip active">All</div>
+        <div class="trend-chip">Heart</div>
+        <div class="trend-chip">Sleep</div>
+        <div class="trend-chip">Activity</div>
+        <div class="trend-chip">Body</div>
+      </div>
+
+      <!-- Trend cards -->
+      <div class="trend-card">
+        <div class="trend-header">
+          <div class="trend-metric"><span>❤️</span> Heart Rate</div>
+          <div class="status-pill pill-optimal" style="font-size:8px;">↑ trending well</div>
+        </div>
+        <div class="line-chart" style="height:30px;">
+          <svg viewBox="0 0 200 30" preserveAspectRatio="none">
+            <path d="M0,20 L28,18 L57,14 L85,16 L114,12 L142,10 L171,11 L200,9"
+                  fill="none" stroke="#F87171" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M0,20 L28,18 L57,14 L85,16 L114,12 L142,10 L171,11 L200,9 L200,30 L0,30 Z"
+                  fill="rgba(248,113,113,0.08)"/>
+          </svg>
+        </div>
+        <div class="trend-stats">
+          <div class="trend-stat">Min <strong>58</strong></div>
+          <div class="trend-stat">Avg <strong>66</strong></div>
+          <div class="trend-stat">Max <strong>102</strong> bpm</div>
+        </div>
+      </div>
+
+      <div class="trend-card">
+        <div class="trend-header">
+          <div class="trend-metric"><span>🌙</span> Sleep</div>
+          <div class="status-pill pill-optimal" style="font-size:8px;">Consistent</div>
+        </div>
+        <div class="line-chart" style="height:30px;">
+          <svg viewBox="0 0 200 30" preserveAspectRatio="none">
+            <path d="M0,14 L28,16 L57,12 L85,14 L114,10 L142,8 L171,10 L200,9"
+                  fill="none" stroke="#818CF8" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M0,14 L28,16 L57,12 L85,14 L114,10 L142,8 L171,10 L200,9 L200,30 L0,30 Z"
+                  fill="rgba(129,140,248,0.08)"/>
+          </svg>
+        </div>
+        <div class="trend-stats">
+          <div class="trend-stat">Min <strong>6.1</strong></div>
+          <div class="trend-stat">Avg <strong>7.2</strong></div>
+          <div class="trend-stat">Max <strong>8.4</strong> hrs</div>
+        </div>
+      </div>
+
+      <!-- Luma pattern insight -->
+      <div class="luma-insight">
+        <div class="luma-insight-icon">✦</div>
+        <div style="flex:1;">
+          <div class="luma-insight-text">
+            <strong style="color:var(--text);">Heart pattern:</strong> Resting HR consistently lower on days with 7.5+ hrs sleep. Prioritise sleep for cardiac health.
+          </div>
+          <span class="luma-insight-ask">Explore pattern →</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon">📊</div><div>Dashboard</div>
+      </div>
+      <div class="tab-item active">
+        <div class="tab-icon">📈</div><div>Trends</div>
+      </div>
+      <div class="tab-item" style="margin-right:44px;">
+        <div class="tab-icon">⟳</div><div>Sync</div>
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon">👤</div><div>Profile</div>
+      </div>
+      <div class="luma-fab">✦</div>
+    </div>
+  </div>
+
+  <!-- ===== SECTION: LUMA CHAT ===== -->
+  <div class="section-label">Luma AI</div>
+  <div class="phone-chrome">
+    <div class="phone-screen">
+
+      <div class="chat-header">
+        <div class="luma-avatar">✦</div>
+        <div>
+          <div class="luma-name">Luma</div>
+          <div class="luma-sub">AI health companion · Not medical advice</div>
+        </div>
+      </div>
+
+      <!-- Data context bar -->
+      <div class="context-chips">
+        <div class="context-chip">HealthKit</div>
+        <div class="context-chip">7D trends</div>
+        <div class="context-chip">HRV data</div>
+      </div>
+
+      <div class="chat-messages">
+        <div class="chat-bubble bubble-luma">
+          Your sleep is averaging 7.2 hrs this week — above the 7 hr threshold. Deep sleep trending up +8%.
+        </div>
+        <div class="chat-bubble bubble-user">
+          What about my HRV?
+        </div>
+        <div class="chat-bubble bubble-luma">
+          HRV is at 42 ms — borderline range. On nights with 7.5+ hrs sleep your HRV improves by ~14%. Consistent sleep timing is your biggest lever right now.
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <div class="pill">Analyse heart rate</div>
+        <div class="pill">Tips to improve HRV</div>
+      </div>
+
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon">📊</div><div>Dashboard</div>
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon">📈</div><div>Trends</div>
+      </div>
+      <div class="tab-item" style="margin-right:44px;">
+        <div class="tab-icon">⟳</div><div>Sync</div>
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon">👤</div><div>Profile</div>
+      </div>
+      <div class="luma-fab" style="box-shadow:0 4px 20px rgba(99,102,241,0.65),0 0 0 4px rgba(99,102,241,0.25);">✦</div>
+    </div>
+  </div>
+
+  <!-- ===== SECTION: PROFILE ===== -->
+  <div class="section-label">Profile</div>
+  <div class="phone-chrome">
+    <div class="phone-screen">
+
+      <!-- Profile header -->
+      <div class="profile-header">
+        <div class="profile-avatar">
+          <div class="profile-avatar-inner">🌿</div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;">87</span>
+            <span class="tier-badge tier-gold">GOLD</span>
+          </div>
+          <div class="wallet-address">0x1a2b…3c4d</div>
+        </div>
+      </div>
+
+      <!-- Connected sources -->
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:1.5px;margin-bottom:8px;">CONNECTED SOURCES</div>
+      <div class="sources-list" style="margin-bottom:12px;">
+        <div class="source-row">
+          <div class="source-left">
+            <div class="source-icon" style="background:rgba(248,113,113,0.1);">❤️</div>
+            <div>
+              <div style="font-size:11px;font-weight:600;">Apple Health</div>
+              <div style="font-size:9px;color:var(--text-muted);">6 categories · read-only</div>
+            </div>
+          </div>
+          <div class="source-status status-connected">Connected</div>
+        </div>
+        <div class="source-row">
+          <div class="source-left">
+            <div class="source-icon" style="background:rgba(99,102,241,0.1);">⛓</div>
+            <div>
+              <div style="font-size:11px;font-weight:600;">ZKsync Wallet</div>
+              <div style="font-size:9px;color:var(--text-muted);">Era testnet · attestations</div>
+            </div>
+          </div>
+          <div class="source-status status-connected">Connected</div>
+        </div>
+        <div class="source-row">
+          <div class="source-left">
+            <div class="source-icon" style="background:rgba(148,163,184,0.1);">📡</div>
+            <div>
+              <div style="font-size:11px;font-weight:600;">CGM / Dexcom</div>
+              <div style="font-size:9px;color:var(--text-muted);">Glucose monitoring</div>
+            </div>
+          </div>
+          <div class="source-status status-soon">Coming soon</div>
+        </div>
+      </div>
+
+      <!-- Tier comparison -->
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:1.5px;margin-bottom:8px;">DATA COMPLETENESS</div>
+      <table class="tier-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">Feature</th>
+            <th style="color:#F59E0B;">Gold</th>
+            <th style="color:#94A3B8;">Silver</th>
+            <th style="color:#CD7F32;">Bronze</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>On-chain attestation</td>
+            <td class="check">✓</td><td class="check">✓</td><td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Luma AI context</td>
+            <td class="check">Full</td><td>Basic</td><td class="cross">—</td>
+          </tr>
+          <tr>
+            <td>Score threshold</td>
+            <td>80%+</td><td>60%+</td><td>40%+</td>
+          </tr>
+        </tbody>
+      </table>
+
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item">
+        <div class="tab-icon">📊</div><div>Dashboard</div>
+      </div>
+      <div class="tab-item">
+        <div class="tab-icon">📈</div><div>Trends</div>
+      </div>
+      <div class="tab-item" style="margin-right:44px;">
+        <div class="tab-icon">⟳</div><div>Sync</div>
+      </div>
+      <div class="tab-item active">
+        <div class="tab-icon">👤</div><div>Profile</div>
+      </div>
+      <div class="luma-fab">✦</div>
+    </div>
+  </div>
+
+  <!-- ===== FEATURES LIST ===== -->
   <div class="section-label">Features</div>
   <div class="card">
     <ul class="features">
@@ -664,93 +1391,58 @@
         <div class="feat-icon">📊</div>
         <div>
           <div class="feat-title">Live Dashboard</div>
-          <div class="feat-desc">Today's steps, heart rate, sleep, HRV, and calories pulled directly from HealthKit. Trend charts for 7D, 30D, and 3M.</div>
+          <div class="feat-desc">Steps, heart rate, HRV, sleep, and calories from HealthKit with status pills (Optimal / Borderline / Critical) and 7-day sparklines.</div>
         </div>
       </li>
       <li>
-        <div class="feat-icon" style="background:rgba(16,185,129,0.1);">✦</div>
+        <div class="feat-icon">📈</div>
         <div>
-          <div class="feat-title">Luma AI Chat</div>
-          <div class="feat-desc">Ask your AI health companion anything about your metrics. Powered by Venice AI via the Amach backend. Sessions saved to Storj.</div>
+          <div class="feat-title">Trends</div>
+          <div class="feat-desc">Category-filtered trend charts (Heart / Sleep / Activity / Body) with min/avg/max stats, gesture-selectable data points, and 7D–1Y range picker.</div>
+        </div>
+      </li>
+      <li>
+        <div class="feat-icon" style="background:rgba(99,102,241,0.12);color:var(--ai);">✦</div>
+        <div>
+          <div class="feat-title">Luma — Floating AI Companion</div>
+          <div class="feat-desc">Persistent indigo FAB above the tab bar. Context-aware chat powered by Venice AI. Luma knows which screen and metric you're viewing. Full sheet or quick chat.</div>
         </div>
       </li>
       <li>
         <div class="feat-icon">🔒</div>
         <div>
           <div class="feat-title">Encrypted Storj Sync</div>
-          <div class="feat-desc">All health data encrypted with your wallet-derived key and stored on Storj. Accessible from both iOS and web apps.</div>
+          <div class="feat-desc">Health data encrypted with your wallet-derived key and stored on Storj. Accessible from iOS and web. Chat sessions persisted across platforms.</div>
         </div>
       </li>
       <li>
         <div class="feat-icon">⛓</div>
         <div>
           <div class="feat-title">On-Chain Attestations</div>
-          <div class="feat-desc">Verifiable health proofs on ZKsync Era testnet. Completeness tiers: Gold (80%+), Silver (60%+), Bronze (40%+).</div>
+          <div class="feat-desc">Verifiable health proofs on ZKsync Era testnet. Completeness tiers: Gold (80%+), Silver (60%+), Bronze (40%+). Inline in Profile tab.</div>
+        </div>
+      </li>
+      <li>
+        <div class="feat-icon">👤</div>
+        <div>
+          <div class="feat-title">Profile</div>
+          <div class="feat-desc">Wallet address, data score ring, connected sources (HealthKit, ZKsync, coming CGM/DEXA), tier comparison table, and privacy details.</div>
         </div>
       </li>
     </ul>
   </div>
 
-  <!-- Chat preview -->
-  <div style="height:32px;"></div>
-  <div class="section-label">Luma AI</div>
-  <div class="card">
-    <div class="chat-agent">
-      <div class="agent-avatar">✦</div>
-      <div>
-        <div class="agent-name">Luma</div>
-        <div class="agent-sub">AI health companion · Venice AI</div>
-      </div>
-    </div>
-    <div class="chat-messages">
-      <div class="chat-bubble bubble-assistant">
-        How can I help with your health today?
-      </div>
-      <div class="chat-bubble bubble-user">
-        How's my sleep this week?
-      </div>
-      <div class="chat-bubble bubble-assistant">
-        Your average sleep this week is <strong>7.2 hrs</strong> — above the 7hr threshold. Deep sleep is trending up (+8%), which is great for recovery. Your HRV has also improved on nights with 7.5+ hrs.
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <div class="pill">How's my sleep this week?</div>
-      <div class="pill">Analyze heart rate trend</div>
-      <div class="pill">Tips to improve HRV</div>
-    </div>
-  </div>
-
-  <!-- Tier system -->
-  <div style="height:32px;"></div>
-  <div class="section-label">Completeness Tiers</div>
-  <div class="card">
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:13px;font-weight:600;">Gold — 80%+ score, core complete</span>
-        <span class="tier-badge tier-gold">GOLD</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:13px;font-weight:600;">Silver — 60%+ score, core complete</span>
-        <span class="tier-badge tier-silver">SILVER</span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-size:13px;font-weight:600;">Bronze — 40%+ score</span>
-        <span class="tier-badge tier-bronze">BRONZE</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Cross-platform note -->
-  <div style="height:32px;"></div>
+  <!-- ===== CROSS-PLATFORM ===== -->
+  <div class="gap"></div>
   <div class="section-label">Cross-Platform</div>
   <div class="card">
     <div style="font-size:13px;color:var(--text-muted);line-height:1.7;">
-      The iOS app and <a href="https://github.com/DaveO280/Amach-Website" style="color:var(--primary-bright);font-weight:600;text-decoration:none;">Amach Web App</a> share the same backend, Storj storage, and Venice AI agents. Health data synced from iPhone is immediately available on the web dashboard. Chat sessions are persisted to Storj and accessible across both platforms.
+      The iOS app and <a href="https://github.com/DaveO280/Amach-Website" style="color:var(--primary-bright);font-weight:600;text-decoration:none;">Amach Web App</a> share the same backend, Storj storage, and Venice AI agents. Health data synced from iPhone is immediately available on the web dashboard. Luma chat sessions are persisted to Storj and accessible across both platforms.
     </div>
   </div>
 
-  <!-- Footer -->
-  <div class="footer">
+  <!-- ===== FOOTER ===== -->
+  <div class="footer" style="margin-top:40px;">
     <p style="margin-bottom:8px;">
       <a href="https://github.com/DaveO280/AmachHealth-iOS">iOS Repo</a>
       &nbsp;·&nbsp;
@@ -774,11 +1466,9 @@
       html.dataset.mode = 'dark';
       label.textContent = 'Light mode';
     }
-    // Persist preference
     try { localStorage.setItem('amach-mode', html.dataset.mode); } catch(e) {}
   }
 
-  // Restore saved preference
   try {
     const saved = localStorage.getItem('amach-mode');
     if (saved) {
