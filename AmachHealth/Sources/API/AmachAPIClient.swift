@@ -138,9 +138,10 @@ final class AmachAPIClient {
         return summary
     }
 
-    // MARK: - AI Chat
+    // MARK: - AI Chat (request/response)
 
-    /// Send a message to Cosaint via /api/ai/chat
+    /// Send a message to Luma via /api/ai/chat (non-streaming, quick mode).
+    /// Use streamLumaChat() for progressive token delivery.
     func sendChatMessage(
         _ message: String,
         history: [AIChatHistoryMessage],
@@ -153,6 +154,90 @@ final class AmachAPIClient {
             options: AIChatOptions(mode: "quick")
         )
         return try await post(path: "/api/ai/chat", body: request)
+    }
+
+    // MARK: - Luma Streaming Chat (SSE via /api/venice/)
+
+    /// Stream a Luma response using Server-Sent Events from /api/venice/.
+    ///
+    /// Returns an AsyncThrowingStream<String, Error> yielding individual
+    /// content tokens as they arrive. The stream finishes naturally when
+    /// the server sends "data: [DONE]" or on any network error.
+    ///
+    /// Designer's Intent:
+    ///   Streaming lets the UI paint Luma's response word-by-word —
+    ///   mimicking real conversation and making the wait feel like
+    ///   thinking, not loading.
+    ///
+    /// Usage (ChatService):
+    ///   let stream = api.streamLumaChat(text, history: history)
+    ///   for try await token in stream {
+    ///       currentSession.messages[lastIdx].content += token
+    ///   }
+    func streamLumaChat(
+        _ message: String,
+        history: [AIChatHistoryMessage],
+        context: AIChatContext? = nil,
+        screen: String? = nil,
+        metric: String? = nil
+    ) -> AsyncThrowingStream<String, Error> {
+        let request = VeniceChatRequest(
+            message: message,
+            history: history,
+            context: context,
+            screen: screen,
+            metric: metric,
+            stream: true
+        )
+
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let url = baseURL.appendingPathComponent("/api/venice")
+                    var urlRequest = URLRequest(url: url)
+                    urlRequest.httpMethod = "POST"
+                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    urlRequest.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
+                    // No timeout for streaming — connection may be held open
+                    urlRequest.timeoutInterval = 120
+
+                    let encoder = JSONEncoder()
+                    encoder.dateEncodingStrategy = .iso8601
+                    urlRequest.httpBody = try encoder.encode(request)
+
+                    let (bytes, response) = try await session.bytes(for: urlRequest)
+
+                    guard let httpResponse = response as? HTTPURLResponse,
+                          (200...299).contains(httpResponse.statusCode) else {
+                        continuation.finish(throwing: APIError.invalidResponse)
+                        return
+                    }
+
+                    // Parse SSE line by line
+                    // Format: "data: {"content":"token"}\n" or "data: [DONE]\n"
+                    for try await line in bytes.lines {
+                        guard line.hasPrefix("data: ") else { continue }
+                        let payload = String(line.dropFirst(6))
+
+                        if payload == "[DONE]" {
+                            continuation.finish()
+                            return
+                        }
+
+                        if let jsonData = payload.data(using: .utf8),
+                           let chunk = try? JSONDecoder().decode(SSEChunk.self, from: jsonData),
+                           !chunk.content.isEmpty {
+                            continuation.yield(chunk.content)
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 
     /// Save a chat session to Storj (encrypted)
@@ -272,6 +357,22 @@ struct StorjStoreOptions: Encodable {
 struct HealthSummaryRequest: Encodable {
     let userAddress: String
     let encryptionKey: WalletEncryptionKey
+}
+
+/// Request body for /api/venice/ streaming endpoint.
+struct VeniceChatRequest: Encodable {
+    let message: String
+    let history: [AIChatHistoryMessage]
+    let context: AIChatContext?
+    let screen: String?          // current screen name for Luma context
+    let metric: String?          // current metric (if on MetricDetailView)
+    let stream: Bool
+}
+
+/// A single token chunk from the Venice SSE stream.
+/// Matches the JSON shape: { "content": "token text" }
+struct SSEChunk: Decodable {
+    let content: String
 }
 
 struct AttestationRequest: Encodable {
