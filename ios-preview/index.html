@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-mode="dark">
+<html lang="en" data-mode="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -42,9 +42,9 @@
        LIGHT MODE TOKENS
     ============================================= */
     [data-mode="light"] {
-      --bg:              #F0FDF4;
+      --bg:              #FFFBEB;
       --surface:         #ffffff;
-      --surface-elev:    #ecfdf5;
+      --surface-elev:    #FEF3C7;
       --primary:         #059669;
       --primary-bright:  #10B981;
       --accent:          #D97706;
@@ -60,10 +60,10 @@
       --ai-dark:         #312E81;
       --ai-bubble:       #EEF2FF;
 
-      --blob-1: rgba(52, 211, 153, 0.45);
-      --blob-2: rgba(13, 148, 136, 0.35);
-      --blob-3: rgba(167, 243, 208, 0.55);
-      --blob-4: rgba(165, 180, 252, 0.18);
+      --blob-1: rgba(245, 158, 11, 0.15);
+      --blob-2: rgba(251, 191, 36, 0.10);
+      --blob-3: rgba(252, 211, 77, 0.12);
+      --blob-4: rgba(217, 119, 6, 0.08);
     }
 
     /* =============================================
@@ -109,7 +109,12 @@
     }
 
     [data-mode="dark"] .blob { opacity: 1; }
-    [data-mode="light"] .blob { opacity: 1; }
+    [data-mode="light"] .blob { opacity: 0; }
+
+    [data-mode="light"] body {
+      background: linear-gradient(160deg, #FFFBEB 0%, #FEF3C7 30%, #FFFDE7 65%, #FFFFFF 100%);
+      background-attachment: fixed;
+    }
 
     .blob-1 {
       width: 700px; height: 700px;
