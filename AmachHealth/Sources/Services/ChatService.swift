@@ -33,6 +33,11 @@ final class ChatService: ObservableObject {
 
     // MARK: - Send Message
 
+    // MARK: - send() — non-streaming (request/response via /api/ai/chat)
+    //
+    // Retained for fallback and contexts where streaming isn't needed.
+    // For progressive token delivery, use sendStreaming() instead.
+
     func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -64,6 +69,73 @@ final class ChatService: ObservableObject {
                 Task { await syncToStorj() }
             }
         } catch {
+            self.error = error.localizedDescription
+        }
+
+        isSending = false
+    }
+
+    // MARK: - sendStreaming() — SSE streaming via /api/venice/
+    //
+    // Appends a user message, then an empty assistant placeholder.
+    // Tokens arrive progressively and are appended to the placeholder
+    // message in-place, triggering real-time UI updates.
+    //
+    // Designer's Intent:
+    //   Word-by-word rendering makes Luma feel alive — like she's
+    //   composing the answer in the moment, not retrieving it from
+    //   a database. The difference in feel is significant.
+
+    func sendStreaming(_ text: String, context: AIChatContext? = nil) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        // 1. Append user message
+        currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
+        currentSession.updatedAt = .now
+
+        // 2. Append empty assistant placeholder — tokens fill it in
+        currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
+        let assistantIdx = currentSession.messages.count - 1
+
+        isSending = true
+        error = nil
+
+        // History excludes the current user turn and the placeholder
+        let history = currentSession.messages
+            .dropLast(2)
+            .suffix(18)
+            .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
+
+        let screen = LumaContextService.shared.currentScreen
+        let metric = LumaContextService.shared.currentMetric
+
+        do {
+            let stream = api.streamLumaChat(
+                trimmed,
+                history: Array(history),
+                context: context,
+                screen: screen,
+                metric: metric
+            )
+
+            for try await token in stream {
+                currentSession.messages[assistantIdx].content += token
+                currentSession.updatedAt = .now
+            }
+
+            saveToDisk()
+            AmachHaptics.lumaResponse()
+
+            if currentSession.messages.count % 10 == 0 {
+                Task { await syncToStorj() }
+            }
+        } catch {
+            // If nothing was streamed, remove the empty placeholder so the
+            // UI doesn't show a blank Luma bubble
+            if currentSession.messages[assistantIdx].content.isEmpty {
+                currentSession.messages.remove(at: assistantIdx)
+            }
             self.error = error.localizedDescription
         }
 
