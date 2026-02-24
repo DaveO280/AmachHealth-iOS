@@ -169,6 +169,66 @@ final class ChatService: ObservableObject {
         currentSession = session
     }
 
+    // MARK: - Proactive Insight Delivery
+
+    /// Deliver a Luma-initiated proactive insight into the chat.
+    ///
+    /// Unlike sendStreaming(), there is no user message — Luma opens the
+    /// conversation. The assistant placeholder is tagged as Luma-initiated
+    /// so the UI can render it distinctly and the session is linkable back
+    /// to the originating HealthEvent.
+    func deliverProactiveInsight(_ event: HealthEvent) async {
+        // Archive any existing session before starting the proactive one
+        if !currentSession.messages.isEmpty {
+            startNewSession()
+        }
+
+        let service = LumaProactiveService.shared
+        let message = service.buildOpeningMessage(for: event)
+        let veniceContext = AIChatContext(proactive: service.buildVeniceContext(for: event))
+
+        // Luma-initiated placeholder — no user message above it
+        let placeholder = ChatMessage(
+            role: .assistant,
+            content: "",
+            metadata: ChatMessageMetadata(
+                triggerType: "proactive_anomaly",
+                healthEventId: event.id,
+                isLumaInitiated: true
+            )
+        )
+        currentSession.messages.append(placeholder)
+        let idx = currentSession.messages.count - 1
+        currentSession.updatedAt = .now
+
+        isSending = true
+        error = nil
+
+        do {
+            let stream = api.streamLumaChat(
+                message,
+                history: [],
+                context: veniceContext,
+                screen: "proactive_insight"
+            )
+            for try await token in stream {
+                currentSession.messages[idx].content += token
+                currentSession.updatedAt = .now
+            }
+            saveToDisk()
+            AmachHaptics.lumaResponse()
+            // Link this session back to the HealthEvent for future memory queries
+            service.linkSession(currentSession.id, to: event.id)
+        } catch {
+            if currentSession.messages[idx].content.isEmpty {
+                currentSession.messages.remove(at: idx)
+            }
+            self.error = error.localizedDescription
+        }
+
+        isSending = false
+    }
+
     // MARK: - Proactive Intelligence Support
 
     /// Whether any of the last 3 sessions substantively discussed a given metric.

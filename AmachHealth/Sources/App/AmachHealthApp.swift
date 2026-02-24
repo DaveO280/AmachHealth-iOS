@@ -13,6 +13,8 @@ struct AmachHealthApp: App {
     @StateObject private var dashboard = DashboardService.shared
     @StateObject private var lumaContext = LumaContextService.shared
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -33,6 +35,14 @@ struct AmachHealthApp: App {
                     appState.setHealthKit(authorized: healthKit.isAuthorized)
                     appState.setWallet(address: wallet.address)
                 }
+                .onChange(of: scenePhase) { _, newPhase in
+                    // When the app comes to foreground, check whether a proactive
+                    // insight is staged and ready to deliver (e.g. user tapped the
+                    // notification). RootView reacts to pendingDelivery being set.
+                    if newPhase == .active {
+                        LumaProactiveService.shared.checkAndDeliverPendingInsight()
+                    }
+                }
         }
     }
 }
@@ -52,6 +62,8 @@ struct RootView: View {
     @EnvironmentObject private var syncService: HealthDataSyncService
     @EnvironmentObject private var chatService: ChatService
     @EnvironmentObject private var dashboard: DashboardService
+
+    @ObservedObject private var proactive = LumaProactiveService.shared
 
     @State private var showLumaSheet = false
 
@@ -86,6 +98,18 @@ struct RootView: View {
         .sheet(isPresented: $showLumaSheet) {
             LumaSheetView()
                 .environmentObject(healthKit)
+        }
+        .onChange(of: proactive.pendingDelivery) { _, delivery in
+            guard let delivery else { return }
+            // Open the Luma sheet and stream the proactive message.
+            // The brief delay lets the sheet presentation animation complete
+            // before the first token arrives and starts updating the UI.
+            showLumaSheet = true
+            Task {
+                try? await Task.sleep(for: .milliseconds(350))
+                await chatService.deliverProactiveInsight(delivery.event)
+                proactive.pendingDelivery = nil
+            }
         }
     }
 }
