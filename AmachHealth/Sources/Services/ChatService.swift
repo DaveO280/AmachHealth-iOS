@@ -147,21 +147,91 @@ final class ChatService: ObservableObject {
     func startNewSession() {
         guard !currentSession.messages.isEmpty else { return }
 
+        let sessionToArchive = currentSession
+
         // Archive current to recent sessions
-        recentSessions.insert(currentSession, at: 0)
+        recentSessions.insert(sessionToArchive, at: 0)
         if recentSessions.count > 30 {
             recentSessions = Array(recentSessions.prefix(30))
         }
         saveToDisk()
 
-        // Save the archived session to Storj in background
-        Task { await syncToStorj(session: currentSession) }
+        // Summarize health content and sync to Storj in background
+        Task {
+            await summarizeAndArchive(sessionToArchive)
+            await syncToStorj(session: sessionToArchive)
+        }
 
         currentSession = ChatSession()
     }
 
     func loadSession(_ session: ChatSession) {
         currentSession = session
+    }
+
+    // MARK: - Proactive Intelligence Support
+
+    /// Whether any of the last 3 sessions substantively discussed a given metric.
+    /// Used by LumaProactiveService to avoid surfacing duplicate anomaly notifications.
+    func hasRecentDiscussion(about metricType: String) -> Bool {
+        let searchTerms = relevantSearchTerms(for: metricType)
+        let sessionsToCheck = ([currentSession] + recentSessions.prefix(2))
+        for session in sessionsToCheck {
+            let allText = session.messages.map { $0.content }.joined(separator: " ").lowercased()
+            if searchTerms.contains(where: { allText.contains($0) }) {
+                // Only counts if discussion happened in the last 3 days
+                let daysSince = Calendar.current.dateComponents(
+                    [.day], from: session.updatedAt, to: .now
+                ).day ?? 99
+                if daysSince <= 3 { return true }
+            }
+        }
+        return false
+    }
+
+    /// Summarize a session's health content via Venice and store the result.
+    /// Called when archiving a session — the summary feeds future proactive contexts.
+    func summarizeAndArchive(_ session: ChatSession) async {
+        guard session.messages.count >= 4 else { return }  // skip very short sessions
+        guard session.healthSummary == nil else { return }  // already summarized
+
+        let summaryPrompt =
+            "In 1-2 sentences, summarize ONLY the health events, anomalies, or symptoms " +
+            "discussed in this conversation, and any outcomes mentioned. " +
+            "If no health-significant content was discussed, reply with exactly: null"
+
+        let history = session.messages.map {
+            AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content)
+        }
+
+        do {
+            let response = try await api.sendChatMessage(summaryPrompt, history: history)
+            let summary = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard summary.lowercased() != "null", !summary.isEmpty else { return }
+
+            // Update the archived session with the health summary
+            if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
+                recentSessions[idx].healthSummary = summary
+                saveToDisk()
+            }
+        } catch {
+            // Non-critical — memory works without summaries, just less rich
+        }
+    }
+
+    // Maps HealthKit metric type identifiers to natural language search terms
+    private func relevantSearchTerms(for metricType: String) -> [String] {
+        switch metricType {
+        case "heartRateVariabilitySDNN": return ["hrv", "heart rate variability"]
+        case "restingHeartRate":         return ["resting heart rate", "rhr", "heart rate"]
+        case "sleepDuration":            return ["sleep", "sleeping", "insomnia", "tired"]
+        case "sleepEfficiency":          return ["sleep quality", "sleep efficiency", "restless"]
+        case "stepCount":                return ["steps", "walking", "activity"]
+        case "activeEnergyBurned":       return ["energy", "calories", "workout", "exercise"]
+        case "respiratoryRate":          return ["breathing", "respiratory", "breath"]
+        case "oxygenSaturation":         return ["oxygen", "spo2", "saturation"]
+        default:                         return [metricType.lowercased()]
+        }
     }
 
     // MARK: - Persistence
