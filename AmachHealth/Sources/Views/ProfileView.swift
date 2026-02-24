@@ -26,6 +26,10 @@ struct ProfileView: View {
     @State private var showDeleteAlert = false
     @State private var showingOpenSettings = false
 
+    // Luma proactive intelligence toggle — backed by UserDefaults
+    @AppStorage("luma.proactiveEnabled") private var lumaProactiveEnabled = false
+    @ObservedObject private var proactive = LumaProactiveService.shared
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -36,6 +40,7 @@ struct ProfileView: View {
                     connectedSourcesSection
                     dataQualitySection
                     attestationsSection
+                    lumaSection
                     privacySection
                     aboutSection
                     destructiveSection
@@ -418,6 +423,83 @@ struct ProfileView: View {
             AmachTierBadge(tier: attestation.tier.rawValue)
         }
         .listRowBackground(Color.amachSurface)
+    }
+
+    // MARK: - Luma Intelligence
+
+    private var lumaSection: some View {
+        Section {
+            // Enable / disable toggle
+            HStack(spacing: AmachSpacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(Color.amachAI.opacity(0.12))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.amachAI)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Background Insights")
+                        .font(AmachType.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Text("Luma watches for patterns while you live your life")
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $lumaProactiveEnabled)
+                    .tint(Color.amachAI)
+                    .labelsHidden()
+                    .onChange(of: lumaProactiveEnabled) { _, newValue in
+                        if newValue {
+                            Task {
+                                let granted = await proactive.enable()
+                                if !granted { lumaProactiveEnabled = false }
+                            }
+                        } else {
+                            proactive.disable()
+                        }
+                    }
+            }
+            .listRowBackground(Color.amachSurface)
+
+            // Alert sensitivity — only shown when enabled
+            if lumaProactiveEnabled {
+                NavigationLink {
+                    LumaSensitivityView()
+                } label: {
+                    HStack(spacing: AmachSpacing.md) {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(Color.amachAI)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Alert Sensitivity")
+                                .font(AmachType.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.amachTextPrimary)
+                            Text("Tune per metric — 8 metrics configured")
+                                .font(AmachType.tiny)
+                                .foregroundStyle(Color.amachTextSecondary)
+                        }
+                    }
+                }
+                .listRowBackground(Color.amachSurface)
+            }
+        } header: {
+            sectionHeader("Luma Intelligence")
+        } footer: {
+            if !lumaProactiveEnabled {
+                Text("Enable to let Luma surface health patterns proactively — before you think to ask.")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .lineSpacing(2)
+            }
+        }
     }
 
     // MARK: - Privacy
