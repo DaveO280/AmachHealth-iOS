@@ -6,6 +6,7 @@
 
 import Foundation
 import Combine
+import CryptoKit
 
 // Note: This requires the Privy iOS SDK
 // Add to Package.swift: .package(url: "https://github.com/privy-io/privy-ios", from: "1.0.0")
@@ -88,9 +89,8 @@ final class WalletService: ObservableObject {
             signature: devSignature,
             timestamp: ts
         )
-        saveEncryptionKeyToKeychain(key)
-
         self.encryptionKey = key
+        try? saveEncryptionKeyToKeychain()
         self.address = devAddress
         self.isConnected = true
     }
@@ -243,13 +243,6 @@ enum WalletError: LocalizedError {
 
 extension Data {
     func sha256() -> Data {
-        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        self.withUnsafeBytes {
-            _ = CC_SHA256($0.baseAddress, CC_LONG(self.count), &hash)
-        }
-        return Data(hash)
+        Data(SHA256.hash(data: self))
     }
 }
-
-// Note: Add to bridging header or use CryptoKit instead
-// #import <CommonCrypto/CommonDigest.h>

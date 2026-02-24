@@ -5,6 +5,7 @@ import SwiftUI
 
 @main
 struct AmachHealthApp: App {
+    @State private var appState = AppState()
     @StateObject private var healthKit = HealthKitService.shared
     @StateObject private var wallet = WalletService.shared
     @StateObject private var syncService = HealthDataSyncService.shared
@@ -15,6 +16,7 @@ struct AmachHealthApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environment(appState)
                 .environmentObject(healthKit)
                 .environmentObject(wallet)
                 .environmentObject(syncService)
@@ -27,6 +29,9 @@ struct AmachHealthApp: App {
                     if healthKit.isHealthKitAvailable && !healthKit.isAuthorized {
                         try? await healthKit.requestAuthorization()
                     }
+                    // Seed AppState from service singletons already initialised above
+                    appState.setHealthKit(authorized: healthKit.isAuthorized)
+                    appState.setWallet(address: wallet.address)
                 }
         }
     }
@@ -41,7 +46,7 @@ struct AmachHealthApp: App {
 
 struct RootView: View {
     @AppStorage("onboardingComplete") private var onboardingComplete = false
-    @StateObject private var lumaContext = LumaContextService.shared
+    @EnvironmentObject private var lumaContext: LumaContextService
     @EnvironmentObject private var healthKit: HealthKitService
     @EnvironmentObject private var wallet: WalletService
     @EnvironmentObject private var syncService: HealthDataSyncService
