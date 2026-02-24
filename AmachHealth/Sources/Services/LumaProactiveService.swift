@@ -87,7 +87,8 @@ final class LumaProactiveService: ObservableObject {
         // Skip if Luma recently discussed this metric in chat
         guard !ChatService.shared.hasRecentDiscussion(about: topSignal.metricType) else { return }
 
-        guard let event = topSignal.toHealthEvent() else { return }
+        let profile = store.profile(for: topSignal.metricType)
+        guard let event = topSignal.toHealthEvent(using: profile) else { return }
         store.record(event)
         store.markSurfaced(event.id)
 

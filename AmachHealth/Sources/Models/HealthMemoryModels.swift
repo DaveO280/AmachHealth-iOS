@@ -158,6 +158,180 @@ struct PersonalBaseline: Codable {
     }
 }
 
+// MARK: - Sensitivity Level
+
+/// User-adjustable sensitivity for a metric's anomaly detection.
+/// Applied as a multiplier to the default zScore threshold and min consecutive days.
+enum SensitivityLevel: String, Codable, CaseIterable {
+    case low    // fewer, higher-confidence alerts  (thresholds * 1.3)
+    case medium // default
+    case high   // more sensitive, earlier alerts  (thresholds * 0.7)
+
+    var displayLabel: String {
+        switch self {
+        case .low:    return "Less sensitive"
+        case .medium: return "Default"
+        case .high:   return "More sensitive"
+        }
+    }
+}
+
+// MARK: - Metric Sensitivity Profile
+
+/// Per-metric detection parameters. Every monitored metric has a default profile;
+/// users can override the sensitivityLevel to tune alerting to their lifestyle.
+///
+/// Design principles:
+///   - Absolute floors/ceilings bypass statistics for clinically meaningful values
+///   - monitoredDirections prevents noise from "good" deviations (e.g. high HRV)
+///   - Consecutive day windows are tuned to each metric's natural variability
+struct MetricSensitivityProfile {
+    let metricType: String
+
+    /// σ threshold for statistical significance (before sensitivity multiplier).
+    let baseZScoreThreshold: Double
+
+    /// Minimum consecutive days outside baseline to surface (before multiplier).
+    let baseMinConsecutiveDays: Int
+
+    /// Only alert for these directions. Empty = alert for both.
+    let monitoredDirections: [AnomalyDirection]
+
+    /// Value below this is always significant, regardless of personal baseline.
+    let absoluteFloor: Double?
+
+    /// Value above this is always significant, regardless of personal baseline.
+    let absoluteCeiling: Double?
+
+    /// User-adjustable — the only field that changes after initialization.
+    var sensitivityLevel: SensitivityLevel
+
+    // MARK: Effective thresholds (after sensitivity multiplier)
+
+    var effectiveZScore: Double {
+        switch sensitivityLevel {
+        case .low:    return baseZScoreThreshold * 1.3
+        case .medium: return baseZScoreThreshold
+        case .high:   return baseZScoreThreshold * 0.7
+        }
+    }
+
+    var effectiveMinDays: Int {
+        switch sensitivityLevel {
+        case .low:    return baseMinConsecutiveDays + 2
+        case .medium: return baseMinConsecutiveDays
+        case .high:   return max(1, baseMinConsecutiveDays - 1)
+        }
+    }
+
+    /// Resolution threshold — hysteresis below detection so we don't
+    /// flip in and out on borderline readings.
+    var resolutionZScore: Double { effectiveZScore * 0.65 }
+
+    // MARK: - Default profiles
+
+    /// Defaults for all monitored metrics. Each profile reflects the metric's
+    /// natural variability and clinical significance.
+    static let defaults: [String: MetricSensitivityProfile] = [
+
+        // HRV — noisiest metric but most sensitive to stress/illness.
+        // Only declining matters: high HRV is healthy.
+        "heartRateVariabilitySDNN": MetricSensitivityProfile(
+            metricType: "heartRateVariabilitySDNN",
+            baseZScoreThreshold: 2.0,
+            baseMinConsecutiveDays: 3,
+            monitoredDirections: [.declining],
+            absoluteFloor: nil,
+            absoluteCeiling: nil,
+            sensitivityLevel: .medium
+        ),
+
+        // RHR — stable day-to-day; a sustained elevation is a reliable illness signal.
+        // Only spiking matters: low RHR is healthy. Hard ceiling at 100 bpm (tachycardia).
+        "restingHeartRate": MetricSensitivityProfile(
+            metricType: "restingHeartRate",
+            baseZScoreThreshold: 1.8,
+            baseMinConsecutiveDays: 2,
+            monitoredDirections: [.spiking],
+            absoluteFloor: nil,
+            absoluteCeiling: 100,
+            sensitivityLevel: .medium
+        ),
+
+        // Sleep duration — highly variable; need a longer window to distinguish
+        // pattern from noise. Both directions matter: chronic short AND long sleep.
+        "sleepDuration": MetricSensitivityProfile(
+            metricType: "sleepDuration",
+            baseZScoreThreshold: 2.0,
+            baseMinConsecutiveDays: 5,
+            monitoredDirections: [.declining, .spiking],
+            absoluteFloor: 4.0,     // <4 h/night = severe deprivation regardless of baseline
+            absoluteCeiling: nil,
+            sensitivityLevel: .medium
+        ),
+
+        // Sleep efficiency — only low efficiency is concerning.
+        // Hard floor at 70%: below that sleep is fragmented regardless of personal norm.
+        "sleepEfficiency": MetricSensitivityProfile(
+            metricType: "sleepEfficiency",
+            baseZScoreThreshold: 2.0,
+            baseMinConsecutiveDays: 4,
+            monitoredDirections: [.declining],
+            absoluteFloor: 70,
+            absoluteCeiling: nil,
+            sensitivityLevel: .medium
+        ),
+
+        // Step count — very noisy (weekend vs weekday, weather, travel).
+        // High threshold + long window to avoid lifestyle-driven false positives.
+        "stepCount": MetricSensitivityProfile(
+            metricType: "stepCount",
+            baseZScoreThreshold: 2.5,
+            baseMinConsecutiveDays: 7,
+            monitoredDirections: [.declining],
+            absoluteFloor: nil,
+            absoluteCeiling: nil,
+            sensitivityLevel: .medium
+        ),
+
+        // Active energy — similar variability to steps; week-long window needed.
+        "activeEnergyBurned": MetricSensitivityProfile(
+            metricType: "activeEnergyBurned",
+            baseZScoreThreshold: 2.5,
+            baseMinConsecutiveDays: 7,
+            monitoredDirections: [.declining],
+            absoluteFloor: nil,
+            absoluteCeiling: nil,
+            sensitivityLevel: .medium
+        ),
+
+        // Respiratory rate — early illness indicator. Lower threshold + shorter window
+        // than activity metrics. Hard ceiling at 20 breaths/min (elevated at rest).
+        "respiratoryRate": MetricSensitivityProfile(
+            metricType: "respiratoryRate",
+            baseZScoreThreshold: 1.8,
+            baseMinConsecutiveDays: 2,
+            monitoredDirections: [.spiking],
+            absoluteFloor: nil,
+            absoluteCeiling: 20,
+            sensitivityLevel: .medium
+        ),
+
+        // SpO2 — most clinically critical metric.
+        // Low threshold, single-day window: even one concerning reading matters.
+        // Hard floor at 94%: below that is clinically significant regardless of baseline.
+        "oxygenSaturation": MetricSensitivityProfile(
+            metricType: "oxygenSaturation",
+            baseZScoreThreshold: 1.5,
+            baseMinConsecutiveDays: 1,
+            monitoredDirections: [.declining],
+            absoluteFloor: 94,
+            absoluteCeiling: nil,
+            sensitivityLevel: .medium
+        ),
+    ]
+}
+
 // MARK: - Anomaly Signal
 
 /// Raw output from AnomalyDetector — one signal per evaluated metric.
@@ -168,16 +342,26 @@ struct AnomalySignal {
     let baseline: PersonalBaseline
     let zScore: Double
     let direction: AnomalyDirection
-    let consecutiveDaysOutside: Int  // how many consecutive days have been anomalous
+    let consecutiveDaysOutside: Int  // consecutive days in the *detected direction*
 
-    /// Surface threshold: >2σ deviation held for 3+ consecutive days.
-    /// Avoids noise from single-day outliers (travel, bad night, etc.).
-    var isSignificant: Bool {
-        abs(zScore) >= 2.0 && consecutiveDaysOutside >= 3
+    /// Evaluate significance against a specific metric profile.
+    /// Absolute floors/ceilings bypass statistical checks entirely.
+    func isSignificant(using profile: MetricSensitivityProfile) -> Bool {
+        // Absolute clinical thresholds — no statistical model needed
+        if let floor = profile.absoluteFloor, currentValue < floor { return true }
+        if let ceiling = profile.absoluteCeiling, currentValue > ceiling { return true }
+
+        // Ignore deviations in directions this metric doesn't care about
+        if !profile.monitoredDirections.isEmpty,
+           !profile.monitoredDirections.contains(direction) { return false }
+
+        // Statistical significance: sustained deviation above profile threshold
+        return abs(zScore) >= profile.effectiveZScore
+            && consecutiveDaysOutside >= profile.effectiveMinDays
     }
 
-    func toHealthEvent() -> HealthEvent? {
-        guard isSignificant else { return nil }
+    func toHealthEvent(using profile: MetricSensitivityProfile) -> HealthEvent? {
+        guard isSignificant(using: profile) else { return nil }
         return HealthEvent(
             metricType: metricType,
             anomalyType: .deviation,

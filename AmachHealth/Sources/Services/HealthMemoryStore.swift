@@ -101,6 +101,39 @@ final class HealthMemoryStore: ObservableObject {
             .map { $0.narrativeSummary }
     }
 
+    // MARK: - MetricSensitivityProfile API
+
+    /// Returns the profile for a metric, with any user sensitivity override applied.
+    /// Falls back to MetricSensitivityProfile.defaults, then a generic medium profile.
+    func profile(for metricType: String) -> MetricSensitivityProfile {
+        var profile = MetricSensitivityProfile.defaults[metricType]
+            ?? MetricSensitivityProfile(
+                metricType: metricType,
+                baseZScoreThreshold: 2.0,
+                baseMinConsecutiveDays: 3,
+                monitoredDirections: [],
+                absoluteFloor: nil,
+                absoluteCeiling: nil,
+                sensitivityLevel: .medium
+            )
+        // Apply user override if set
+        if let raw = UserDefaults.standard.string(forKey: "luma.sensitivity.\(metricType)"),
+           let level = SensitivityLevel(rawValue: raw) {
+            profile.sensitivityLevel = level
+        }
+        return profile
+    }
+
+    /// Persist a user's sensitivity preference for a metric.
+    func setSensitivity(_ level: SensitivityLevel, for metricType: String) {
+        UserDefaults.standard.set(level.rawValue, forKey: "luma.sensitivity.\(metricType)")
+    }
+
+    /// Reset a metric's sensitivity to its profile default.
+    func resetSensitivity(for metricType: String) {
+        UserDefaults.standard.removeObject(forKey: "luma.sensitivity.\(metricType)")
+    }
+
     // MARK: - PersonalBaseline API
 
     func baseline(for metricType: String) -> PersonalBaseline? {

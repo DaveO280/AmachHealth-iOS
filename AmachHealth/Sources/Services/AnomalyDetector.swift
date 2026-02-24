@@ -1,39 +1,29 @@
 // AnomalyDetector.swift
 // AmachHealth
 //
-// Evaluates incoming HealthKit daily readings against PersonalBaselines
-// stored in HealthMemoryStore. Entirely on-device — no network calls.
+// Evaluates incoming HealthKit daily readings against PersonalBaselines,
+// using per-metric MetricSensitivityProfiles from HealthMemoryStore.
 //
-// Significance threshold: >2σ deviation held for 3+ consecutive days.
-// This filters single-day outliers (bad sleep night, travel day, etc.)
-// and only surfaces patterns that are sustained and meaningful.
+// Each metric has its own:
+//   - zScore threshold     (SpO2: 1.5σ vs steps: 2.5σ)
+//   - consecutive day window  (SpO2: 1 day vs steps: 7 days)
+//   - monitored directions    (HRV: declining only; sleep: both)
+//   - absolute clinical floors/ceilings (SpO2 < 94 always significant)
+//   - user sensitivity override (low / medium / high)
 //
-// Called by LumaProactiveService after each HealthKit sync or background
-// observer fire. Returns [AnomalySignal] — caller decides what to surface.
+// Consecutive day counters are direction-aware — a week of elevated steps
+// does not count toward the declining-steps anomaly window.
 
 import Foundation
 
 final class AnomalyDetector {
 
-    // MARK: - Core metrics monitored for anomalies
-    //
-    // Not every metric is worth monitoring proactively.
-    // These are the ones with strong signal-to-noise for longitudinal patterns.
+    // Monitored metrics — the superset. Profiles define how each is evaluated.
+    static let monitoredMetrics: Set<String> = Set(MetricSensitivityProfile.defaults.keys)
 
-    static let monitoredMetrics: Set<String> = [
-        "heartRateVariabilitySDNN",     // HRV — most sensitive stress/illness signal
-        "restingHeartRate",             // RHR — elevated RHR tracks recovery/illness
-        "sleepDuration",                // computed from SleepSummary.total
-        "sleepEfficiency",              // computed from SleepSummary.efficiency
-        "stepCount",                    // activity level proxy
-        "activeEnergyBurned",           // workout intensity proxy
-        "respiratoryRate",              // respiratory changes precede illness
-        "oxygenSaturation",             // SpO2 — significant drops warrant attention
-    ]
-
-    // Tracks consecutive days each metric has been outside its baseline.
-    // Keyed by metricType. Persists across calls within a session;
-    // HealthMemoryStore holds the ground truth across app launches.
+    // Direction-aware consecutive day counters.
+    // Key: "\(metricType)_\(direction.rawValue)" — e.g. "restingHeartRate_spiking"
+    // Crossing in the opposite direction resets only the opposite counter.
     private var consecutiveDaysOutside: [String: Int] = [:]
 
     private let store: HealthMemoryStore
@@ -45,65 +35,55 @@ final class AnomalyDetector {
     // MARK: - Main evaluation entry point
 
     /// Evaluate a map of daily summaries against stored baselines.
-    /// Returns significant anomaly signals sorted by severity (highest zScore first).
-    ///
-    /// - Parameter dailySummaries: keyed by "YYYY-MM-DD", from HealthKitService
-    /// - Returns: signals that crossed the significance threshold
+    /// Returns significant anomaly signals sorted by severity (highest |zScore| first).
     func evaluate(dailySummaries: [String: DailySummary]) -> [AnomalySignal] {
-        // Sort by date so we process in chronological order —
-        // consecutive day counting depends on ordering
         let sortedDays = dailySummaries.keys.sorted()
-
         var signals: [AnomalySignal] = []
 
         for dateKey in sortedDays {
             guard let summary = dailySummaries[dateKey] else { continue }
-            let daySignals = evaluateDay(summary: summary, date: dateKey)
-            signals.append(contentsOf: daySignals)
+            signals.append(contentsOf: evaluateDay(summary: summary))
         }
 
-        // Return only significant signals, highest deviation first
+        // Filter and rank — highest absolute deviation first
         return signals
-            .filter { $0.isSignificant }
+            .filter { signal in
+                let profile = store.profile(for: signal.metricType)
+                return signal.isSignificant(using: profile)
+            }
             .sorted { abs($0.zScore) > abs($1.zScore) }
     }
 
-    /// Evaluate a single day's readings.
-    private func evaluateDay(summary: DailySummary, date: String) -> [AnomalySignal] {
+    /// Evaluate a single day's readings against all monitored metrics.
+    private func evaluateDay(summary: DailySummary) -> [AnomalySignal] {
+        var readings = flattenReadings(from: summary)
         var signals: [AnomalySignal] = []
-
-        // Metric readings from the daily summary
-        var readings: [String: Double] = [:]
-        for (key, metric) in summary.metrics {
-            if let value = metric.avg ?? metric.total {
-                readings[key] = value
-            }
-        }
-
-        // Sleep metrics computed separately
-        if let sleep = summary.sleep {
-            readings["sleepDuration"] = Double(sleep.total) / 60.0
-            if let efficiency = sleep.efficiency {
-                readings["sleepEfficiency"] = efficiency
-            }
-        }
 
         for metricType in Self.monitoredMetrics {
             guard let value = readings[metricType] else { continue }
             guard let baseline = store.baseline(for: metricType),
                   baseline.isReliable else { continue }
 
+            let profile = store.profile(for: metricType)
             let z = baseline.zScore(for: value)
-            guard abs(z) > 0 else { continue }
+            guard z != 0 else { continue }
 
             let direction: AnomalyDirection = z < 0 ? .declining : .spiking
-            let isOutside = abs(z) >= 2.0
 
-            // Update consecutive days counter
-            if isOutside {
-                consecutiveDaysOutside[metricType, default: 0] += 1
+            // Update direction-aware consecutive day counters.
+            // A day above baseline resets the declining counter (and vice versa).
+            let detectedKey  = consecutiveDayKey(metricType, direction)
+            let oppositeKey  = consecutiveDayKey(metricType, direction == .declining ? .spiking : .declining)
+
+            let isOutsideThreshold = abs(z) >= profile.effectiveZScore
+                || (profile.absoluteFloor.map { value < $0 } ?? false)
+                || (profile.absoluteCeiling.map { value > $0 } ?? false)
+
+            if isOutsideThreshold {
+                consecutiveDaysOutside[detectedKey, default: 0] += 1
+                consecutiveDaysOutside[oppositeKey] = 0
             } else {
-                consecutiveDaysOutside[metricType] = 0
+                consecutiveDaysOutside[detectedKey] = 0
             }
 
             let signal = AnomalySignal(
@@ -112,12 +92,9 @@ final class AnomalyDetector {
                 baseline: baseline,
                 zScore: z,
                 direction: direction,
-                consecutiveDaysOutside: consecutiveDaysOutside[metricType, default: 0]
+                consecutiveDaysOutside: consecutiveDaysOutside[detectedKey, default: 0]
             )
-
-            if signal.isSignificant {
-                signals.append(signal)
-            }
+            signals.append(signal)
         }
 
         return signals
@@ -125,39 +102,60 @@ final class AnomalyDetector {
 
     // MARK: - Resolution check
 
-    /// Check whether previously-flagged anomalies have resolved.
-    /// Called after baseline update to close out stale active events.
+    /// Check whether previously-active anomalies have returned to baseline.
+    /// Uses each metric's profile resolutionZScore (below detection threshold)
+    /// to avoid flipping in and out on borderline readings.
     func checkResolutions(from dailySummaries: [String: DailySummary]) {
         let activeEvents = store.events.filter { $0.outcome == nil }
         guard !activeEvents.isEmpty else { return }
 
-        // Use the most recent day's readings for resolution check
         guard let latestDate = dailySummaries.keys.sorted().last,
               let latestSummary = dailySummaries[latestDate] else { return }
 
-        var readings: [String: Double] = [:]
-        for (key, metric) in latestSummary.metrics {
-            if let value = metric.avg ?? metric.total {
-                readings[key] = value
-            }
-        }
-        if let sleep = latestSummary.sleep {
-            readings["sleepDuration"] = Double(sleep.total) / 60.0
-        }
+        let readings = flattenReadings(from: latestSummary)
 
         for event in activeEvents {
             guard let currentValue = readings[event.metricType],
                   let baseline = store.baseline(for: event.metricType),
                   baseline.isReliable else { continue }
 
+            let profile = store.profile(for: event.metricType)
             let z = abs(baseline.zScore(for: currentValue))
-            if z < 1.5 {
-                // Returned within ~1.5σ of baseline — consider resolved
-                consecutiveDaysOutside[event.metricType] = 0
+
+            // Also check absolute thresholds — if we're back above the floor, resolved
+            let aboveFloor   = profile.absoluteFloor.map { currentValue >= $0 } ?? true
+            let belowCeiling = profile.absoluteCeiling.map { currentValue <= $0 } ?? true
+
+            if z < profile.resolutionZScore && aboveFloor && belowCeiling {
+                consecutiveDaysOutside[consecutiveDayKey(event.metricType, event.direction)] = 0
                 Task { @MainActor in
                     store.resolve(eventId: event.id, outcome: .resolved)
                 }
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    /// Flatten a DailySummary into a flat [metricType: value] map.
+    /// Sleep metrics are derived here so all downstream code sees a uniform interface.
+    private func flattenReadings(from summary: DailySummary) -> [String: Double] {
+        var readings: [String: Double] = [:]
+        for (key, metric) in summary.metrics {
+            if let value = metric.avg ?? metric.total {
+                readings[key] = value
+            }
+        }
+        if let sleep = summary.sleep {
+            readings["sleepDuration"] = Double(sleep.total) / 60.0
+            if let efficiency = sleep.efficiency {
+                readings["sleepEfficiency"] = efficiency
+            }
+        }
+        return readings
+    }
+
+    private func consecutiveDayKey(_ metricType: String, _ direction: AnomalyDirection) -> String {
+        "\(metricType)_\(direction.rawValue)"
     }
 }
