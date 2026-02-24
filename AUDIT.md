@@ -164,6 +164,38 @@ action needed until then.
 
 ---
 
+### 10. Key derivation message must match the web app exactly
+**Status:** `WalletService.swift` builds the signing message as:
+
+```
+Sign this message to derive your encryption key.
+
+This key is used to encrypt your health data before storage.
+
+It will NOT be sent to our servers.
+Timestamp: %d          ← millisecond epoch, formatted with String(format:)
+```
+
+The web app (`Amach-Website`) must use the **identical string** — same
+wording, same whitespace, same newlines, same timestamp unit.  If there is
+any difference the two apps will derive different encryption keys from the
+same wallet signature, and iOS will be unable to decrypt data written by the
+web app (and vice versa).
+
+**How to verify:**
+1. Open `Amach-Website` and search for `signMessage` or `deriveEncryptionKey`
+   to find where the signing message is constructed.
+2. Compare character-for-character with `keyDerivationMessage` in
+   `WalletService.swift` lines 29–36.
+3. Confirm the timestamp is passed as milliseconds (`Date.now()` in JS vs
+   `Int(Date().timeIntervalSince1970 * 1000)` in Swift) and formatted the
+   same way in both strings.
+
+If they differ, one side needs to be updated — whichever was written first
+should be treated as the canonical version.
+
+---
+
 ## Checklist for TestFlight readiness
 
 - [ ] Xcode app target created (item 1)
@@ -173,3 +205,4 @@ action needed until then.
 - [ ] AppState bridged to live service events (item 5)
 - [ ] Orientation lock confirmed intentional (item 6)
 - [ ] `preferredColorScheme` decision made (item 7)
+- [ ] Key derivation message verified against web app (item 10)
