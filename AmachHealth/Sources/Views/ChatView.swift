@@ -125,7 +125,11 @@ struct ChatView: View {
                                 .id(msg.id)
                         }
 
-                        if chatService.isSending {
+                        // Only show the animated typing dots when no streaming placeholder
+                        // exists yet. Once the assistant placeholder is appended the tokens
+                        // fill it in-place, making the dots redundant.
+                        if chatService.isSending,
+                           chatService.currentSession.messages.last?.role != .assistant {
                             LumaTypingBubble()
                                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
@@ -355,8 +359,8 @@ struct ChatView: View {
         messageText = ""
         inputFocused = false
         AmachHaptics.buttonPress()
-        await chatService.send(text)
-        AmachHaptics.lumaResponse()
+        await chatService.sendStreaming(text)
+        // Haptic on completion is handled inside sendStreaming; no double-fire needed.
     }
 }
 
