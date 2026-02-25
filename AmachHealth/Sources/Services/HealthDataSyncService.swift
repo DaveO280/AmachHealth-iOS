@@ -132,6 +132,10 @@ final class HealthDataSyncService: ObservableObject {
             lastSyncResult = result
             pendingPayload = nil
 
+            // Feed new readings into Luma's anomaly detector and personal baselines.
+            // Runs after upload so the UI sync state is already at 100%.
+            LumaProactiveService.shared.evaluateAndStage(dailySummaries: dailySummaries)
+
             // Delay before setting idle to show completion
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             syncState = .idle
