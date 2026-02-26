@@ -29,22 +29,9 @@
 		552DB5222F50B9170082B249 /* Amach HealthUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amach HealthUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		552DB5822F50BC4D0082B249 /* Exceptions for "Amach Health" folder in "Amach Health" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Amach-Health-Info.plist",
-			);
-			target = 552DB5082F50B9160082B249 /* Amach Health */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		552DB50B2F50B9160082B249 /* Amach Health */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				552DB5822F50BC4D0082B249 /* Exceptions for "Amach Health" folder in "Amach Health" target */,
-			);
 			path = "Amach Health";
 			sourceTree = "<group>";
 		};
