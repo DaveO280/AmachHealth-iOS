@@ -14,6 +14,7 @@
 //   and the emerald color on the back chevron — making even a
 //   detail screen feel cohesive with the design system.
 
+import Combine
 import SwiftUI
 
 

@@ -17,6 +17,7 @@
 // These are intentionally separate from chat session storage so they
 // persist across session resets and are queryable independently.
 
+import Combine
 import Foundation
 
 @MainActor

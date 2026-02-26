@@ -194,7 +194,7 @@ private struct WelcomeStep: View {
 // MARK: - STEP 1: OWN YOUR DATA
 // ============================================================
 
-private struct OwnYourDataStep: View {
+struct OwnYourDataStep: View {
     let onContinue: () -> Void
     @State private var appeared = false
 
@@ -312,7 +312,7 @@ private struct PillarCard: View {
 // MARK: - STEP 2: MEET LUMA
 // ============================================================
 
-private struct MeetLumaStep: View {
+struct MeetLumaStep: View {
     let onContinue: () -> Void
     @State private var appeared = false
     @State private var typedText = ""
@@ -421,7 +421,7 @@ private struct MeetLumaStep: View {
 // Show exactly what categories will be accessed.
 // Never mention "upload" or "share" — say "read" and "analyze."
 
-private struct HealthPermissionStep: View {
+struct HealthPermissionStep: View {
     @Binding var isRequesting: Bool
     @Binding var permissionDenied: Bool
     let onAllow: () async -> Void
@@ -604,7 +604,7 @@ private struct HealthPermissionStep: View {
 // MARK: - STEP 4: READY
 // ============================================================
 
-private struct ReadyStep: View {
+struct ReadyStep: View {
     let onGetStarted: () -> Void
     @State private var appeared = false
 

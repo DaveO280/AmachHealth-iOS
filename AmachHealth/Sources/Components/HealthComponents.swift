@@ -69,6 +69,11 @@ struct AmachSourceBadge: View {
     let source: DataSource
     var showLabel: Bool = true
 
+    init(_ source: DataSource, showLabel: Bool = true) {
+        self.source    = source
+        self.showLabel = showLabel
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: source.icon)
@@ -262,6 +267,11 @@ struct AmachSectionHeader<Trailing: View>: View {
 struct AmachStatRow<ValueContent: View>: View {
     let label: String
     @ViewBuilder let value: () -> ValueContent
+
+    init(_ label: String, @ViewBuilder value: @escaping () -> ValueContent) {
+        self.label = label
+        self.value = value
+    }
 
     var body: some View {
         HStack {
