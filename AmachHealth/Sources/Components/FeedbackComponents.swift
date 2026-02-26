@@ -402,6 +402,20 @@ struct AmachBanner: View {
     var action: (() -> Void)? = nil
     @Binding var isDismissed: Bool
 
+    init(
+        _ style: Style,
+        message: String,
+        actionLabel: String? = nil,
+        action: (() -> Void)? = nil,
+        isDismissed: Binding<Bool>
+    ) {
+        self.style       = style
+        self.message     = message
+        self.actionLabel = actionLabel
+        self.action      = action
+        self._isDismissed = isDismissed
+    }
+
     @Environment(\.colorScheme) private var scheme
 
     private var tokens: (icon: Color, bg: Color, border: Color, text: Color) {

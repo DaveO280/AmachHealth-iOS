@@ -15,6 +15,7 @@
 //   AmachFormSection           — titled wrapper for input groups
 
 import SwiftUI
+import UIKit
 
 
 // ============================================================
@@ -112,6 +113,26 @@ struct AmachTextField: View {
     var onSubmit: (() -> Void)?     = nil
 
     @FocusState private var isFocused: Bool
+
+    init(
+        _ placeholder: String,
+        text: Binding<String>,
+        icon: String? = nil,
+        errorMessage: String? = nil,
+        keyboardType: UIKeyboardType = .default,
+        textContentType: UITextContentType? = nil,
+        autocapitalization: TextInputAutocapitalization = .sentences,
+        onSubmit: (() -> Void)? = nil
+    ) {
+        self.placeholder      = placeholder
+        self._text            = text
+        self.icon             = icon
+        self.errorMessage     = errorMessage
+        self.keyboardType     = keyboardType
+        self.textContentType  = textContentType
+        self.autocapitalization = autocapitalization
+        self.onSubmit         = onSubmit
+    }
 
     private var borderColor: Color {
         if errorMessage != nil    { return Color.Amach.Semantic.error }
@@ -354,6 +375,12 @@ struct AmachCheckbox: View {
     let label: String
     @Binding var isChecked: Bool
     var description: String? = nil
+
+    init(_ label: String, description: String? = nil, isChecked: Binding<Bool>) {
+        self.label       = label
+        self.description = description
+        self._isChecked  = isChecked
+    }
 
     var body: some View {
         Button {
