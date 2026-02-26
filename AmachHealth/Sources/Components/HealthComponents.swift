@@ -268,7 +268,7 @@ struct AmachStatRow<ValueContent: View>: View {
     let label: String
     @ViewBuilder let value: () -> ValueContent
 
-    init(_ label: String, @ViewBuilder value: @escaping () -> ValueContent) {
+    init(label: String, @ViewBuilder value: @escaping () -> ValueContent) {
         self.label = label
         self.value = value
     }
@@ -287,7 +287,7 @@ struct AmachStatRow<ValueContent: View>: View {
 
 extension AmachStatRow where ValueContent == Text {
     /// Convenience init for plain-string values.
-    init(_ label: String, value: String) {
+    init(label: String, value: String) {
         self.label = label
         self.value = {
             Text(value)
@@ -468,11 +468,11 @@ struct AmachConnectionCard: View {
     ZStack {
         Color.amachBg.ignoresSafeArea()
         VStack(spacing: 0) {
-            AmachStatRow("Metrics synced", value: "142")
+            AmachStatRow(label: "Metrics synced", value: "142")
             Divider().padding(.leading)
-            AmachStatRow("Days covered", value: "30")
+            AmachStatRow(label: "Days covered", value: "30")
             Divider().padding(.leading)
-            AmachStatRow("Tier") { AmachTierBadge(tier: "GOLD") }
+            AmachStatRow(label: "Tier") { AmachTierBadge(tier: "GOLD") }
         }
         .padding()
         .amachCard()

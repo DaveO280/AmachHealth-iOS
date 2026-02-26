@@ -115,7 +115,7 @@ struct AmachTextField: View {
     @FocusState private var isFocused: Bool
 
     init(
-        _ placeholder: String,
+        placeholder: String,
         text: Binding<String>,
         icon: String? = nil,
         errorMessage: String? = nil,
@@ -376,7 +376,7 @@ struct AmachCheckbox: View {
     @Binding var isChecked: Bool
     var description: String? = nil
 
-    init(_ label: String, description: String? = nil, isChecked: Binding<Bool>) {
+    init(label: String, description: String? = nil, isChecked: Binding<Bool>) {
         self.label       = label
         self.description = description
         self._isChecked  = isChecked
@@ -571,14 +571,14 @@ struct AmachFormSection<Content: View>: View {
     ZStack {
         Color.amachBg.ignoresSafeArea()
         VStack(spacing: AmachSpacing.md) {
-            AmachTextField("Email address", text: .constant(""), icon: "envelope")
+            AmachTextField(placeholder: "Email address", text: .constant(""), icon: "envelope")
             AmachTextField(
-                "Name",
+                placeholder: "Name",
                 text: .constant("Dave"),
                 icon: "person.fill",
                 errorMessage: "Display name is required"
             )
-            AmachSecureField("Passphrase", text: .constant(""))
+            AmachSecureField(placeholder: "Passphrase", text: .constant(""))
         }
         .padding()
     }
@@ -596,9 +596,9 @@ struct AmachFormSection<Content: View>: View {
 
             Divider().padding(.vertical, AmachSpacing.xs)
 
-            AmachCheckbox("Sync heart rate data", isChecked: .constant(true))
+            AmachCheckbox(label: "Sync heart rate data", isChecked: .constant(true))
             AmachCheckbox(
-                "I agree to the data terms",
+                label: "I agree to the data terms",
                 description: "Your data stays encrypted and under your control.",
                 isChecked: .constant(false)
             )

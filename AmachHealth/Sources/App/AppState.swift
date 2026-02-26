@@ -176,11 +176,11 @@ extension AppState {
             AmachHealthScoreRing(score: state.dataScore, tier: state.currentTier)
 
             VStack(spacing: AmachSpacing.sm) {
-                AmachStatRow("Tier") { AmachTierBadge(tier: state.currentTier) }
-                AmachStatRow("Score", value: "\(state.dataScore) / 100")
-                AmachStatRow("Wallet", value: state.walletAddress ?? "Not connected")
-                AmachStatRow("HealthKit", value: state.isHealthKitAuthorized ? "Authorized" : "Not authorized")
-                AmachStatRow("Fully connected", value: state.isFullyConnected ? "Yes" : "No")
+                AmachStatRow(label: "Tier") { AmachTierBadge(tier: state.currentTier) }
+                AmachStatRow(label: "Score", value: "\(state.dataScore) / 100")
+                AmachStatRow(label: "Wallet", value: state.walletAddress ?? "Not connected")
+                AmachStatRow(label: "HealthKit", value: state.isHealthKitAuthorized ? "Authorized" : "Not authorized")
+                AmachStatRow(label: "Fully connected", value: state.isFullyConnected ? "Yes" : "No")
             }
             .padding()
             .amachCard()

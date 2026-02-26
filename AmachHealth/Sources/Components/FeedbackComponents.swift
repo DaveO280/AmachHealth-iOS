@@ -403,7 +403,7 @@ struct AmachBanner: View {
     @Binding var isDismissed: Bool
 
     init(
-        _ style: Style,
+        style: Style,
         message: String,
         actionLabel: String? = nil,
         action: (() -> Void)? = nil,
@@ -753,19 +753,19 @@ extension View {
         Color.amachBg.ignoresSafeArea()
         VStack(spacing: AmachSpacing.md) {
             AmachBanner(
-                .success,
+                style: .success,
                 message: "Your data was uploaded and attested on ZKsync Era.",
                 isDismissed: .constant(false)
             )
             AmachBanner(
-                .warning,
+                style: .warning,
                 message: "Last sync was 3 days ago. Your data may be out of date.",
                 actionLabel: "Sync Now",
                 action: {},
                 isDismissed: .constant(false)
             )
             AmachBanner(
-                .error,
+                style: .error,
                 message: "Upload failed. Your local data is safe — tap to retry.",
                 isDismissed: .constant(false)
             )
