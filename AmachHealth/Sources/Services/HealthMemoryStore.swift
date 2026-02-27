@@ -22,7 +22,7 @@ import Foundation
 
 @MainActor
 final class HealthMemoryStore: ObservableObject {
-    static let shared = HealthMemoryStore()
+    nonisolated(unsafe) static let shared = HealthMemoryStore()
 
     @Published private(set) var events: [HealthEvent] = []
     @Published private(set) var pendingInsights: [PendingProactiveInsight] = []

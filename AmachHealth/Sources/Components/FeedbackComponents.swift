@@ -302,7 +302,7 @@ struct AmachProgressBar: View {
 //   AmachEmptyState(
 //       icon: "waveform.path.ecg",
 //       title: "No trends yet",
-//       body: "Sync your health data and Luma will start finding patterns.",
+//       message: "Sync your health data and Luma will start finding patterns.",
 //       ctaLabel: "Sync Now",
 //       ctaAction: { … }
 //   )
@@ -310,7 +310,7 @@ struct AmachProgressBar: View {
 struct AmachEmptyState: View {
     let icon: String
     let title: String
-    let body: String
+    let message: String
     var tintColor: Color       = Color.amachPrimary
     var ctaLabel: String?      = nil
     var ctaAction: (() -> Void)? = nil
@@ -343,7 +343,7 @@ struct AmachEmptyState: View {
                     .multilineTextAlignment(.center)
                     .tracking(-0.2)
 
-                Text(body)
+                Text(message)
                     .font(AmachType.body)
                     .foregroundStyle(Color.amachTextSecondary)
                     .multilineTextAlignment(.center)
@@ -738,7 +738,7 @@ extension View {
         AmachEmptyState(
             icon: "waveform.path.ecg",
             title: "No trends yet",
-            body: "Sync your Apple Health data and Luma will start finding patterns.",
+            message: "Sync your Apple Health data and Luma will start finding patterns.",
             ctaLabel: "Sync Now",
             ctaAction: {},
             secondaryLabel: "Learn more",
