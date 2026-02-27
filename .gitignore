@@ -1,0 +1,31 @@
+# Xcode user-specific state (changes on every open — never commit)
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+
+# Build artifacts
+DerivedData/
+build/
+*.o
+*.d
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Default Xcode template file (not part of the app)
+**/Item.swift
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
