@@ -161,9 +161,9 @@ struct GoldShimmerModifier: ViewModifier {
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color(hex: "CBD5E1").opacity(0.85),
-                            Color.white,
                             Color(hex: "CBD5E1").opacity(0.80),
+                            Color(hex: "10B981"),
+                            Color(hex: "CBD5E1").opacity(0.75),
                             .clear
                         ],
                         startPoint: .leading,
