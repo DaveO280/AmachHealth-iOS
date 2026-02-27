@@ -895,26 +895,26 @@
          animations inside overflow:hidden containers (phone-chrome) */
       transform: translateZ(0);
     }
-    /* Bright-emerald → white shimmer on "AMACH"
-       White peak is high-contrast on both dark (light-mode) and light (dark-mode) text */
+    /* Silver flanks + emerald peak — same as .brand-name::after which is confirmed working.
+       Emerald (#10B981) is clearly visible through white text in dark mode.
+       will-change:background-position removed — causes single-fire in some browsers. */
     .wm-top::after {
       content: 'AMACH';
       position: absolute;
       inset: 0;
       background: linear-gradient(
         100deg,
-        transparent             25%,
-        rgba(16,185,129,0.55)   38%,
-        rgba(255,255,255,0.92)  50%,
-        rgba(16,185,129,0.55)   62%,
-        transparent             75%
+        transparent            25%,
+        rgba(203,213,225,0.85) 40%,
+        #10B981                50%,
+        rgba(203,213,225,0.80) 60%,
+        transparent            75%
       );
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
       background-size: 280% 100%;
       animation: shimmer 5s ease-in-out infinite;
-      will-change: background-position;
     }
     .wm-bottom {
       font-family: 'Inter', system-ui, sans-serif;
