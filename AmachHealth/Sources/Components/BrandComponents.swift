@@ -255,13 +255,13 @@ struct AmachBrandMark: View {
 
                 VStack(spacing: 5) {
                     Text("AMACH")
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(6)
                         .foregroundStyle(Color.amachTextPrimary)
                         .silverShimmer(duration: 4.5, delay: 0.8)
 
                     Text("HEALTH")
-                        .font(.system(size: 9, weight: .light))
+                        .font(.system(size: 9, weight: .light, design: .serif))
                         .kerning(7)
                         .foregroundStyle(Color.amachPrimaryBright.opacity(0.65))
 
