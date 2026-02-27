@@ -154,16 +154,16 @@ struct GoldShimmerModifier: ViewModifier {
             .overlay(
                 GeometryReader { geo in
                     let w         = geo.size.width
-                    let stripW    = w * 0.42           // width of the shimmer stripe
+                    let stripW    = w * 0.55           // width of the shimmer stripe
                     let startX    = -stripW            // fully hidden left
                     let travel    = w + stripW         // total distance to cross
 
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color(hex: "CBD5E1").opacity(0.55),
-                            Color(hex: "F1F5F9"),
-                            Color(hex: "CBD5E1").opacity(0.50),
+                            Color(hex: "CBD5E1").opacity(0.75),
+                            Color(hex: "F1F5F9").opacity(0.95),
+                            Color(hex: "CBD5E1").opacity(0.65),
                             .clear
                         ],
                         startPoint: .leading,
@@ -255,7 +255,7 @@ struct AmachBrandMark: View {
 
                 VStack(spacing: 5) {
                     Text("AMACH")
-                        .font(.system(size: 26, weight: .bold, design: .serif))
+                        .font(.system(size: 26, weight: .bold))
                         .kerning(6)
                         .foregroundStyle(Color.amachTextPrimary)
                         .silverShimmer(duration: 4.5, delay: 0.8)
