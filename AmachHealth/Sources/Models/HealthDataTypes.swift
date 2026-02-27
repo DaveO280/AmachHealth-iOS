@@ -173,9 +173,7 @@ enum HealthKitMetric: String, CaseIterable {
             return HKObjectType.workoutType()
         default:
             // Most are quantity types
-            guard let identifier = HKQuantityTypeIdentifier(rawValue: self.rawValue) else {
-                return nil
-            }
+            let identifier = HKQuantityTypeIdentifier(rawValue: self.rawValue)
             return HKObjectType.quantityType(forIdentifier: identifier)
         }
     }
