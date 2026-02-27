@@ -138,11 +138,11 @@ struct TriskelionView: View {
     }
 }
 
-// MARK: - Gold Shimmer Modifier
+// MARK: - Silver Shimmer Modifier
 //
-// Sweeps a narrow gold gradient stripe across any view (typically text).
+// Sweeps a narrow silver/white gradient stripe across any view (typically text).
 // The gradient is clipped to the shape of the view it modifies via .mask().
-// Usage:  Text("AMACH").goldShimmer()
+// Usage:  Text("AMACH").silverShimmer()
 
 struct GoldShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = 0
@@ -161,9 +161,9 @@ struct GoldShimmerModifier: ViewModifier {
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color(hex: "D97706").opacity(0.75),
-                            Color(hex: "FBBF24"),
-                            Color(hex: "D97706").opacity(0.65),
+                            Color(hex: "CBD5E1").opacity(0.55),
+                            Color(hex: "F1F5F9"),
+                            Color(hex: "CBD5E1").opacity(0.50),
                             .clear
                         ],
                         startPoint: .leading,
@@ -190,7 +190,7 @@ struct GoldShimmerModifier: ViewModifier {
 
 extension View {
     /// Applies an animated gold light-sweep over this view.
-    func goldShimmer(duration: Double = 4.5, delay: Double = 0.6) -> some View {
+    func silverShimmer(duration: Double = 4.5, delay: Double = 0.6) -> some View {
         modifier(GoldShimmerModifier(duration: duration, delay: delay))
     }
 }
@@ -239,7 +239,7 @@ struct AmachBrandMark: View {
                         .font(.system(size: 13, weight: .bold))
                         .kerning(3)
                         .foregroundStyle(Color.amachTextPrimary)
-                        .goldShimmer(duration: 4.5, delay: 1.2)
+                        .silverShimmer(duration: 4.5, delay: 1.2)
 
                     Text("HEALTH")
                         .font(.system(size: 7.5, weight: .medium))
@@ -258,14 +258,14 @@ struct AmachBrandMark: View {
                         .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(6)
                         .foregroundStyle(Color.amachTextPrimary)
-                        .goldShimmer(duration: 4.5, delay: 0.8)
+                        .silverShimmer(duration: 4.5, delay: 0.8)
 
                     Text("HEALTH")
                         .font(.system(size: 9, weight: .light))
                         .kerning(7)
                         .foregroundStyle(Color.amachPrimaryBright.opacity(0.65))
 
-                    Text("outward · into life")
+                    Text("Driven by data · Guided by Nature")
                         .font(.system(size: 11, weight: .light))
                         .italic()
                         .foregroundStyle(Color.amachTextSecondary.opacity(0.6))
