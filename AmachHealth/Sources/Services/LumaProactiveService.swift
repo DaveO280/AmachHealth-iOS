@@ -17,12 +17,21 @@
 import Foundation
 import UserNotifications
 
+struct PendingDelivery: Equatable {
+    let event: HealthEvent
+    let insight: PendingProactiveInsight
+
+    static func == (lhs: PendingDelivery, rhs: PendingDelivery) -> Bool {
+        lhs.event.id == rhs.event.id && lhs.insight.id == rhs.insight.id
+    }
+}
+
 @MainActor
 final class LumaProactiveService: ObservableObject {
     static let shared = LumaProactiveService()
 
     // Published so views can react when a pending insight is ready to deliver
-    @Published var pendingDelivery: (event: HealthEvent, insight: PendingProactiveInsight)?
+    @Published var pendingDelivery: PendingDelivery?
 
     private let store: HealthMemoryStore = .shared
     private let detector: AnomalyDetector = AnomalyDetector(store: .shared)
@@ -144,7 +153,7 @@ final class LumaProactiveService: ObservableObject {
         guard isEnabled else { return }
         guard let pending = store.consumeNextPendingInsight() else { return }
         guard let event = store.events.first(where: { $0.id == pending.healthEventId }) else { return }
-        pendingDelivery = (event: event, insight: pending)
+        pendingDelivery = PendingDelivery(event: event, insight: pending)
     }
 
     /// Build the Venice context for a proactive insight delivery.
