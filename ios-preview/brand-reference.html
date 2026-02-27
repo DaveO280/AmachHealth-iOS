@@ -550,6 +550,112 @@
       background: linear-gradient(90deg, transparent, rgba(6,78,59,0.15), transparent);
       margin: 0 24px;
     }
+
+    /* =============================================
+       SILVER → EMERALD SHIMMER DEMO
+    ============================================= */
+    @keyframes shimmerEm {
+      0%   { background-position: -150% 0; }
+      65%  { background-position: 250% 0; }
+      100% { background-position: 250% 0; }
+    }
+
+    /* Overlay approach — mirrors the SwiftUI .mask(content) pattern.
+       The gradient is visible only through the letter shapes. */
+    .shimmer-demo-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    .shimmer-demo-wrap .shimmer-overlay {
+      content: attr(data-text);
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        100deg,
+        transparent         25%,
+        rgba(203,213,225,0.85) 40%,
+        #10B981              50%,
+        rgba(203,213,225,0.80) 60%,
+        transparent         75%
+      );
+      background-size: 280% 100%;
+      animation: shimmerEm var(--dur, 4.5s) ease-in-out var(--delay, 0.6s) infinite;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .shimmer-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      padding: 40px 32px;
+      border-radius: 20px;
+    }
+    .shimmer-stage.on-dark {
+      background: #0A1A15;
+      border: 1px solid rgba(52,211,153,0.15);
+    }
+    .shimmer-stage.on-light {
+      background: linear-gradient(160deg,#FFFBEB 0%,#FEF3C7 30%,#FFFDE7 65%,#FFFFFF 100%);
+      border: 1px solid rgba(6,78,59,0.10);
+    }
+    .shimmer-stages {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 8px;
+    }
+    @media (max-width: 600px) { .shimmer-stages { grid-template-columns: 1fr; } }
+
+    .shimmer-label {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .on-dark  .shimmer-label { color: #34D399; }
+    .on-light .shimmer-label { color: #059669; }
+
+    .shimmer-note {
+      font-size: 11px;
+      line-height: 1.6;
+      text-align: center;
+      max-width: 280px;
+      font-style: italic;
+    }
+    .on-dark  .shimmer-note { color: rgba(255,255,255,0.45); }
+    .on-light .shimmer-note { color: #6B7280; }
+
+    .shimmer-compact-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* colour-stop legend */
+    .stop-legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 24px;
+    }
+    .stop-swatch {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-mid);
+    }
+    .stop-dot {
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
   </style>
 </head>
 <body>
@@ -578,6 +684,110 @@
       <p style="font-size:11px;color:var(--teal);margin-top:32px;letter-spacing:0.15em;">↓ Scroll to explore symbol directions</p>
     </div>
   </section>
+
+  <!-- ============================================
+       SHIMMER ANIMATION DEMO
+  ============================================= -->
+  <section class="section" style="padding-top:60px;padding-bottom:60px;">
+    <p class="section-label">iOS Shimmer Animation — Current State</p>
+    <h2 class="section-title">Silver → Emerald Wordmark Shimmer</h2>
+    <p style="font-size:14px;color:var(--text-mid);margin-top:-32px;margin-bottom:40px;line-height:1.7;max-width:620px;">
+      The sweep goes: <strong>clear → silver (#CBD5E1) → emerald (#10B981) → silver → clear</strong>.
+      The gradient is masked to the letter shapes only (mirrors the SwiftUI <code>.mask(content)</code> approach), so you see emerald flashing through the letterforms as the stripe crosses.
+    </p>
+
+    <div class="shimmer-stages">
+
+      <!-- Dark mode (iOS dark surface: #0A1A15) -->
+      <div class="shimmer-stage on-dark">
+        <p class="shimmer-label">iOS Dark Mode surface #0A1A15</p>
+
+        <!-- Stacked variant: AMACH / HEALTH -->
+        <div style="text-align:center;">
+          <div class="shimmer-demo-wrap">
+            <span style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;color:#F9FAFB;">AMACH</span>
+            <span class="shimmer-overlay" style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;--dur:4.5s;--delay:0.6s;">AMACH</span>
+          </div>
+          <div class="shimmer-demo-wrap" style="display:block;">
+            <span style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;color:#F9FAFB;">HEALTH</span>
+            <span class="shimmer-overlay" style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;--dur:4.5s;--delay:1.4s;">HEALTH</span>
+          </div>
+        </div>
+
+        <!-- Compact header lockup variant -->
+        <div class="shimmer-compact-row" style="margin-top:8px;">
+          <svg width="22" height="22" viewBox="0 0 60 60" style="flex-shrink:0;opacity:0.9;">
+            <defs><linearGradient id="tg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#059669"/><stop offset="100%" stop-color="#34D399"/></linearGradient></defs>
+            <g transform="translate(30,30)">
+              <path d="M0,0 C0,-10 5,-18 8,-25 C11,-32 7,-37 0,-35 C-7,-33 -8,-25 -4,-18 C-1,-13 0,-7 0,0" fill="none" stroke="url(#tg2)" stroke-width="4" stroke-linecap="round"/>
+              <path d="M0,0 C0,-10 5,-18 8,-25 C11,-32 7,-37 0,-35 C-7,-33 -8,-25 -4,-18 C-1,-13 0,-7 0,0" fill="none" stroke="url(#tg2)" stroke-width="4" stroke-linecap="round" transform="rotate(120)"/>
+              <path d="M0,0 C0,-10 5,-18 8,-25 C11,-32 7,-37 0,-35 C-7,-33 -8,-25 -4,-18 C-1,-13 0,-7 0,0" fill="none" stroke="url(#tg2)" stroke-width="4" stroke-linecap="round" transform="rotate(240)"/>
+              <circle r="3.5" fill="url(#tg2)"/>
+            </g>
+          </svg>
+          <div>
+            <div class="shimmer-demo-wrap" style="display:block;line-height:1.1;">
+              <span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.2em;color:#F9FAFB;">AMACH</span>
+              <span class="shimmer-overlay" style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.2em;--dur:4.5s;--delay:1.2s;">AMACH</span>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:7.5px;font-weight:500;letter-spacing:0.3em;color:#34D399;margin-top:1px;">HEALTH</div>
+          </div>
+        </div>
+
+        <p class="shimmer-note">Emerald flash should be clearly visible against dark text. If you're not seeing this, the animation may not be firing in the simulator.</p>
+      </div>
+
+      <!-- Light mode (iOS light bg: amber/cream gradient) -->
+      <div class="shimmer-stage on-light">
+        <p class="shimmer-label">iOS Light Mode bg #FFFBEB</p>
+
+        <!-- Stacked -->
+        <div style="text-align:center;">
+          <div class="shimmer-demo-wrap">
+            <span style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;color:#064E3B;">AMACH</span>
+            <span class="shimmer-overlay" style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;--dur:4.5s;--delay:0.6s;">AMACH</span>
+          </div>
+          <div class="shimmer-demo-wrap" style="display:block;">
+            <span style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;color:#064E3B;">HEALTH</span>
+            <span class="shimmer-overlay" style="font-family:'Inter',sans-serif;font-size:40px;font-weight:800;letter-spacing:0.12em;--dur:4.5s;--delay:1.4s;">HEALTH</span>
+          </div>
+        </div>
+
+        <!-- Compact -->
+        <div class="shimmer-compact-row" style="margin-top:8px;">
+          <svg width="22" height="22" viewBox="0 0 60 60" style="flex-shrink:0;">
+            <g transform="translate(30,30)">
+              <path d="M0,0 C0,-10 5,-18 8,-25 C11,-32 7,-37 0,-35 C-7,-33 -8,-25 -4,-18 C-1,-13 0,-7 0,0" fill="none" stroke="#059669" stroke-width="4" stroke-linecap="round"/>
+              <path d="M0,0 C0,-10 5,-18 8,-25 C11,-32 7,-37 0,-35 C-7,-33 -8,-25 -4,-18 C-1,-13 0,-7 0,0" fill="none" stroke="#059669" stroke-width="4" stroke-linecap="round" transform="rotate(120)"/>
+              <path d="M0,0 C0,-10 5,-18 8,-25 C11,-32 7,-37 0,-35 C-7,-33 -8,-25 -4,-18 C-1,-13 0,-7 0,0" fill="none" stroke="#059669" stroke-width="4" stroke-linecap="round" transform="rotate(240)"/>
+              <circle r="3.5" fill="#059669"/>
+            </g>
+          </svg>
+          <div>
+            <div class="shimmer-demo-wrap" style="display:block;line-height:1.1;">
+              <span style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.2em;color:#064E3B;">AMACH</span>
+              <span class="shimmer-overlay" style="font-family:'Inter',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.2em;--dur:4.5s;--delay:1.2s;">AMACH</span>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:7.5px;font-weight:500;letter-spacing:0.3em;color:#059669;opacity:0.7;margin-top:1px;">HEALTH</div>
+          </div>
+        </div>
+
+        <p class="shimmer-note">On the amber/cream light bg the emerald centre flash is the most visible part. Silver edges are subtle glow.</p>
+      </div>
+    </div>
+
+    <!-- Colour stop legend -->
+    <div class="stop-legend">
+      <span style="font-size:11px;font-weight:600;color:var(--text-mid);letter-spacing:0.05em;">Gradient stops:</span>
+      <div class="stop-swatch"><div class="stop-dot" style="background:rgba(0,0,0,0.08);border:1px dashed #ccc;"></div> transparent</div>
+      <div class="stop-swatch"><div class="stop-dot" style="background:#CBD5E1;"></div> silver #CBD5E1 ×0.80</div>
+      <div class="stop-swatch"><div class="stop-dot" style="background:#10B981;"></div> emerald #10B981 (peak)</div>
+      <div class="stop-swatch"><div class="stop-dot" style="background:#CBD5E1;opacity:0.75;"></div> silver #CBD5E1 ×0.75</div>
+      <div class="stop-swatch"><div class="stop-dot" style="background:rgba(0,0,0,0.08);border:1px dashed #ccc;"></div> transparent</div>
+    </div>
+  </section>
+
+  <hr class="divider"/>
 
   <!-- ============================================
        SYMBOL LANGUAGE OPTIONS
