@@ -161,9 +161,9 @@ struct GoldShimmerModifier: ViewModifier {
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color(hex: "CBD5E1").opacity(0.75),
-                            Color(hex: "F1F5F9").opacity(0.95),
-                            Color(hex: "CBD5E1").opacity(0.65),
+                            Color(hex: "CBD5E1").opacity(0.85),
+                            Color.white,
+                            Color(hex: "CBD5E1").opacity(0.80),
                             .clear
                         ],
                         startPoint: .leading,
@@ -258,12 +258,13 @@ struct AmachBrandMark: View {
                         .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(6)
                         .foregroundStyle(Color.amachTextPrimary)
-                        .silverShimmer(duration: 4.5, delay: 0.8)
+                        .silverShimmer(duration: 3.2, delay: 0.8)
 
                     Text("HEALTH")
-                        .font(.system(size: 9, weight: .light, design: .serif))
+                        .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(7)
-                        .foregroundStyle(Color.amachPrimaryBright.opacity(0.65))
+                        .foregroundStyle(Color.amachTextPrimary)
+                        .silverShimmer(duration: 3.2, delay: 1.4)
 
                     Text("Driven by data · Guided by Nature")
                         .font(.system(size: 11, weight: .light))
