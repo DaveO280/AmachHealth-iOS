@@ -725,6 +725,17 @@ extension Color {
     /// Not adaptive. Use only where the surface provides contrast.
     static let amachPrimaryBright = Amach.p400
 
+    /// Adaptive emerald for brand wordmarks and display text.
+    /// light → primary #006B4F (deep forest — high contrast on cream/amber)
+    /// dark  → p400 #10B981 (bright emerald — legible on dark surface)
+    static var amachPrimaryWordmark: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(Amach.p400)
+                : UIColor(Amach.primary)
+        })
+    }
+
     // ── Accent ────────────────────────────────────────────────
 
     /// Adaptive amber.

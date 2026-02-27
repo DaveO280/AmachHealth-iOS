@@ -124,9 +124,9 @@ final class DashboardService: ObservableObject {
         async let hrMin = stat(.heartRate, start: startOfDay, end: now, opts: .discreteMin, unit: bpmUnit)
         async let hrMax = stat(.heartRate, start: startOfDay, end: now, opts: .discreteMax, unit: bpmUnit)
         async let hrv = stat(.heartRateVariabilitySDNN, start: startOfDay, end: now, opts: .discreteAverage, unit: .secondUnit(with: .milli))
-        async let rhr = stat(.restingHeartRate, start: startOfDay, end: now, opts: .discreteMostRecent, unit: bpmUnit)
+        async let rhr = stat(.restingHeartRate, start: startOfDay, end: now, opts: .mostRecent, unit: bpmUnit)
         async let rr = stat(.respiratoryRate, start: startOfDay, end: now, opts: .discreteAverage, unit: bpmUnit)
-        async let vo2 = stat(.vo2Max, start: startOfDay, end: now, opts: .discreteMostRecent, unit: vo2Unit)
+        async let vo2 = stat(.vo2Max, start: startOfDay, end: now, opts: .mostRecent, unit: vo2Unit)
         async let sleep = fetchLastNightSleep()
 
         let (sleepHrs, sleepEff) = await sleep
@@ -198,7 +198,7 @@ final class DashboardService: ObservableObject {
                     value = stats.minimumQuantity()?.doubleValue(for: unit)
                 } else if opts.contains(.discreteMax) {
                     value = stats.maximumQuantity()?.doubleValue(for: unit)
-                } else if opts.contains(.discreteMostRecent) {
+                } else if opts.contains(.mostRecent) {
                     value = stats.mostRecentQuantity()?.doubleValue(for: unit)
                 }
                 continuation.resume(returning: value)

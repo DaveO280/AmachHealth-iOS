@@ -16,6 +16,7 @@
 
 import Foundation
 
+@MainActor
 final class AnomalyDetector {
 
     // Monitored metrics — the superset. Profiles define how each is evaluated.
@@ -28,7 +29,7 @@ final class AnomalyDetector {
 
     private let store: HealthMemoryStore
 
-    init(store: HealthMemoryStore = .shared) {
+    init(store: HealthMemoryStore) {
         self.store = store
     }
 
@@ -56,7 +57,7 @@ final class AnomalyDetector {
 
     /// Evaluate a single day's readings against all monitored metrics.
     private func evaluateDay(summary: DailySummary) -> [AnomalySignal] {
-        var readings = flattenReadings(from: summary)
+        let readings = flattenReadings(from: summary)
         var signals: [AnomalySignal] = []
 
         for metricType in Self.monitoredMetrics {

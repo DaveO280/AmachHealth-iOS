@@ -244,7 +244,7 @@ struct OwnYourDataStep: View {
                             icon: p.icon,
                             iconColor: p.color,
                             title: p.title,
-                            body: p.body
+                            description: p.body
                         )
                         .opacity(appeared ? 1 : 0)
                         .offset(x: appeared ? 0 : 30)
@@ -273,7 +273,7 @@ private struct PillarCard: View {
     let icon: String
     let iconColor: Color
     let title: String
-    let body: String
+    let description: String
 
     var body: some View {
         HStack(alignment: .center, spacing: AmachSpacing.md) {
@@ -289,7 +289,7 @@ private struct PillarCard: View {
                 Text(title)
                     .font(AmachType.h3)
                     .foregroundStyle(Color.amachTextPrimary)
-                Text(body)
+                Text(description)
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextSecondary)
                     .lineSpacing(3)

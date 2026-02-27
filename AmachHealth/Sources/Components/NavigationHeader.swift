@@ -100,6 +100,23 @@ struct AmachNavigationHeader<Trailing: View>: View {
     }
 }
 
+// Generic init — with trailing content
+extension AmachNavigationHeader {
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        showBack: Bool = true,
+        backAction: (() -> Void)? = nil,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title      = title
+        self.subtitle   = subtitle
+        self.showBack   = showBack
+        self.backAction = backAction
+        self.trailing   = trailing()
+    }
+}
+
 // Convenience init — no trailing content
 extension AmachNavigationHeader where Trailing == EmptyView {
     init(
@@ -207,6 +224,23 @@ struct AmachModalHeader<Trailing: View>: View {
         .padding(.horizontal, AmachSpacing.md)
         .padding(.vertical, AmachSpacing.sm)
         .frame(minHeight: 52)
+    }
+}
+
+// Generic init — with trailing content
+extension AmachModalHeader {
+    init(
+        _ title: String,
+        subtitle: String? = nil,
+        lumaColors: Bool = false,
+        onDismiss: (() -> Void)? = nil,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title      = title
+        self.subtitle   = subtitle
+        self.lumaColors = lumaColors
+        self.onDismiss  = onDismiss
+        self.trailing   = trailing()
     }
 }
 

@@ -17,7 +17,7 @@ final class AmachAPIClient {
     private init() {
         // Configure base URL from environment or default
         let baseURLString = ProcessInfo.processInfo.environment["AMACH_API_URL"]
-            ?? "https://app.amach.health"
+            ?? "https://amachhealth.com"
         self.baseURL = URL(string: baseURLString)!
 
         let config = URLSessionConfiguration.default

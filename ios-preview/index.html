@@ -28,6 +28,8 @@
       --ai:              #6366F1;
       --ai-dark:         #3730A3;
       --ai-bubble:       #3730A3;
+      --primary-wordmark: #10B981;
+      --wordmark-shimmer: rgba(255,255,255,0.80);
       --radius:          16px;
       --radius-sm:       10px;
       --radius-pill:     999px;
@@ -58,7 +60,9 @@
       --sleep-color:     #7C3AED;
       --ai:              #6366F1;
       --ai-dark:         #312E81;
-      --ai-bubble:       #EEF2FF;
+      --ai-bubble:       #3730A3;
+      --primary-wordmark: #006B4F;
+      --wordmark-shimmer: #A7F3D0;
 
       --blob-1: rgba(245, 158, 11, 0.15);
       --blob-2: rgba(251, 191, 36, 0.10);
@@ -233,24 +237,24 @@
       position: absolute;
       inset: 0;
       background: linear-gradient(
-        105deg,
-        transparent 25%,
-        rgba(217, 119, 6, 0.9) 42%,
-        rgba(251, 191, 36, 1.0) 50%,
-        rgba(217, 119, 6, 0.8) 58%,
-        transparent 75%
+        100deg,
+        transparent            25%,
+        rgba(203,213,225,0.85) 40%,
+        #10B981                50%,
+        rgba(203,213,225,0.80) 60%,
+        transparent            75%
       );
       -webkit-background-clip: text;
       background-clip: text;
       -webkit-text-fill-color: transparent;
-      background-size: 300% 100%;
+      background-size: 280% 100%;
       animation: shimmer 5s ease-in-out infinite;
     }
 
     @keyframes shimmer {
-      0%   { background-position: -100% 0; }
-      55%  { background-position: 220% 0; }
-      100% { background-position: 220% 0; }
+      0%   { background-position: -150% 0; }
+      65%  { background-position: 250% 0; }
+      100% { background-position: 250% 0; }
     }
 
     .brand-sub {
@@ -526,7 +530,7 @@
       align-self: flex-start;
     }
     [data-mode="light"] .bubble-luma {
-      color: #3730A3;
+      color: #C7D2FE; /* indigo-200 — AI.p200 equivalent, readable on #3730A3 */
     }
     .bubble-user {
       background: var(--primary);
@@ -841,6 +845,154 @@
     }
 
     /* =============================================
+       WELCOME STEP 0 (full phone screen)
+    ============================================= */
+    .welcome-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 40px 20px 28px;
+      gap: 0;
+      min-height: 520px;
+    }
+
+    /* Triskelion ring + SVG */
+    .trisk-ring {
+      position: relative;
+      width: 96px; height: 96px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .trisk-ring::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1.5px solid rgba(16,185,129,0.35);
+    }
+    .trisk-svg {
+      animation: trisk-spin 45s linear infinite;
+    }
+    @keyframes trisk-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* Wordmark — both halves use Inter, same family */
+    .welcome-wordmark {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      margin-top: 18px;
+    }
+    /* Shared base for both wordmark words — adaptive emerald text */
+    .wm-top, .wm-bottom {
+      font-family: 'EB Garamond', Georgia, serif;
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--primary-wordmark);
+      position: relative;
+      display: inline-block;
+      text-transform: uppercase;
+    }
+    .wm-top  { letter-spacing: 5px; }
+    .wm-bottom { letter-spacing: 6px; }
+
+    /* Silver/white shimmer via CSS mask — the ::after layer is a near-white
+       stripe that sweeps through the emerald base, reading as a "light source"
+       passing across the letters. */
+    .wm-top::after, .wm-bottom::after {
+      position: absolute;
+      inset: 0;
+      color: var(--wordmark-shimmer); /* white on dark / emerald-200 on light */
+      -webkit-mask-image: linear-gradient(
+        100deg,
+        transparent 30%,
+        black       44%,
+        black       56%,
+        transparent 70%
+      );
+      mask-image: linear-gradient(
+        100deg,
+        transparent 30%,
+        black       44%,
+        black       56%,
+        transparent 70%
+      );
+      -webkit-mask-size: 300% 100%;
+      mask-size: 300% 100%;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      animation: shimmerMask 4s ease-in-out infinite;
+    }
+    .wm-top::after    { content: 'AMACH';  animation-delay: 0.8s; }
+    .wm-bottom::after { content: 'HEALTH'; animation-delay: 1.4s; }
+
+    @keyframes shimmerMask {
+      0%   { -webkit-mask-position: -150% 0; mask-position: -150% 0; }
+      60%  { -webkit-mask-position: 250% 0;  mask-position: 250% 0; }
+      100% { -webkit-mask-position: 250% 0;  mask-position: 250% 0; }
+    }
+    .wm-tagline {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.03em;
+      color: var(--text-muted);
+      opacity: 0.7;
+      margin-top: 6px;
+    }
+
+    /* Welcome headline lines */
+    .welcome-headline {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      margin-top: 32px;
+    }
+    .welcome-headline span {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.25;
+      color: var(--text);
+    }
+    .welcome-headline span.accent { color: var(--primary-bright); }
+
+    .welcome-sub {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-muted);
+      line-height: 1.55;
+      max-width: 220px;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .welcome-cta {
+      margin-top: auto;
+      padding-top: 32px;
+      width: 100%;
+    }
+    .welcome-cta button {
+      width: 100%;
+      background: linear-gradient(135deg, var(--primary-bright), #059669);
+      color: white;
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 14px;
+      padding: 13px 0;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(16,185,129,0.32);
+      letter-spacing: 0.02em;
+    }
+
+    /* =============================================
        FEATURES
     ============================================= */
     .features { list-style: none; }
@@ -923,7 +1075,7 @@
     <div class="brand-name-wrap">
       <span class="brand-name">Amach Health</span>
     </div>
-    <div class="brand-sub">outward · into life</div>
+    <div class="brand-sub">Driven by data · Guided by Nature</div>
     <div class="brand-tagline">
       Your health data — owned by you, verified on-chain, analyzed by AI.
     </div>
@@ -933,7 +1085,57 @@
   </div>
 
   <!-- ===== SECTION: ONBOARDING ===== -->
-  <div class="section-label">Onboarding</div>
+  <div class="section-label">Onboarding — Step 0: Welcome</div>
+  <div class="phone-chrome">
+    <div class="phone-screen" style="padding:0; overflow:hidden;">
+      <div class="welcome-screen">
+
+        <!-- Triskelion mark -->
+        <div style="display:flex;flex-direction:column;align-items:center;">
+          <div class="trisk-ring">
+            <svg class="trisk-svg" width="72" height="72" viewBox="-60 -60 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="triskGrad" x1="-1" y1="-1" x2="1" y2="1" gradientUnits="objectBoundingBox">
+                  <stop offset="0%" stop-color="#10B981"/>
+                  <stop offset="100%" stop-color="#006B4F"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,0 C0,-15 8,-28 12,-38 C16,-48 10,-55 0,-52 C-10,-49 -12,-38 -6,-28 C-2,-20 0,-10 0,0Z"
+                    fill="url(#triskGrad)" filter="drop-shadow(0 0 6px rgba(16,185,129,0.35))"/>
+              <path d="M0,0 C0,-15 8,-28 12,-38 C16,-48 10,-55 0,-52 C-10,-49 -12,-38 -6,-28 C-2,-20 0,-10 0,0Z"
+                    fill="url(#triskGrad)" transform="rotate(120)" filter="drop-shadow(0 0 6px rgba(16,185,129,0.35))"/>
+              <path d="M0,0 C0,-15 8,-28 12,-38 C16,-48 10,-55 0,-52 C-10,-49 -12,-38 -6,-28 C-2,-20 0,-10 0,0Z"
+                    fill="url(#triskGrad)" transform="rotate(240)" filter="drop-shadow(0 0 6px rgba(16,185,129,0.35))"/>
+            </svg>
+          </div>
+
+          <!-- Wordmark: both words same font (Inter), consistent family -->
+          <div class="welcome-wordmark">
+            <span class="wm-top">AMACH</span>
+            <span class="wm-bottom">HEALTH</span>
+            <span class="wm-tagline">Driven by data · Guided by Nature</span>
+          </div>
+        </div>
+
+        <!-- Headline -->
+        <div class="welcome-headline">
+          <span>Own your data.</span>
+          <span class="accent">Keep the value.</span>
+          <span>Read the signals.</span>
+        </div>
+        <div class="welcome-sub">Health data that works for you — not the system.</div>
+
+        <!-- CTA -->
+        <div class="welcome-cta">
+          <button>Get Started</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="gap-sm"></div>
+  <div class="section-label">Onboarding — Step 2 (reference)</div>
   <div class="phone-chrome">
     <div class="phone-screen" style="padding-bottom:16px;">
       <div class="onboard-screen">
@@ -964,7 +1166,7 @@
       <!-- Nav header -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div>
-          <div style="font-size:8px;font-weight:700;letter-spacing:0.15em;color:var(--primary-bright);font-family:'Cinzel',serif;margin-bottom:2px;">AMACH HEALTH</div>
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.15em;color:var(--primary-wordmark);font-family:'EB Garamond',Georgia,serif;margin-bottom:2px;">AMACH HEALTH</div>
           <div style="font-size:16px;font-weight:700;">Good morning</div>
         </div>
         <div class="score-ring">

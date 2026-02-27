@@ -247,7 +247,7 @@ final class HealthKitService: ObservableObject {
 
     // MARK: - Sleep Stage Mapping
 
-    private func sleepStageFromValue(_ value: Int) -> String {
+    nonisolated private func sleepStageFromValue(_ value: Int) -> String {
         // Match web app's sleep stage values
         switch value {
         case 0: return "inBed"

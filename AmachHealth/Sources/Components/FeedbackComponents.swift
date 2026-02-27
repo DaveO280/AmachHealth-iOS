@@ -302,7 +302,7 @@ struct AmachProgressBar: View {
 //   AmachEmptyState(
 //       icon: "waveform.path.ecg",
 //       title: "No trends yet",
-//       body: "Sync your health data and Luma will start finding patterns.",
+//       message: "Sync your health data and Luma will start finding patterns.",
 //       ctaLabel: "Sync Now",
 //       ctaAction: { … }
 //   )
@@ -310,7 +310,7 @@ struct AmachProgressBar: View {
 struct AmachEmptyState: View {
     let icon: String
     let title: String
-    let body: String
+    let message: String
     var tintColor: Color       = Color.amachPrimary
     var ctaLabel: String?      = nil
     var ctaAction: (() -> Void)? = nil
@@ -343,7 +343,7 @@ struct AmachEmptyState: View {
                     .multilineTextAlignment(.center)
                     .tracking(-0.2)
 
-                Text(body)
+                Text(message)
                     .font(AmachType.body)
                     .foregroundStyle(Color.amachTextSecondary)
                     .multilineTextAlignment(.center)
@@ -403,7 +403,7 @@ struct AmachBanner: View {
     @Binding var isDismissed: Bool
 
     init(
-        _ style: Style,
+        style: Style,
         message: String,
         actionLabel: String? = nil,
         action: (() -> Void)? = nil,
@@ -738,7 +738,7 @@ extension View {
         AmachEmptyState(
             icon: "waveform.path.ecg",
             title: "No trends yet",
-            body: "Sync your Apple Health data and Luma will start finding patterns.",
+            message: "Sync your Apple Health data and Luma will start finding patterns.",
             ctaLabel: "Sync Now",
             ctaAction: {},
             secondaryLabel: "Learn more",
@@ -753,19 +753,19 @@ extension View {
         Color.amachBg.ignoresSafeArea()
         VStack(spacing: AmachSpacing.md) {
             AmachBanner(
-                .success,
+                style: .success,
                 message: "Your data was uploaded and attested on ZKsync Era.",
                 isDismissed: .constant(false)
             )
             AmachBanner(
-                .warning,
+                style: .warning,
                 message: "Last sync was 3 days ago. Your data may be out of date.",
                 actionLabel: "Sync Now",
                 action: {},
                 isDismissed: .constant(false)
             )
             AmachBanner(
-                .error,
+                style: .error,
                 message: "Upload failed. Your local data is safe — tap to retry.",
                 isDismissed: .constant(false)
             )

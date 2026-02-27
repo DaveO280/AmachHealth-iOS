@@ -138,11 +138,11 @@ struct TriskelionView: View {
     }
 }
 
-// MARK: - Gold Shimmer Modifier
+// MARK: - Silver Shimmer Modifier
 //
-// Sweeps a narrow gold gradient stripe across any view (typically text).
+// Sweeps a narrow silver/white gradient stripe across any view (typically text).
 // The gradient is clipped to the shape of the view it modifies via .mask().
-// Usage:  Text("AMACH").goldShimmer()
+// Usage:  Text("AMACH").silverShimmer()
 
 struct GoldShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = 0
@@ -154,16 +154,16 @@ struct GoldShimmerModifier: ViewModifier {
             .overlay(
                 GeometryReader { geo in
                     let w         = geo.size.width
-                    let stripW    = w * 0.42           // width of the shimmer stripe
+                    let stripW    = w * 0.65           // width of the shimmer stripe
                     let startX    = -stripW            // fully hidden left
                     let travel    = w + stripW         // total distance to cross
 
                     LinearGradient(
                         colors: [
                             .clear,
-                            Color(hex: "D97706").opacity(0.75),
-                            Color(hex: "FBBF24"),
-                            Color(hex: "D97706").opacity(0.65),
+                            Color(hex: "CBD5E1").opacity(0.70),
+                            Color.white.opacity(0.85),
+                            Color(hex: "CBD5E1").opacity(0.70),
                             .clear
                         ],
                         startPoint: .leading,
@@ -171,26 +171,31 @@ struct GoldShimmerModifier: ViewModifier {
                     )
                     .frame(width: stripW)
                     .offset(x: startX + phase * travel)
-                    .onAppear {
-                        withAnimation(
-                            .easeInOut(duration: duration)
-                            .delay(delay)
-                            .repeatForever(autoreverses: false)
-                        ) {
-                            phase = 1
-                        }
-                    }
                 }
                 // Clip shimmer to the exact shape of the wrapped view
                 .mask(content)
                 .clipped()
             )
+            .onAppear {
+                // Delay via DispatchQueue, not .delay() on the animation.
+                // Reason: the WelcomeStep entrance animation (.opacity 0→1) creates
+                // a SwiftUI transaction that cancels any withAnimation fired during
+                // .onAppear. Dispatching async puts us outside that transaction.
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    withAnimation(
+                        .linear(duration: duration)
+                        .repeatForever(autoreverses: false)
+                    ) {
+                        phase = 1
+                    }
+                }
+            }
     }
 }
 
 extension View {
     /// Applies an animated gold light-sweep over this view.
-    func goldShimmer(duration: Double = 4.5, delay: Double = 0.6) -> some View {
+    func silverShimmer(duration: Double = 4.5, delay: Double = 0.6) -> some View {
         modifier(GoldShimmerModifier(duration: duration, delay: delay))
     }
 }
@@ -236,15 +241,15 @@ struct AmachBrandMark: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("AMACH")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 13, weight: .bold, design: .serif))
                         .kerning(3)
-                        .foregroundStyle(Color.amachTextPrimary)
-                        .goldShimmer(duration: 4.5, delay: 1.2)
+                        .foregroundStyle(Color.amachPrimaryWordmark)
+                        .silverShimmer(duration: 4.5, delay: 1.2)
 
                     Text("HEALTH")
-                        .font(.system(size: 7.5, weight: .medium))
-                        .kerning(3.5)
-                        .foregroundStyle(Color.amachPrimaryBright.opacity(0.7))
+                        .font(.system(size: 13, weight: .bold, design: .serif))
+                        .kerning(3)
+                        .foregroundStyle(Color.amachPrimaryWordmark.opacity(0.7))
                 }
             }
 
@@ -257,15 +262,16 @@ struct AmachBrandMark: View {
                     Text("AMACH")
                         .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(6)
-                        .foregroundStyle(Color.amachTextPrimary)
-                        .goldShimmer(duration: 4.5, delay: 0.8)
+                        .foregroundStyle(Color.amachPrimaryWordmark)
+                        .silverShimmer(duration: 3.2, delay: 0.8)
 
                     Text("HEALTH")
-                        .font(.system(size: 9, weight: .light))
+                        .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(7)
-                        .foregroundStyle(Color.amachPrimaryBright.opacity(0.65))
+                        .foregroundStyle(Color.amachPrimaryWordmark)
+                        .silverShimmer(duration: 3.2, delay: 1.4)
 
-                    Text("outward · into life")
+                    Text("Driven by data · Guided by Nature")
                         .font(.system(size: 11, weight: .light))
                         .italic()
                         .foregroundStyle(Color.amachTextSecondary.opacity(0.6))
