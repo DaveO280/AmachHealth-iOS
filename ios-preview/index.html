@@ -892,7 +892,7 @@
       text-transform: uppercase;
       display: inline-block;          /* needed for ::after absolute positioning */
     }
-    /* Silver → Emerald shimmer on "AMACH" */
+    /* Dark green → Emerald shimmer on "AMACH" — high contrast on light text */
     .wm-top::after {
       content: 'AMACH';
       position: absolute;
@@ -900,9 +900,9 @@
       background: linear-gradient(
         100deg,
         transparent            25%,
-        rgba(203,213,225,0.85) 40%,
+        rgba(16,107,79,0.65)   40%,
         #10B981                50%,
-        rgba(203,213,225,0.80) 60%,
+        rgba(16,107,79,0.65)   60%,
         transparent            75%
       );
       -webkit-background-clip: text;
