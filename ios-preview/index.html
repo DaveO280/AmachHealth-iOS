@@ -882,36 +882,38 @@
       gap: 3px;
       margin-top: 18px;
     }
-    .wm-top {
+    /* Shared base for both wordmark words — emerald text */
+    .wm-top, .wm-bottom {
       font-family: 'Inter', system-ui, sans-serif;
       font-size: 30px;
       font-weight: 800;
-      letter-spacing: 5px;
-      color: var(--text);
+      color: #10B981;
       position: relative;
-      text-transform: uppercase;
       display: inline-block;
+      text-transform: uppercase;
     }
-    /* Emerald shimmer via CSS mask — avoids background-clip:text which
-       breaks inside overflow:hidden containers (phone-chrome).
-       ::after is solid emerald text, masked to a moving stripe. */
-    .wm-top::after {
-      content: 'AMACH';
+    .wm-top  { letter-spacing: 5px; }
+    .wm-bottom { letter-spacing: 6px; }
+
+    /* Silver/white shimmer via CSS mask — the ::after layer is a near-white
+       stripe that sweeps through the emerald base, reading as a "light source"
+       passing across the letters. */
+    .wm-top::after, .wm-bottom::after {
       position: absolute;
       inset: 0;
-      color: #10B981;
+      color: #E8F5F0;          /* very light mint-white — bright against emerald */
       -webkit-mask-image: linear-gradient(
         100deg,
         transparent 30%,
-        black       45%,
-        black       55%,
+        black       44%,
+        black       56%,
         transparent 70%
       );
       mask-image: linear-gradient(
         100deg,
         transparent 30%,
-        black       45%,
-        black       55%,
+        black       44%,
+        black       56%,
         transparent 70%
       );
       -webkit-mask-size: 300% 100%;
@@ -920,19 +922,13 @@
       mask-repeat: no-repeat;
       animation: shimmerMask 4s ease-in-out infinite;
     }
+    .wm-top::after    { content: 'AMACH';  animation-delay: 0.8s; }
+    .wm-bottom::after { content: 'HEALTH'; animation-delay: 1.4s; }
+
     @keyframes shimmerMask {
       0%   { -webkit-mask-position: -150% 0; mask-position: -150% 0; }
       60%  { -webkit-mask-position: 250% 0;  mask-position: 250% 0; }
       100% { -webkit-mask-position: 250% 0;  mask-position: 250% 0; }
-    }
-    .wm-bottom {
-      font-family: 'Inter', system-ui, sans-serif;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 6px;
-      color: var(--primary-bright);
-      opacity: 0.75;
-      text-transform: uppercase;
     }
     .wm-tagline {
       font-family: 'Inter', system-ui, sans-serif;
