@@ -154,7 +154,7 @@ struct GoldShimmerModifier: ViewModifier {
             .overlay(
                 GeometryReader { geo in
                     let w         = geo.size.width
-                    let stripW    = w * 0.55           // width of the shimmer stripe
+                    let stripW    = w * 0.65           // width of the shimmer stripe
                     let startX    = -stripW            // fully hidden left
                     let travel    = w + stripW         // total distance to cross
 
@@ -171,20 +171,25 @@ struct GoldShimmerModifier: ViewModifier {
                     )
                     .frame(width: stripW)
                     .offset(x: startX + phase * travel)
-                    .onAppear {
-                        withAnimation(
-                            .easeInOut(duration: duration)
-                            .delay(delay)
-                            .repeatForever(autoreverses: false)
-                        ) {
-                            phase = 1
-                        }
-                    }
                 }
                 // Clip shimmer to the exact shape of the wrapped view
                 .mask(content)
                 .clipped()
             )
+            .onAppear {
+                // Delay via DispatchQueue, not .delay() on the animation.
+                // Reason: the WelcomeStep entrance animation (.opacity 0→1) creates
+                // a SwiftUI transaction that cancels any withAnimation fired during
+                // .onAppear. Dispatching async puts us outside that transaction.
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    withAnimation(
+                        .linear(duration: duration)
+                        .repeatForever(autoreverses: false)
+                    ) {
+                        phase = 1
+                    }
+                }
+            }
     }
 }
 
