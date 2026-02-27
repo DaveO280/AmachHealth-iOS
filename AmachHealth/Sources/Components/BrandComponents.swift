@@ -247,8 +247,8 @@ struct AmachBrandMark: View {
                         .silverShimmer(duration: 4.5, delay: 1.2)
 
                     Text("HEALTH")
-                        .font(.system(size: 7.5, weight: .medium, design: .serif))
-                        .kerning(3.5)
+                        .font(.system(size: 13, weight: .bold, design: .serif))
+                        .kerning(3)
                         .foregroundStyle(Color.amachPrimaryWordmark.opacity(0.7))
                 }
             }
