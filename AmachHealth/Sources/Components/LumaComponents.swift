@@ -538,7 +538,7 @@ struct LumaMessageBubble: View {
                 Text(message.content)
                     .font(AmachType.body)
                     .foregroundStyle(
-                        isUser ? Color.white : Color.amachTextPrimary
+                        isUser ? Color.white : Color.Amach.AI.p200
                     )
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)

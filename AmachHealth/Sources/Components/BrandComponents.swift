@@ -241,15 +241,15 @@ struct AmachBrandMark: View {
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("AMACH")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 13, weight: .bold, design: .serif))
                         .kerning(3)
-                        .foregroundStyle(Color.amachTextPrimary)
+                        .foregroundStyle(Color.amachPrimaryWordmark)
                         .silverShimmer(duration: 4.5, delay: 1.2)
 
                     Text("HEALTH")
-                        .font(.system(size: 7.5, weight: .medium))
+                        .font(.system(size: 7.5, weight: .medium, design: .serif))
                         .kerning(3.5)
-                        .foregroundStyle(Color.amachPrimaryBright.opacity(0.7))
+                        .foregroundStyle(Color.amachPrimaryWordmark.opacity(0.7))
                 }
             }
 
@@ -262,13 +262,13 @@ struct AmachBrandMark: View {
                     Text("AMACH")
                         .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(6)
-                        .foregroundStyle(Color.amachPrimaryBright)
+                        .foregroundStyle(Color.amachPrimaryWordmark)
                         .silverShimmer(duration: 3.2, delay: 0.8)
 
                     Text("HEALTH")
                         .font(.system(size: 26, weight: .bold, design: .serif))
                         .kerning(7)
-                        .foregroundStyle(Color.amachPrimaryBright)
+                        .foregroundStyle(Color.amachPrimaryWordmark)
                         .silverShimmer(duration: 3.2, delay: 1.4)
 
                     Text("Driven by data · Guided by Nature")

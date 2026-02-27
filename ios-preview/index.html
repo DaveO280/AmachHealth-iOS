@@ -28,6 +28,8 @@
       --ai:              #6366F1;
       --ai-dark:         #3730A3;
       --ai-bubble:       #3730A3;
+      --primary-wordmark: #10B981;
+      --wordmark-shimmer: rgba(255,255,255,0.80);
       --radius:          16px;
       --radius-sm:       10px;
       --radius-pill:     999px;
@@ -58,7 +60,9 @@
       --sleep-color:     #7C3AED;
       --ai:              #6366F1;
       --ai-dark:         #312E81;
-      --ai-bubble:       #EEF2FF;
+      --ai-bubble:       #3730A3;
+      --primary-wordmark: #006B4F;
+      --wordmark-shimmer: #A7F3D0;
 
       --blob-1: rgba(245, 158, 11, 0.15);
       --blob-2: rgba(251, 191, 36, 0.10);
@@ -526,7 +530,7 @@
       align-self: flex-start;
     }
     [data-mode="light"] .bubble-luma {
-      color: #3730A3;
+      color: #C7D2FE; /* indigo-200 — AI.p200 equivalent, readable on #3730A3 */
     }
     .bubble-user {
       background: var(--primary);
@@ -882,12 +886,12 @@
       gap: 3px;
       margin-top: 18px;
     }
-    /* Shared base for both wordmark words — emerald text */
+    /* Shared base for both wordmark words — adaptive emerald text */
     .wm-top, .wm-bottom {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'EB Garamond', Georgia, serif;
       font-size: 30px;
       font-weight: 800;
-      color: #10B981;
+      color: var(--primary-wordmark);
       position: relative;
       display: inline-block;
       text-transform: uppercase;
@@ -901,7 +905,7 @@
     .wm-top::after, .wm-bottom::after {
       position: absolute;
       inset: 0;
-      color: #E8F5F0;          /* very light mint-white — bright against emerald */
+      color: var(--wordmark-shimmer); /* white on dark / emerald-200 on light */
       -webkit-mask-image: linear-gradient(
         100deg,
         transparent 30%,
@@ -1162,7 +1166,7 @@
       <!-- Nav header -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div>
-          <div style="font-size:8px;font-weight:700;letter-spacing:0.15em;color:var(--primary-bright);font-family:'Inter',system-ui,sans-serif;margin-bottom:2px;">AMACH HEALTH</div>
+          <div style="font-size:8px;font-weight:700;letter-spacing:0.15em;color:var(--primary-wordmark);font-family:'EB Garamond',Georgia,serif;margin-bottom:2px;">AMACH HEALTH</div>
           <div style="font-size:16px;font-weight:700;">Good morning</div>
         </div>
         <div class="score-ring">
