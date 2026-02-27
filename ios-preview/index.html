@@ -891,30 +891,39 @@
       position: relative;
       text-transform: uppercase;
       display: inline-block;
-      /* Force new compositing layer — required for background-clip:text
-         animations inside overflow:hidden containers (phone-chrome) */
-      transform: translateZ(0);
     }
-    /* Silver flanks + emerald peak — same as .brand-name::after which is confirmed working.
-       Emerald (#10B981) is clearly visible through white text in dark mode.
-       will-change:background-position removed — causes single-fire in some browsers. */
+    /* Emerald shimmer via CSS mask — avoids background-clip:text which
+       breaks inside overflow:hidden containers (phone-chrome).
+       ::after is solid emerald text, masked to a moving stripe. */
     .wm-top::after {
       content: 'AMACH';
       position: absolute;
       inset: 0;
-      background: linear-gradient(
+      color: #10B981;
+      -webkit-mask-image: linear-gradient(
         100deg,
-        transparent            25%,
-        rgba(203,213,225,0.85) 40%,
-        #10B981                50%,
-        rgba(203,213,225,0.80) 60%,
-        transparent            75%
+        transparent 30%,
+        black       45%,
+        black       55%,
+        transparent 70%
       );
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-size: 280% 100%;
-      animation: shimmer 5s ease-in-out infinite;
+      mask-image: linear-gradient(
+        100deg,
+        transparent 30%,
+        black       45%,
+        black       55%,
+        transparent 70%
+      );
+      -webkit-mask-size: 300% 100%;
+      mask-size: 300% 100%;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      animation: shimmerMask 4s ease-in-out infinite;
+    }
+    @keyframes shimmerMask {
+      0%   { -webkit-mask-position: -150% 0; mask-position: -150% 0; }
+      60%  { -webkit-mask-position: 250% 0;  mask-position: 250% 0; }
+      100% { -webkit-mask-position: 250% 0;  mask-position: 250% 0; }
     }
     .wm-bottom {
       font-family: 'Inter', system-ui, sans-serif;
