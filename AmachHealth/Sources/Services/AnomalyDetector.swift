@@ -29,7 +29,7 @@ final class AnomalyDetector {
 
     private let store: HealthMemoryStore
 
-    init(store: HealthMemoryStore = .shared) {
+    init(store: HealthMemoryStore) {
         self.store = store
     }
 

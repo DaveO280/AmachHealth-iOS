@@ -25,7 +25,7 @@ final class LumaProactiveService: ObservableObject {
     @Published var pendingDelivery: (event: HealthEvent, insight: PendingProactiveInsight)?
 
     private let store: HealthMemoryStore = .shared
-    private let detector: AnomalyDetector = AnomalyDetector()
+    private let detector: AnomalyDetector = AnomalyDetector(store: .shared)
     private let api: AmachAPIClient = .shared
 
     // Whether the user has opted in to proactive insights
