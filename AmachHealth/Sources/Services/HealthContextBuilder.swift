@@ -55,7 +55,22 @@ struct HealthContextBuilder {
                 max: nil,
                 latest: today.exerciseMinutes > 0 ? today.exerciseMinutes : nil,
                 trend: computeTrend(dashboard.calsTrend)
-            )
+            ),
+            restingHeartRate: today.restingHeartRate > 0 ? MetricContext(
+                average: nil, min: nil, max: nil,
+                latest: today.restingHeartRate,
+                trend: nil
+            ) : nil,
+            vo2Max: today.vo2Max > 0 ? MetricContext(
+                average: nil, min: nil, max: nil,
+                latest: today.vo2Max,
+                trend: nil
+            ) : nil,
+            respiratoryRate: today.respiratoryRate > 0 ? MetricContext(
+                average: nil, min: nil, max: nil,
+                latest: today.respiratoryRate,
+                trend: nil
+            ) : nil
         )
 
         let formatter = ISO8601DateFormatter()

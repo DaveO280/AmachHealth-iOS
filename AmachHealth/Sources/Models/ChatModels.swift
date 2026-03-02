@@ -97,6 +97,9 @@ struct AIChatMetrics: Encodable {
     let hrv: MetricContext?
     let sleep: MetricContext?
     let exercise: MetricContext?
+    let restingHeartRate: MetricContext?
+    let vo2Max: MetricContext?
+    let respiratoryRate: MetricContext?
 }
 
 struct MetricContext: Encodable {
