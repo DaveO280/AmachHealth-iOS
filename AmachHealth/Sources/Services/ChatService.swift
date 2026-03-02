@@ -75,7 +75,7 @@ final class ChatService: ObservableObject {
         isSending = false
     }
 
-    // MARK: - sendStreaming() — SSE streaming via /api/venice/
+    // MARK: - sendStreaming() — progressive token delivery via /api/ai/chat
     //
     // Appends a user message, then an empty assistant placeholder.
     // Tokens arrive progressively and are appended to the placeholder

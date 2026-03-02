@@ -17,7 +17,7 @@ final class AmachAPIClient {
     private init() {
         // Configure base URL from environment or default
         let baseURLString = ProcessInfo.processInfo.environment["AMACH_API_URL"]
-            ?? "https://amachhealth.com"
+            ?? "https://www.amachhealth.com"
         self.baseURL = URL(string: baseURLString)!
 
         let config = URLSessionConfiguration.default
@@ -153,27 +153,21 @@ final class AmachAPIClient {
             history: history,
             options: AIChatOptions(mode: "quick")
         )
-        return try await post(path: "/api/ai/chat", body: request)
+        let response: AIChatResponse = try await post(path: "/api/ai/chat", body: request)
+        #if DEBUG
+        print("🤖 [Luma] Response: \(response.content.prefix(120))… (\(response.content.count) chars)")
+        #endif
+        return response
     }
 
-    // MARK: - Luma Streaming Chat (SSE via /api/venice/)
+    // MARK: - Luma Streaming Chat (simulated via /api/ai/chat)
 
-    /// Stream a Luma response using Server-Sent Events from /api/venice/.
+    /// Stream a Luma response via /api/ai/chat.
     ///
-    /// Returns an AsyncThrowingStream<String, Error> yielding individual
-    /// content tokens as they arrive. The stream finishes naturally when
-    /// the server sends "data: [DONE]" or on any network error.
-    ///
-    /// Designer's Intent:
-    ///   Streaming lets the UI paint Luma's response word-by-word —
-    ///   mimicking real conversation and making the wait feel like
-    ///   thinking, not loading.
-    ///
-    /// Usage (ChatService):
-    ///   let stream = api.streamLumaChat(text, history: history)
-    ///   for try await token in stream {
-    ///       currentSession.messages[lastIdx].content += token
-    ///   }
+    /// Returns an AsyncThrowingStream<String, Error> that yields the
+    /// response in word-sized chunks for progressive UI rendering.
+    /// The backend returns a complete response (not SSE), so we
+    /// simulate streaming by splitting the text into words.
     func streamLumaChat(
         _ message: String,
         history: [AIChatHistoryMessage],
@@ -181,59 +175,39 @@ final class AmachAPIClient {
         screen: String? = nil,
         metric: String? = nil
     ) -> AsyncThrowingStream<String, Error> {
-        let request = VeniceChatRequest(
-            message: message,
-            history: history,
-            context: context,
-            screen: screen,
-            metric: metric,
-            stream: true
-        )
-
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let url = baseURL.appendingPathComponent("/api/venice")
-                    var urlRequest = URLRequest(url: url)
-                    urlRequest.httpMethod = "POST"
-                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    urlRequest.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
-                    // No timeout for streaming — connection may be held open
-                    urlRequest.timeoutInterval = 120
+                    // Use /api/ai/chat which handles system prompt, context
+                    // injection, and messages array construction server-side
+                    let response = try await self.sendChatMessage(
+                        message,
+                        history: history,
+                        context: context
+                    )
 
-                    let encoder = JSONEncoder()
-                    encoder.dateEncodingStrategy = .iso8601
-                    urlRequest.httpBody = try encoder.encode(request)
-
-                    let (bytes, response) = try await session.bytes(for: urlRequest)
-
-                    guard let httpResponse = response as? HTTPURLResponse,
-                          (200...299).contains(httpResponse.statusCode) else {
-                        continuation.finish(throwing: APIError.invalidResponse)
+                    // Guard: if the AI returned empty content, surface an error
+                    // instead of rendering a blank assistant bubble
+                    let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !content.isEmpty else {
+                        print("⚠️ [Luma] AI returned empty content")
+                        continuation.finish(throwing: APIError.requestFailed(
+                            "Luma returned an empty response. Please try again."
+                        ))
                         return
                     }
 
-                    // Parse SSE line by line
-                    // Format: "data: {"content":"token"}\n" or "data: [DONE]\n"
-                    for try await line in bytes.lines {
-                        guard line.hasPrefix("data: ") else { continue }
-                        let payload = String(line.dropFirst(6))
-
-                        if payload == "[DONE]" {
-                            continuation.finish()
-                            return
-                        }
-
-                        if let jsonData = payload.data(using: .utf8),
-                           let chunk = try? JSONDecoder().decode(SSEChunk.self, from: jsonData),
-                           !chunk.content.isEmpty {
-                            continuation.yield(chunk.content)
-                        }
+                    // Simulate streaming by yielding word-by-word
+                    let words = content.split(separator: " ")
+                    for (i, word) in words.enumerated() {
+                        let chunk = (i == 0 ? "" : " ") + word
+                        continuation.yield(String(chunk))
+                        try await Task.sleep(nanoseconds: 15_000_000) // 15ms per word
                     }
 
                     continuation.finish()
                 } catch {
+                    print("⚠️ [Luma] streamLumaChat error: \(error.localizedDescription)")
                     continuation.finish(throwing: error)
                 }
             }
@@ -295,7 +269,12 @@ final class AmachAPIClient {
         path: String,
         body: T
     ) async throws -> R {
-        let url = baseURL.appendingPathComponent(path)
+        // Build URL via string concatenation — appendingPathComponent can
+        // add trailing slashes that cause 308 redirects on Next.js
+        guard let url = URL(string: baseURL.absoluteString + path) else {
+            throw APIError.invalidResponse
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -305,13 +284,26 @@ final class AmachAPIClient {
         encoder.dateEncodingStrategy = .iso8601
         request.httpBody = try encoder.encode(body)
 
+        #if DEBUG
+        print("📡 [API] POST \(url.absoluteString) (\(request.httpBody?.count ?? 0) bytes)")
+        #endif
+
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
 
+        #if DEBUG
+        print("📡 [API] ← \(httpResponse.statusCode) (\(data.count) bytes)")
+        #endif
+
         guard (200...299).contains(httpResponse.statusCode) else {
+            #if DEBUG
+            if let preview = String(data: data.prefix(500), encoding: .utf8) {
+                print("📡 [API] Error body: \(preview)")
+            }
+            #endif
             // Try to parse error message
             if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
                 throw APIError.requestFailed(errorResponse.error)
