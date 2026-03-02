@@ -21,7 +21,7 @@ final class AmachAPIClient {
         self.baseURL = URL(string: baseURLString)!
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForRequest = 120   // Venice AI can take 60-90s with health context
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
     }
