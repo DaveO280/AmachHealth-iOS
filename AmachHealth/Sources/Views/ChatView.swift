@@ -359,7 +359,8 @@ struct ChatView: View {
         messageText = ""
         inputFocused = false
         AmachHaptics.buttonPress()
-        await chatService.sendStreaming(text)
+        let context = HealthContextBuilder.buildCurrentContext()
+        await chatService.sendStreaming(text, context: context)
         // Haptic on completion is handled inside sendStreaming; no double-fire needed.
     }
 }

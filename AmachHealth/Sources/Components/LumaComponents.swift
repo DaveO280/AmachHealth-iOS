@@ -501,7 +501,8 @@ struct LumaSheetView: View {
                 selectedDetent = .large
             }
         }
-        await chatService.send(text)
+        let context = HealthContextBuilder.buildCurrentContext()
+        await chatService.sendStreaming(text, context: context)
     }
 }
 

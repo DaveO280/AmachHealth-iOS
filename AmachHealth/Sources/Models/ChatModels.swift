@@ -1,7 +1,7 @@
 // ChatModels.swift
 // AmachHealth
 //
-// Data models for the Cosaint AI chat feature
+// Data models for the Luma AI chat feature
 
 import Foundation
 

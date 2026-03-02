@@ -1,7 +1,7 @@
 // ChatService.swift
 // AmachHealth
 //
-// Manages Cosaint AI chat sessions:
+// Manages Luma AI chat sessions:
 // - Real-time message state
 // - Local persistence (documents directory JSON)
 // - Batched Storj saves when sessions grow (every 10 messages) or on new session
@@ -38,7 +38,7 @@ final class ChatService: ObservableObject {
     // Retained for fallback and contexts where streaming isn't needed.
     // For progressive token delivery, use sendStreaming() instead.
 
-    func send(_ text: String) async {
+    func send(_ text: String, context: AIChatContext? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
@@ -57,7 +57,7 @@ final class ChatService: ObservableObject {
                 .suffix(18)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
-            let response = try await api.sendChatMessage(trimmed, history: Array(history))
+            let response = try await api.sendChatMessage(trimmed, history: Array(history), context: context)
 
             let assistantMsg = ChatMessage(role: .assistant, content: response.content)
             currentSession.messages.append(assistantMsg)
