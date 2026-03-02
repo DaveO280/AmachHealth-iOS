@@ -40,6 +40,7 @@
 		AA000000000000000000021F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000011F /* OnboardingView.swift */; };
 		AA0000000000000000000220 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000120 /* ProfileView.swift */; };
 		AA0000000000000000000221 /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000121 /* TrendsView.swift */; };
+		AA0000000000000000000222 /* SleepStagesChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000122 /* SleepStagesChart.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -79,6 +80,7 @@
 		AA000000000000000000011F /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = AmachHealth/Sources/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000120 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProfileView.swift; path = AmachHealth/Sources/Views/ProfileView.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000121 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsView.swift; path = AmachHealth/Sources/Views/TrendsView.swift; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000122 /* SleepStagesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SleepStagesChart.swift; path = AmachHealth/Sources/Components/SleepStagesChart.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -169,6 +171,7 @@
 				AA0000000000000000000109 /* LumaComponents.swift */,
 				AA000000000000000000010A /* NavigationHeader.swift */,
 				AA000000000000000000010B /* Sparkline.swift */,
+				AA0000000000000000000122 /* SleepStagesChart.swift */,
 			);
 			name = Components;
 			sourceTree = "<group>";
@@ -309,6 +312,7 @@
 				AA0000000000000000000209 /* LumaComponents.swift in Sources */,
 				AA000000000000000000020A /* NavigationHeader.swift in Sources */,
 				AA000000000000000000020B /* Sparkline.swift in Sources */,
+				AA0000000000000000000222 /* SleepStagesChart.swift in Sources */,
 				AA000000000000000000020C /* AmachDesignSystem.swift in Sources */,
 				AA000000000000000000020D /* ChatModels.swift in Sources */,
 				AA000000000000000000020E /* HealthDataTypes.swift in Sources */,
