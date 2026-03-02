@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -94,7 +94,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		AA0000000000000000000400 /* = */ = {
+		AA0000000000000000000400 = {
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000401 /* AmachHealth */,
@@ -132,15 +132,6 @@
 				AA0000000000000000000418 /* Views */,
 			);
 			name = Sources;
-			sourceTree = "<group>";
-		};
-		AA000000000000000000041A /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				AA0000000000000000000002 /* Info.plist */,
-				AA0000000000000000000003 /* AmachHealth.entitlements */,
-			);
-			name = Resources;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000411 /* API */ = {
@@ -231,6 +222,15 @@
 				AA0000000000000000000121 /* TrendsView.swift */,
 			);
 			name = Views;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000041A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000002 /* Info.plist */,
+				AA0000000000000000000003 /* AmachHealth.entitlements */,
+			);
+			name = Resources;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -465,6 +465,7 @@
 				CODE_SIGN_ENTITLEMENTS = AmachHealth/Resources/AmachHealth.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6VDX3QKK79;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AmachHealth/Resources/Info.plist;
@@ -489,6 +490,7 @@
 				CODE_SIGN_ENTITLEMENTS = AmachHealth/Resources/AmachHealth.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6VDX3QKK79;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AmachHealth/Resources/Info.plist;
@@ -529,7 +531,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = AA0000000000000000000700 /* Project object */;
 }

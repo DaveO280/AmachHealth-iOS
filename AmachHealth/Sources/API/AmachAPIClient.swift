@@ -17,7 +17,7 @@ final class AmachAPIClient {
     private init() {
         // Configure base URL from environment or default
         let baseURLString = ProcessInfo.processInfo.environment["AMACH_API_URL"]
-            ?? "https://amachhealth.com"
+            ?? "https://www.amachhealth.com"
         self.baseURL = URL(string: baseURLString)!
 
         let config = URLSessionConfiguration.default
@@ -174,6 +174,12 @@ final class AmachAPIClient {
     ///   for try await token in stream {
     ///       currentSession.messages[lastIdx].content += token
     ///   }
+    /// Stream a Luma response via /api/ai/chat.
+    ///
+    /// Returns an AsyncThrowingStream<String, Error> that yields the
+    /// response in word-sized chunks for progressive UI rendering.
+    /// The backend returns a complete response (not SSE), so we
+    /// simulate streaming by splitting the text into words.
     func streamLumaChat(
         _ message: String,
         history: [AIChatHistoryMessage],
@@ -181,55 +187,23 @@ final class AmachAPIClient {
         screen: String? = nil,
         metric: String? = nil
     ) -> AsyncThrowingStream<String, Error> {
-        let request = VeniceChatRequest(
-            message: message,
-            history: history,
-            context: context,
-            screen: screen,
-            metric: metric,
-            stream: true
-        )
-
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let url = baseURL.appendingPathComponent("/api/venice")
-                    var urlRequest = URLRequest(url: url)
-                    urlRequest.httpMethod = "POST"
-                    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    urlRequest.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
-                    // No timeout for streaming — connection may be held open
-                    urlRequest.timeoutInterval = 120
+                    // Use /api/ai/chat which handles system prompt, context
+                    // injection, and messages array construction server-side
+                    let response = try await sendChatMessage(
+                        message,
+                        history: history,
+                        context: context
+                    )
 
-                    let encoder = JSONEncoder()
-                    encoder.dateEncodingStrategy = .iso8601
-                    urlRequest.httpBody = try encoder.encode(request)
-
-                    let (bytes, response) = try await session.bytes(for: urlRequest)
-
-                    guard let httpResponse = response as? HTTPURLResponse,
-                          (200...299).contains(httpResponse.statusCode) else {
-                        continuation.finish(throwing: APIError.invalidResponse)
-                        return
-                    }
-
-                    // Parse SSE line by line
-                    // Format: "data: {"content":"token"}\n" or "data: [DONE]\n"
-                    for try await line in bytes.lines {
-                        guard line.hasPrefix("data: ") else { continue }
-                        let payload = String(line.dropFirst(6))
-
-                        if payload == "[DONE]" {
-                            continuation.finish()
-                            return
-                        }
-
-                        if let jsonData = payload.data(using: .utf8),
-                           let chunk = try? JSONDecoder().decode(SSEChunk.self, from: jsonData),
-                           !chunk.content.isEmpty {
-                            continuation.yield(chunk.content)
-                        }
+                    // Simulate streaming by yielding word-by-word
+                    let words = response.content.split(separator: " ")
+                    for (i, word) in words.enumerated() {
+                        let chunk = (i == 0 ? "" : " ") + word
+                        continuation.yield(String(chunk))
+                        try await Task.sleep(nanoseconds: 15_000_000) // 15ms per word
                     }
 
                     continuation.finish()
