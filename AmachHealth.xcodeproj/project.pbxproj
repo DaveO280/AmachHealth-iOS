@@ -40,6 +40,7 @@
 		AA000000000000000000021F /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000011F /* OnboardingView.swift */; };
 		AA0000000000000000000220 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000120 /* ProfileView.swift */; };
 		AA0000000000000000000221 /* TrendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000121 /* TrendsView.swift */; };
+		AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000122 /* HealthContextBuilder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -79,6 +80,7 @@
 		AA000000000000000000011F /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OnboardingView.swift; path = AmachHealth/Sources/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000120 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProfileView.swift; path = AmachHealth/Sources/Views/ProfileView.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000121 /* TrendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsView.swift; path = AmachHealth/Sources/Views/TrendsView.swift; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000122 /* HealthContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthContextBuilder.swift; path = AmachHealth/Sources/Services/HealthContextBuilder.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -206,6 +208,7 @@
 				AA0000000000000000000112 /* AnomalyDetector.swift */,
 				AA0000000000000000000113 /* ChatService.swift */,
 				AA0000000000000000000114 /* DashboardService.swift */,
+				AA0000000000000000000122 /* HealthContextBuilder.swift */,
 				AA0000000000000000000115 /* HealthDataSyncService.swift */,
 				AA0000000000000000000116 /* HealthKitService.swift */,
 				AA0000000000000000000117 /* HealthMemoryStore.swift */,
@@ -331,6 +334,7 @@
 				AA000000000000000000021F /* OnboardingView.swift in Sources */,
 				AA0000000000000000000220 /* ProfileView.swift in Sources */,
 				AA0000000000000000000221 /* TrendsView.swift in Sources */,
+				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
