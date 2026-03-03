@@ -69,6 +69,77 @@ struct DashboardTodayData {
     var sleepStages: SleepStageBreakdown = SleepStageBreakdown()
     var respiratoryRate: Double = 0
     var vo2Max: Double = 0
+
+    var recoveryScore: RecoveryScoreBreakdown? {
+        // Requires Apple Watch-derived recovery signals.
+        guard hrv > 0, restingHeartRate > 0 else { return nil }
+
+        let hrvScore = Self.clamp((hrv - 20) / 60, min: 0, max: 1) * 100
+        let rhrScore = Self.clamp((80 - restingHeartRate) / 40, min: 0, max: 1) * 100
+        let sleepDurScore: Double
+        switch sleepHours {
+        case ..<6:
+            sleepDurScore = 0
+        case 6..<7:
+            sleepDurScore = (sleepHours - 6) * 50
+        case 7..<8.5:
+            sleepDurScore = 50 + ((sleepHours - 7) / 1.5) * 50
+        default:
+            sleepDurScore = 100
+        }
+
+        let efficiency = sleepEfficiency ?? sleepStages.efficiency
+        let sleepEffScore: Double
+        if let efficiency {
+            if efficiency >= 0.85 {
+                sleepEffScore = 100
+            } else if efficiency >= 0.70 {
+                sleepEffScore = ((efficiency - 0.70) / 0.15) * 100
+            } else {
+                sleepEffScore = Self.clamp((efficiency / 0.70) * 50, min: 0, max: 50)
+            }
+        } else {
+            sleepEffScore = 0
+        }
+
+        let hrvContrib = Int((hrvScore * 0.40).rounded())
+        let rhrContrib = Int((rhrScore * 0.25).rounded())
+        let sleepDurContrib = Int((sleepDurScore * 0.20).rounded())
+        let sleepEffContrib = Int((sleepEffScore * 0.15).rounded())
+        let score = Self.clamp(
+            Double(hrvContrib + rhrContrib + sleepDurContrib + sleepEffContrib),
+            min: 0,
+            max: 100
+        )
+
+        return RecoveryScoreBreakdown(
+            score: Int(score.rounded()),
+            hrvContrib: hrvContrib,
+            rhrContrib: rhrContrib,
+            sleepDurContrib: sleepDurContrib,
+            sleepEffContrib: sleepEffContrib,
+            hrv: hrv,
+            rhr: restingHeartRate,
+            sleepHours: sleepHours,
+            efficiency: efficiency
+        )
+    }
+
+    private static func clamp(_ value: Double, min lower: Double, max upper: Double) -> Double {
+        Swift.min(Swift.max(value, lower), upper)
+    }
+}
+
+struct RecoveryScoreBreakdown {
+    let score: Int
+    let hrvContrib: Int
+    let rhrContrib: Int
+    let sleepDurContrib: Int
+    let sleepEffContrib: Int
+    let hrv: Double
+    let rhr: Double
+    let sleepHours: Double
+    let efficiency: Double?
 }
 
 // MARK: - Sleep Stage Breakdown (last night)

@@ -177,7 +177,8 @@ struct TrendsView: View {
                     if config.id == "sleep" {
                         SleepStagesChart(
                             stagesTrend: dashboard.sleepStagesTrend[selectedPeriod] ?? [],
-                            todayEfficiency: dashboard.today.sleepStages.efficiency
+                            todayEfficiency: dashboard.today.sleepStages.efficiency,
+                            recoveryScore: dashboard.today.recoveryScore
                         )
                     }
 

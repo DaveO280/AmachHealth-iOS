@@ -16,6 +16,9 @@ struct SleepStagesChart: View {
 
     let stagesTrend: [SleepStageTrendPoint]
     let todayEfficiency: Double?         // last night's efficiency (0.0–1.0)
+    var recoveryScore: RecoveryScoreBreakdown? = nil
+
+    @State private var showScoreInfo = false
 
     // Flat data model for Swift Charts series stacking
     private struct StageBar: Identifiable {
@@ -113,10 +116,49 @@ struct SleepStagesChart: View {
                 .foregroundStyle(Color.amachTextSecondary)
                 .tracking(1.2)
             Spacer()
-            if let eff = displayEfficiency {
+            if let recoveryScore {
+                recoveryBadge(recoveryScore)
+            } else if let eff = displayEfficiency {
                 efficiencyBadge(eff)
             }
         }
+    }
+
+    private func recoveryBadge(_ breakdown: RecoveryScoreBreakdown) -> some View {
+        HStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Text("Recovery")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+                Text("\(breakdown.score)")
+                    .font(AmachType.tiny)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(scoreColor(breakdown.score))
+                    .contentTransition(.numericText())
+                Text("/100")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+
+            Button {
+                showScoreInfo = true
+            } label: {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Recovery score breakdown")
+            .popover(isPresented: $showScoreInfo) {
+                RecoveryScorePopover(breakdown: breakdown)
+                    .presentationCompactAdaptation(.popover)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(scoreColor(breakdown.score).opacity(0.10))
+        .clipShape(Capsule())
     }
 
     private func efficiencyBadge(_ efficiency: Double) -> some View {
@@ -138,6 +180,12 @@ struct SleepStagesChart: View {
     private func efficiencyColor(_ eff: Double) -> Color {
         if eff >= 0.85 { return Color.Amach.Health.optimal }
         if eff >= 0.70 { return Color.Amach.Health.borderline }
+        return Color.Amach.Health.critical
+    }
+
+    private func scoreColor(_ score: Int) -> Color {
+        if score >= 75 { return Color.Amach.Health.optimal }
+        if score >= 50 { return Color.Amach.Health.borderline }
         return Color.Amach.Health.critical
     }
 
@@ -236,6 +284,108 @@ struct SleepStagesChart: View {
                 }
             }
             .frame(height: 150)
+        }
+    }
+}
+
+private struct RecoveryScorePopover: View {
+    let breakdown: RecoveryScoreBreakdown
+
+    private var efficiencyText: String {
+        guard let efficiency = breakdown.efficiency else { return "N/A" }
+        return String(format: "%.0f%%", efficiency * 100)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("RECOVERY SCORE")
+                .font(AmachType.tiny)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.amachTextSecondary)
+                .tracking(1.2)
+
+            HStack(alignment: .lastTextBaseline, spacing: 4) {
+                Circle()
+                    .fill(scoreColor)
+                    .frame(width: 8, height: 8)
+                Text("\(breakdown.score)")
+                    .font(AmachType.dataValue(size: 32))
+                    .foregroundStyle(Color.amachTextPrimary)
+                    .contentTransition(.numericText())
+                Text("/ 100")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+
+            Divider()
+
+            row(
+                icon: "heart.fill",
+                label: "HRV",
+                value: String(format: "%.0f ms", breakdown.hrv),
+                points: "\(breakdown.hrvContrib) / 40 pts"
+            )
+            row(
+                icon: "bolt.heart.fill",
+                label: "Resting HR",
+                value: String(format: "%.0f bpm", breakdown.rhr),
+                points: "\(breakdown.rhrContrib) / 25 pts"
+            )
+            row(
+                icon: "moon.zzz.fill",
+                label: "Sleep",
+                value: String(format: "%.1f h", breakdown.sleepHours),
+                points: "\(breakdown.sleepDurContrib) / 20 pts"
+            )
+            row(
+                icon: "bed.double.fill",
+                label: "Efficiency",
+                value: efficiencyText,
+                points: "\(breakdown.sleepEffContrib) / 15 pts"
+            )
+
+            Divider()
+
+            Text("Requires Apple Watch HRV + resting HR.")
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextSecondary)
+            Text("Weighted recovery signal. Updates nightly.")
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextSecondary)
+        }
+        .padding(AmachSpacing.md)
+        .frame(minWidth: 290, maxWidth: 340, alignment: .leading)
+        .background(Color.amachSurface)
+    }
+
+    private var scoreColor: Color {
+        if breakdown.score >= 75 { return Color.Amach.Health.optimal }
+        if breakdown.score >= 50 { return Color.Amach.Health.borderline }
+        return Color.Amach.Health.critical
+    }
+
+    private func row(icon: String, label: String, value: String, points: String) -> some View {
+        HStack(spacing: AmachSpacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.amachTextSecondary)
+                .frame(width: 14)
+
+            Text(label)
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextPrimary)
+
+            Spacer()
+
+            Text(value)
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextSecondary)
+                .monospacedDigit()
+
+            Text(points)
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextPrimary)
+                .monospacedDigit()
         }
     }
 }

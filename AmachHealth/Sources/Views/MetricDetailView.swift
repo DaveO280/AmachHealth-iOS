@@ -596,7 +596,8 @@ struct MetricDetailView: View {
         let stageTrend = dashboard.sleepStagesTrend[selectedRange.trendPeriod] ?? []
         return SleepStagesChart(
             stagesTrend: stageTrend,
-            todayEfficiency: dashboard.today.sleepStages.efficiency
+            todayEfficiency: dashboard.today.sleepStages.efficiency,
+            recoveryScore: dashboard.today.recoveryScore
         )
     }
 
