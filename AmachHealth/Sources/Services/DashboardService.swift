@@ -8,6 +8,51 @@ import Foundation
 import HealthKit
 import Combine
 
+// MARK: - Heart Rate Zones (today)
+//
+// Zones are based on % of estimated max HR (default 185 bpm ≈ 220−35).
+// Time is computed by interpolating gaps between consecutive HR samples.
+//
+// Zone 1 — Recovery  < 60%   warm-up, easy movement
+// Zone 2 — Fat Burn  60–70%  aerobic base
+// Zone 3 — Aerobic   70–80%  steady cardio
+// Zone 4 — Threshold 80–90%  hard effort
+// Zone 5 — Peak      > 90%   max effort / sprint
+
+struct HeartRateZoneMinutes {
+    var zone1: Double = 0
+    var zone2: Double = 0
+    var zone3: Double = 0
+    var zone4: Double = 0
+    var zone5: Double = 0
+    var estimatedMaxHR: Double = 185
+
+    var total: Double { zone1 + zone2 + zone3 + zone4 + zone5 }
+
+    func fraction(for zone: Int) -> Double {
+        guard total > 0 else { return 0 }
+        switch zone {
+        case 1: return zone1 / total
+        case 2: return zone2 / total
+        case 3: return zone3 / total
+        case 4: return zone4 / total
+        case 5: return zone5 / total
+        default: return 0
+        }
+    }
+
+    func minutes(for zone: Int) -> Double {
+        switch zone {
+        case 1: return zone1
+        case 2: return zone2
+        case 3: return zone3
+        case 4: return zone4
+        case 5: return zone5
+        default: return 0
+        }
+    }
+}
+
 // MARK: - Dashboard Today Data
 
 struct DashboardTodayData {
@@ -88,6 +133,7 @@ final class DashboardService: ObservableObject {
     @Published var rhrTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var vo2Trend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var rrTrend: [TrendPeriod: [TrendPoint]] = [:]
+    @Published var todayHRZones = HeartRateZoneMinutes()
     @Published var isLoading = false
     @Published var error: String?
 
@@ -143,6 +189,8 @@ final class DashboardService: ObservableObject {
                 .unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: .minute()))
         )
 
+        async let hrZonesFetch = fetchTodayHRZones()
+
         today = await todayFetch
         stepsTrend = await stepsFetch
         heartRateTrend = await hrFetch
@@ -153,6 +201,7 @@ final class DashboardService: ObservableObject {
         rhrTrend = await rhrFetch
         rrTrend = await rrFetch
         vo2Trend = await vo2Fetch
+        todayHRZones = await hrZonesFetch
 
         isLoading = false
         lastLoaded = Date()
@@ -467,6 +516,54 @@ final class DashboardService: ObservableObject {
                 }
                 points.sort { $0.date < $1.date }
                 continuation.resume(returning: points)
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Heart Rate Zones (today)
+
+    private func fetchTodayHRZones() async -> HeartRateZoneMinutes {
+        guard let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+            return HeartRateZoneMinutes()
+        }
+        let now = Date()
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: now, options: .strictStartDate)
+        let bpmUnit = HKUnit.count().unitDivided(by: .minute())
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: hrType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, _ in
+                guard let samples = samples as? [HKQuantitySample], !samples.isEmpty else {
+                    continuation.resume(returning: HeartRateZoneMinutes())
+                    return
+                }
+
+                let maxHR: Double = 185   // ~220 − 35 default; refine with user age later
+                var zones = HeartRateZoneMinutes(estimatedMaxHR: maxHR)
+
+                // Interpolate time between consecutive samples (cap at 5 min to avoid gaps)
+                for i in 0..<samples.count {
+                    let bpm = samples[i].quantity.doubleValue(for: bpmUnit)
+                    let nextStart = i + 1 < samples.count ? samples[i + 1].startDate : samples[i].endDate
+                    let rawSeconds = nextStart.timeIntervalSince(samples[i].startDate)
+                    let minutes = min(rawSeconds, 300) / 60  // cap at 5 min
+
+                    let pct = bpm / maxHR
+                    switch pct {
+                    case ..<0.60:          zones.zone1 += max(minutes, 1.0 / 60)
+                    case 0.60..<0.70:      zones.zone2 += max(minutes, 1.0 / 60)
+                    case 0.70..<0.80:      zones.zone3 += max(minutes, 1.0 / 60)
+                    case 0.80..<0.90:      zones.zone4 += max(minutes, 1.0 / 60)
+                    default:               zones.zone5 += max(minutes, 1.0 / 60)
+                    }
+                }
+                continuation.resume(returning: zones)
             }
             store.execute(query)
         }

@@ -262,7 +262,7 @@ struct DashboardView: View {
         } label: {
             EnhancedMetricCard(metric: metric)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MetricCardButtonStyle())
         .accessibilityLabel("\(metric.label): \(metric.value) \(metric.unit). Status: \(statusLabel(metric.status)). Tap for details.")
     }
 
@@ -432,14 +432,31 @@ struct DashboardView: View {
 
 
 // ============================================================
+// MARK: - METRIC CARD BUTTON STYLE
+// ============================================================
+// Handles press-state scale via ButtonStyle so SwiftUI can still
+// recognize and forward vertical scroll gestures to the ScrollView.
+// Using a simultaneousGesture(DragGesture(minimumDistance:0)) on
+// card views inside a ScrollView blocks scroll — ButtonStyle avoids this.
+
+struct MetricCardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? AmachAnimation.cardPressScale : 1.0)
+            .animation(
+                AmachAnimation.ifMotion(.spring(response: 0.3, dampingFraction: 0.7)),
+                value: configuration.isPressed
+            )
+    }
+}
+
+
+// ============================================================
 // MARK: - ENHANCED METRIC CARD
 // ============================================================
-// Replaces the original MetricCard.
-// Adds: status pill, press state scale effect, proper padding.
 
 struct EnhancedMetricCard: View {
     let metric: MetricInfo
-    @State private var isPressed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
@@ -490,13 +507,6 @@ struct EnhancedMetricCard: View {
             x: AmachElevation.Level1.shadowX,
             y: AmachElevation.Level1.shadowY
         )
-        .scaleEffect(isPressed ? AmachAnimation.cardPressScale : 1.0)
-        .animation(AmachAnimation.ifMotion(AmachAnimation.spring), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
     }
 }
 
@@ -506,7 +516,7 @@ struct EnhancedMetricCard: View {
 // ============================================================
 
 struct SkeletonMetricCard: View {
-    @State private var phase: CGFloat = 0
+    @State private var pulsing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
@@ -528,24 +538,12 @@ struct SkeletonMetricCard: View {
         .frame(maxWidth: .infinity, minHeight: AmachLayout.cardMinHeight, alignment: .leading)
         .background(Color.amachSurface.opacity(0.6))
         .clipShape(RoundedRectangle(cornerRadius: AmachRadius.card))
-        .overlay(
-            GeometryReader { geo in
-                LinearGradient(
-                    colors: [.clear, Color.white.opacity(0.04), .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: geo.size.width * 0.6)
-                .offset(x: phase * (geo.size.width + geo.size.width * 0.6) - geo.size.width * 0.6)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: AmachRadius.card))
-        )
+        .opacity(pulsing ? 0.4 : 0.75)
         .onAppear {
             withAnimation(
-                .linear(duration: AmachAnimation.durationShimmer)
-                .repeatForever(autoreverses: false)
+                .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
             ) {
-                phase = 1
+                pulsing = true
             }
         }
     }

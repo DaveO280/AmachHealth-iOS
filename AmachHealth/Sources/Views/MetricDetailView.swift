@@ -201,6 +201,9 @@ struct MetricDetailView: View {
                     if metric.id == "sleep" {
                         sleepStagesSection
                     }
+                    if metric.id == "heartRate" {
+                        hrZonesSection
+                    }
                     dataInfoSection
                     lumaSection
                     Spacer().frame(height: AmachSpacing.xxl)
@@ -515,6 +518,12 @@ struct MetricDetailView: View {
             efficiency: dashboard.today.sleepStages.efficiency,
             selectedRange: selectedRange.rawValue
         )
+    }
+
+    // MARK: HR Zones Section
+
+    private var hrZonesSection: some View {
+        HeartRateZonesChart(zones: dashboard.todayHRZones)
     }
 
     // MARK: Data Info Section
