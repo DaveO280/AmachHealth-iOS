@@ -1,10 +1,10 @@
 // HeartRateZonesChart.swift
 // AmachHealth
 //
-// Donut chart showing today's time-in-zone distribution.
+// Donut chart showing time-in-zone distribution for a selected period.
 // Uses SectorMark (Swift Charts, iOS 17+).
-// Used in MetricDetailView for the Heart Rate metric.
-// Zones are computed from raw HR samples by DashboardService.fetchTodayHRZones().
+// Used in MetricDetailView for the Exercise metric.
+// Zones are computed from raw HR samples by DashboardService.
 
 import SwiftUI
 import Charts
@@ -16,6 +16,7 @@ import Charts
 struct HeartRateZonesChart: View {
 
     let zones: HeartRateZoneMinutes
+    var periodLabel: String = "Today"
 
     // Zone display definitions — ordered Z1→Z5 (chart draws clockwise from top)
     private struct ZoneDef: Identifiable {
@@ -70,7 +71,7 @@ struct HeartRateZonesChart: View {
                 .foregroundStyle(Color.amachTextSecondary)
                 .tracking(1.2)
             Spacer()
-            Text("Today")
+            Text(periodLabel)
                 .font(AmachType.tiny)
                 .foregroundStyle(Color.amachTextSecondary)
         }
@@ -102,7 +103,7 @@ struct HeartRateZonesChart: View {
             }
         }
         .frame(width: 120, height: 120)
-        .accessibilityLabel("Heart rate zones, \(Int(zones.total)) total minutes tracked today")
+        .accessibilityLabel("Heart rate zones, \(Int(zones.total)) total minutes tracked")
     }
 
     // MARK: - Legend Column (Z5 at top → Z1 at bottom)
@@ -138,7 +139,7 @@ struct HeartRateZonesChart: View {
     // MARK: - No Data
 
     private var noDataView: some View {
-        Text("No heart rate data recorded today")
+        Text("No heart rate zone data for this period")
             .font(AmachType.caption)
             .foregroundStyle(Color.amachTextSecondary)
             .frame(maxWidth: .infinity, minHeight: 80, alignment: .center)

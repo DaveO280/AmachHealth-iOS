@@ -135,6 +135,7 @@ final class DashboardService: ObservableObject {
     @Published var vo2Trend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var rrTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var todayHRZones = HeartRateZoneMinutes()
+    @Published var hrZonesTrend: [TrendPeriod: HeartRateZoneMinutes] = [:]
     @Published var isLoading = false
     @Published var error: String?
 
@@ -196,6 +197,7 @@ final class DashboardService: ObservableObject {
         )
 
         async let hrZonesFetch = fetchTodayHRZones()
+        async let hrZonesAllFetch = fetchHRZonesAllPeriods()
 
         today = await todayFetch
         stepsTrend = await stepsFetch
@@ -209,6 +211,7 @@ final class DashboardService: ObservableObject {
         rrTrend = await rrFetch
         vo2Trend = await vo2Fetch
         todayHRZones = await hrZonesFetch
+        hrZonesTrend = await hrZonesAllFetch
 
         isLoading = false
         lastLoaded = Date()
@@ -571,6 +574,66 @@ final class DashboardService: ObservableObject {
                     }
                 }
                 continuation.resume(returning: zones)
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Heart Rate Zones (all periods)
+    //
+    // Fetches 90 days of raw HR samples in a single HealthKit query,
+    // then partitions into 7/30/90-day windows and computes zone totals
+    // for each. This avoids three separate HK queries.
+
+    private func fetchHRZonesAllPeriods() async -> [TrendPeriod: HeartRateZoneMinutes] {
+        guard let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+            return [:]
+        }
+        let now = Date()
+        let maxDays = TrendPeriod.allCases.map(\.days).max() ?? 90
+        let startDate = Calendar.current.date(byAdding: .day, value: -maxDays, to: now)!
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: now, options: .strictStartDate)
+        let bpmUnit = HKUnit.count().unitDivided(by: .minute())
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: hrType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, _ in
+                guard let samples = samples as? [HKQuantitySample], !samples.isEmpty else {
+                    continuation.resume(returning: [:])
+                    return
+                }
+
+                let maxHR: Double = 185
+                var result: [TrendPeriod: HeartRateZoneMinutes] = [:]
+
+                for period in TrendPeriod.allCases {
+                    let periodStart = Calendar.current.date(byAdding: .day, value: -period.days, to: now)!
+                    // Binary-search-style skip: find first sample >= periodStart
+                    let startIdx = samples.firstIndex { $0.startDate >= periodStart } ?? samples.count
+
+                    var zones = HeartRateZoneMinutes(estimatedMaxHR: maxHR)
+                    for i in startIdx..<samples.count {
+                        let bpm = samples[i].quantity.doubleValue(for: bpmUnit)
+                        let nextStart = i + 1 < samples.count ? samples[i + 1].startDate : samples[i].endDate
+                        let rawSeconds = nextStart.timeIntervalSince(samples[i].startDate)
+                        let minutes = min(rawSeconds, 300) / 60
+
+                        let pct = bpm / maxHR
+                        switch pct {
+                        case ..<0.60:     zones.zone1 += max(minutes, 1.0 / 60)
+                        case 0.60..<0.70: zones.zone2 += max(minutes, 1.0 / 60)
+                        case 0.70..<0.80: zones.zone3 += max(minutes, 1.0 / 60)
+                        case 0.80..<0.90: zones.zone4 += max(minutes, 1.0 / 60)
+                        default:          zones.zone5 += max(minutes, 1.0 / 60)
+                        }
+                    }
+                    result[period] = zones
+                }
+                continuation.resume(returning: result)
             }
             store.execute(query)
         }

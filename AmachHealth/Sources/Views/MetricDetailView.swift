@@ -272,7 +272,7 @@ struct MetricDetailView: View {
                     if metric.id == "sleep" {
                         sleepStagesSection
                     }
-                    if metric.id == "heartRate" {
+                    if metric.id == "exercise" {
                         hrZonesSection
                     }
                     dataInfoSection
@@ -603,7 +603,8 @@ struct MetricDetailView: View {
     // MARK: HR Zones Section
 
     private var hrZonesSection: some View {
-        HeartRateZonesChart(zones: dashboard.todayHRZones)
+        let zones = dashboard.hrZonesTrend[selectedRange.trendPeriod] ?? HeartRateZoneMinutes()
+        return HeartRateZonesChart(zones: zones, periodLabel: selectedRange.rawValue)
     }
 
     // MARK: Data Info Section
