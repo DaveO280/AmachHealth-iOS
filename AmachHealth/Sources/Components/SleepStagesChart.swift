@@ -18,8 +18,6 @@ struct SleepStagesChart: View {
     let todayEfficiency: Double?         // last night's efficiency (0.0–1.0)
     var recoveryScore: RecoveryScoreBreakdown? = nil
 
-    @State private var showScoreInfo = false
-
     // Flat data model for Swift Charts series stacking
     private struct StageBar: Identifiable {
         let id = UUID()
@@ -116,49 +114,10 @@ struct SleepStagesChart: View {
                 .foregroundStyle(Color.amachTextSecondary)
                 .tracking(1.2)
             Spacer()
-            if let recoveryScore {
-                recoveryBadge(recoveryScore)
-            } else if let eff = displayEfficiency {
+            if recoveryScore == nil, let eff = displayEfficiency {
                 efficiencyBadge(eff)
             }
         }
-    }
-
-    private func recoveryBadge(_ breakdown: RecoveryScoreBreakdown) -> some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 4) {
-                Text("Recovery")
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextSecondary)
-                Text("\(breakdown.score)")
-                    .font(AmachType.tiny)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(scoreColor(breakdown.score))
-                    .contentTransition(.numericText())
-                Text("/100")
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextSecondary)
-            }
-
-            Button {
-                showScoreInfo = true
-            } label: {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.amachTextSecondary)
-                    .frame(width: 16, height: 16)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Recovery score breakdown")
-            .popover(isPresented: $showScoreInfo) {
-                RecoveryScorePopover(breakdown: breakdown)
-                    .presentationCompactAdaptation(.popover)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(scoreColor(breakdown.score).opacity(0.10))
-        .clipShape(Capsule())
     }
 
     private func efficiencyBadge(_ efficiency: Double) -> some View {
@@ -180,12 +139,6 @@ struct SleepStagesChart: View {
     private func efficiencyColor(_ eff: Double) -> Color {
         if eff >= 0.85 { return Color.Amach.Health.optimal }
         if eff >= 0.70 { return Color.Amach.Health.borderline }
-        return Color.Amach.Health.critical
-    }
-
-    private func scoreColor(_ score: Int) -> Color {
-        if score >= 75 { return Color.Amach.Health.optimal }
-        if score >= 50 { return Color.Amach.Health.borderline }
         return Color.Amach.Health.critical
     }
 
@@ -285,6 +238,80 @@ struct SleepStagesChart: View {
             }
             .frame(height: 150)
         }
+    }
+}
+
+struct RecoveryScoreCard: View {
+    let breakdown: RecoveryScoreBreakdown
+
+    @State private var showBreakdown = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.md) {
+            HStack {
+                Text("RECOVERY SCORE")
+                    .font(AmachType.tiny)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .tracking(1.2)
+                Spacer()
+                Button {
+                    showBreakdown = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Recovery score breakdown")
+                .popover(isPresented: $showBreakdown) {
+                    RecoveryScorePopover(breakdown: breakdown)
+                        .presentationCompactAdaptation(.popover)
+                }
+            }
+
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Circle()
+                    .fill(scoreColor)
+                    .frame(width: 10, height: 10)
+                Text("\(breakdown.score)")
+                    .font(AmachType.dataValue(size: 44))
+                    .foregroundStyle(scoreColor)
+                    .contentTransition(.numericText())
+                Text("/100")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+
+            HStack(spacing: AmachSpacing.xs) {
+                contributionPill(label: "HRV", points: breakdown.hrvContrib, maxPoints: 40)
+                contributionPill(label: "RHR", points: breakdown.rhrContrib, maxPoints: 25)
+                contributionPill(label: "Sleep", points: breakdown.sleepDurContrib, maxPoints: 20)
+                contributionPill(label: "Eff", points: breakdown.sleepEffContrib, maxPoints: 15)
+            }
+        }
+        .padding(AmachSpacing.md)
+        .amachCard()
+    }
+
+    private var scoreColor: Color {
+        if breakdown.score >= 75 { return Color.Amach.Health.optimal }
+        if breakdown.score >= 50 { return Color.Amach.Health.borderline }
+        return Color.Amach.Health.critical
+    }
+
+    private func contributionPill(label: String, points: Int, maxPoints: Int) -> some View {
+        Text("\(label) \(points)/\(maxPoints)")
+            .font(AmachType.tiny)
+            .foregroundStyle(Color.amachTextSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.amachSurface)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(Color.amachPrimary.opacity(0.1), lineWidth: 1)
+            )
     }
 }
 

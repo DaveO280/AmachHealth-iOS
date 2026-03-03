@@ -594,11 +594,16 @@ struct MetricDetailView: View {
 
     private var sleepStagesSection: some View {
         let stageTrend = dashboard.sleepStagesTrend[selectedRange.trendPeriod] ?? []
-        return SleepStagesChart(
-            stagesTrend: stageTrend,
-            todayEfficiency: dashboard.today.sleepStages.efficiency,
-            recoveryScore: dashboard.today.recoveryScore
-        )
+        return VStack(spacing: AmachSpacing.md) {
+            if let recovery = dashboard.today.recoveryScore {
+                RecoveryScoreCard(breakdown: recovery)
+            }
+            SleepStagesChart(
+                stagesTrend: stageTrend,
+                todayEfficiency: dashboard.today.sleepStages.efficiency,
+                recoveryScore: dashboard.today.recoveryScore
+            )
+        }
     }
 
     // MARK: HR Zones Section

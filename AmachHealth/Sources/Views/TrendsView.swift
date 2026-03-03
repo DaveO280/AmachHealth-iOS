@@ -175,6 +175,9 @@ struct TrendsView: View {
 
                     // Sleep stages appear directly below the Sleep card
                     if config.id == "sleep" {
+                        if let recovery = dashboard.today.recoveryScore {
+                            RecoveryScoreCard(breakdown: recovery)
+                        }
                         SleepStagesChart(
                             stagesTrend: dashboard.sleepStagesTrend[selectedPeriod] ?? [],
                             todayEfficiency: dashboard.today.sleepStages.efficiency,
