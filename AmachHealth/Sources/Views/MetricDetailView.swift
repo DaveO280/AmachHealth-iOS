@@ -178,17 +178,86 @@ struct MetricDetailView: View {
     private var trendData: [TrendPoint] {
         let period = selectedRange.trendPeriod
         switch metric.id {
-        case "steps":           return dashboard.stepsTrend[period] ?? []
-        case "heartRate":       return dashboard.heartRateTrend[period] ?? []
-        case "hrv":             return dashboard.hrvTrend[period] ?? []
-        case "sleep":           return dashboard.sleepTrend[period] ?? []
+        case "steps":            return dashboard.stepsTrend[period] ?? []
+        case "heartRate":        return dashboard.heartRateTrend[period] ?? []
+        case "hrv":              return dashboard.hrvTrend[period] ?? []
+        case "sleep":            return dashboard.sleepTrend[period] ?? []
         case "restingHeartRate": return dashboard.rhrTrend[period] ?? []
-        case "vo2Max":          return dashboard.vo2Trend[period] ?? []
-        case "respiratoryRate": return dashboard.rrTrend[period] ?? []
-        case "calories":        return dashboard.calsTrend[period] ?? []
-        case "exercise":        return dashboard.exerciseTrend[period] ?? []
-        default:                return []
+        case "vo2Max":           return dashboard.vo2Trend[period] ?? []
+        case "respiratoryRate":  return dashboard.rrTrend[period] ?? []
+        case "calories":         return dashboard.calsTrend[period] ?? []
+        case "exercise":         return dashboard.exerciseTrend[period] ?? []
+        default:                 return []
         }
+    }
+
+    // MARK: - Period-average computed properties
+    //
+    // When a time range is selected, the hero value and status update
+    // to reflect the average for that period rather than today's fixed value.
+
+    private var periodAverage: Double {
+        guard !trendData.isEmpty else { return metric.rawValue }
+        return trendData.map(\.value).reduce(0, +) / Double(trendData.count)
+    }
+
+    /// Period label shown beneath the hero value (e.g. "7D avg")
+    private var periodLabel: String {
+        switch selectedRange {
+        case .week:    return "7D avg"
+        case .month:   return "30D avg"
+        case .quarter: return "90D avg"
+        case .year:    return "1Y avg"
+        }
+    }
+
+    /// Period average formatted like the original metric display
+    private var periodDisplayValue: String {
+        let avg = periodAverage
+        guard avg > 0 else { return "—" }
+        switch metric.id {
+        case "sleep", "vo2Max", "respiratoryRate":
+            return String(format: "%.1f", avg)
+        case "steps":
+            return avg >= 1000 ? String(format: "%.1fk", avg / 1000) : String(Int(avg))
+        default:
+            return String(Int(avg))
+        }
+    }
+
+    /// Status computed from the period average using the metric's normal range
+    private var periodStatus: HealthStatusPill.Status {
+        let avg = periodAverage
+        guard avg > 0 else { return .noData }
+        if avg >= metric.normalRangeLow && avg <= metric.normalRangeHigh {
+            return .optimal
+        }
+        let buffer = (metric.normalRangeHigh - metric.normalRangeLow) * 0.5
+        if avg >= (metric.normalRangeLow - buffer) && avg <= (metric.normalRangeHigh + buffer) {
+            return .borderline
+        }
+        return .critical
+    }
+
+    /// Normalized 0–1 position of the period average within the metric's absolute range
+    private var periodNormalizedPosition: Double {
+        let avg = periodAverage
+        guard metric.absoluteMax > metric.absoluteMin else { return 0.5 }
+        return max(0, min(1, (avg - metric.absoluteMin) / (metric.absoluteMax - metric.absoluteMin)))
+    }
+
+    /// Dynamic Y-axis domain: min(data)−5 … max(data)+5, clamped to ≥ 0
+    private var chartYDomain: ClosedRange<Double> {
+        guard !trendData.isEmpty else {
+            return metric.absoluteMin...metric.absoluteMax
+        }
+        let minVal = trendData.map(\.value).min()!
+        let maxVal = trendData.map(\.value).max()!
+        let lower = max(0, minVal - 5)
+        let upper = maxVal + 5
+        // Guard against degenerate range (all identical values)
+        if lower >= upper { return max(0, lower - 10)...(upper + 10) }
+        return lower...upper
     }
 
     var body: some View {
@@ -263,21 +332,27 @@ struct MetricDetailView: View {
 
     private var heroSection: some View {
         VStack(spacing: AmachSpacing.md) {
-            // Value + unit
-            HStack(alignment: .lastTextBaseline, spacing: AmachSpacing.sm) {
-                Text(metric.value)
-                    .font(AmachType.dataValue(size: 56))
-                    .foregroundStyle(Color.amachTextPrimary)
-                    .contentTransition(.numericText())
-                Text(metric.unit)
-                    .font(AmachType.dataUnit(size: 22))
+            // Value + unit + period label
+            VStack(spacing: 2) {
+                HStack(alignment: .lastTextBaseline, spacing: AmachSpacing.sm) {
+                    Text(periodDisplayValue)
+                        .font(AmachType.dataValue(size: 56))
+                        .foregroundStyle(Color.amachTextPrimary)
+                        .contentTransition(.numericText())
+                    Text(metric.unit)
+                        .font(AmachType.dataUnit(size: 22))
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+                Text(periodLabel)
+                    .font(AmachType.tiny)
                     .foregroundStyle(Color.amachTextSecondary)
             }
             .frame(maxWidth: .infinity)
+            .animation(AmachAnimation.spring, value: selectedRange)
 
             // Status pill + source
             HStack(spacing: AmachSpacing.sm) {
-                HealthStatusPill(status: metric.status)
+                HealthStatusPill(status: periodStatus)
                 Spacer()
                 SourceBadge(source: metric.source)
             }
@@ -291,13 +366,13 @@ struct MetricDetailView: View {
 
     private var statusExplanation: some View {
         let (text, color): (String, Color) = {
-            switch metric.status {
+            switch periodStatus {
             case .optimal:
-                return ("Your \(metric.label.lowercased()) is in a healthy range.", Color.Amach.Health.optimal)
+                return ("Your \(metric.label.lowercased()) average is in a healthy range.", Color.Amach.Health.optimal)
             case .borderline:
-                return ("Your \(metric.label.lowercased()) is slightly outside the typical range. Worth monitoring.", Color.Amach.Health.borderline)
+                return ("Your \(metric.label.lowercased()) average is slightly outside the typical range. Worth monitoring.", Color.Amach.Health.borderline)
             case .critical:
-                return ("Your \(metric.label.lowercased()) is significantly outside the typical range. Consider discussing with your provider.", Color.Amach.Health.critical)
+                return ("Your \(metric.label.lowercased()) average is significantly outside the typical range. Consider discussing with your provider.", Color.Amach.Health.critical)
             case .noData:
                 return ("No data available for this metric.", Color.amachTextSecondary)
             }
@@ -321,7 +396,7 @@ struct MetricDetailView: View {
                 .tracking(1.2)
 
             VStack(spacing: AmachSpacing.sm) {
-                AmachRangeBar(value: metric.normalizedPosition, status: metric.status)
+                AmachRangeBar(value: periodNormalizedPosition, status: periodStatus)
 
                 HStack {
                     Text("\(Int(metric.absoluteMin))")
@@ -337,6 +412,7 @@ struct MetricDetailView: View {
                         .foregroundStyle(Color.amachTextTertiary)
                 }
             }
+            .animation(AmachAnimation.spring, value: selectedRange)
         }
         .padding(AmachSpacing.md)
         .amachCard()
@@ -450,13 +526,16 @@ struct MetricDetailView: View {
                     .foregroundStyle(Color.amachTextTertiary)
             }
         }
+        .chartYScale(domain: chartYDomain)
         .chartOverlay { proxy in
             GeometryReader { geo in
                 Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        // minimumDistance: 10 gives the ScrollView time to
+                        // claim vertical pan gestures before this fires
+                        DragGesture(minimumDistance: 10)
                             .onChanged { value in
                                 let x = value.location.x - geo.frame(in: .local).minX
                                 if let date: Date = proxy.value(atX: x) {
