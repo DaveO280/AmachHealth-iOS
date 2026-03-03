@@ -109,6 +109,37 @@ extension MetricInfo {
                    normalRangeLow: 30, normalRangeHigh: 60,
                    absoluteMin: 0, absoluteMax: 90)
     }
+
+    static func restingHeartRate(_ bpm: Double) -> MetricInfo {
+        MetricInfo(id: "restingHeartRate", icon: "heart.text.square.fill", label: "Resting HR",
+                   value: bpm > 0 ? String(Int(bpm)) : "—", rawValue: bpm, unit: "bpm",
+                   color: Color(hex: "FB7185"),
+                   status: bpm == 0 ? .noData : (bpm >= 50 && bpm <= 70) ? .optimal : (bpm >= 40 && bpm <= 90) ? .borderline : .critical,
+                   source: "Apple Watch",
+                   normalRangeLow: 50, normalRangeHigh: 70,
+                   absoluteMin: 30, absoluteMax: 110)
+    }
+
+    static func vo2Max(_ value: Double) -> MetricInfo {
+        let formatted = value > 0 ? String(format: "%.1f", value) : "—"
+        return MetricInfo(id: "vo2Max", icon: "lungs.fill", label: "VO₂ Max",
+                   value: formatted, rawValue: value, unit: "mL/kg/min",
+                   color: Color(hex: "34D399"),
+                   status: value == 0 ? .noData : value >= 45 ? .optimal : value >= 35 ? .borderline : .critical,
+                   source: "Apple Watch",
+                   normalRangeLow: 45, normalRangeHigh: 60,
+                   absoluteMin: 20, absoluteMax: 80)
+    }
+
+    static func respiratoryRate(_ bpm: Double) -> MetricInfo {
+        MetricInfo(id: "respiratoryRate", icon: "wind", label: "Resp. Rate",
+                   value: bpm > 0 ? String(format: "%.1f", bpm) : "—", rawValue: bpm, unit: "br/min",
+                   color: Color(hex: "60A5FA"),
+                   status: bpm == 0 ? .noData : (bpm >= 12 && bpm <= 18) ? .optimal : (bpm >= 10 && bpm <= 22) ? .borderline : .critical,
+                   source: "Apple Watch",
+                   normalRangeLow: 12, normalRangeHigh: 18,
+                   absoluteMin: 8, absoluteMax: 30)
+    }
 }
 
 
@@ -147,11 +178,14 @@ struct MetricDetailView: View {
     private var trendData: [TrendPoint] {
         let period = selectedRange.trendPeriod
         switch metric.id {
-        case "steps":     return dashboard.stepsTrend[period] ?? []
-        case "heartRate": return dashboard.heartRateTrend[period] ?? []
-        case "hrv":       return dashboard.hrvTrend[period] ?? []
-        case "sleep":     return dashboard.sleepTrend[period] ?? []
-        default:          return []
+        case "steps":           return dashboard.stepsTrend[period] ?? []
+        case "heartRate":       return dashboard.heartRateTrend[period] ?? []
+        case "hrv":             return dashboard.hrvTrend[period] ?? []
+        case "sleep":           return dashboard.sleepTrend[period] ?? []
+        case "restingHeartRate": return dashboard.rhrTrend[period] ?? []
+        case "vo2Max":          return dashboard.vo2Trend[period] ?? []
+        case "respiratoryRate": return dashboard.rrTrend[period] ?? []
+        default:                return []
         }
     }
 

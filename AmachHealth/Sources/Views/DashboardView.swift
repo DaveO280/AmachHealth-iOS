@@ -247,6 +247,9 @@ struct DashboardView: View {
                 tappableMetricCard(.sleep(dashboard.today.sleepHours))
                 tappableMetricCard(.hrv(dashboard.today.hrv))
                 tappableMetricCard(.exercise(dashboard.today.exerciseMinutes))
+                tappableMetricCard(.restingHeartRate(dashboard.today.restingHeartRate))
+                tappableMetricCard(.vo2Max(dashboard.today.vo2Max))
+                tappableMetricCard(.respiratoryRate(dashboard.today.respiratoryRate))
             }
         }
     }

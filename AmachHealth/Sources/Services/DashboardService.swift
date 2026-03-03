@@ -85,6 +85,9 @@ final class DashboardService: ObservableObject {
     @Published var sleepTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var sleepStagesTrend: [TrendPeriod: [SleepStageTrendPoint]] = [:]
     @Published var calsTrend: [TrendPeriod: [TrendPoint]] = [:]
+    @Published var rhrTrend: [TrendPeriod: [TrendPoint]] = [:]
+    @Published var vo2Trend: [TrendPeriod: [TrendPoint]] = [:]
+    @Published var rrTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var isLoading = false
     @Published var error: String?
 
@@ -123,6 +126,22 @@ final class DashboardService: ObservableObject {
         )
         async let sleepFetch = fetchSleepAllPeriods()
         async let sleepStagesFetch = fetchSleepStagesAllPeriods()
+        async let rhrFetch = fetchAllPeriods(
+            identifier: .restingHeartRate,
+            options: .discreteAverage,
+            unit: HKUnit.count().unitDivided(by: .minute())
+        )
+        async let rrFetch = fetchAllPeriods(
+            identifier: .respiratoryRate,
+            options: .discreteAverage,
+            unit: HKUnit.count().unitDivided(by: .minute())
+        )
+        async let vo2Fetch = fetchAllPeriods(
+            identifier: .vo2Max,
+            options: .discreteAverage,
+            unit: HKUnit.literUnit(with: .milli)
+                .unitDivided(by: HKUnit.gramUnit(with: .kilo).unitMultiplied(by: .minute()))
+        )
 
         today = await todayFetch
         stepsTrend = await stepsFetch
@@ -131,6 +150,9 @@ final class DashboardService: ObservableObject {
         calsTrend = await calsFetch
         sleepTrend = await sleepFetch
         sleepStagesTrend = await sleepStagesFetch
+        rhrTrend = await rhrFetch
+        rrTrend = await rrFetch
+        vo2Trend = await vo2Fetch
 
         isLoading = false
         lastLoaded = Date()
