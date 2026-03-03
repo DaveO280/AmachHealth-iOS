@@ -164,6 +164,9 @@ struct MetricDetailView: View {
                     heroSection
                     rangeBarSection
                     chartSection
+                    if metric.id == "sleep" {
+                        sleepStagesSection
+                    }
                     dataInfoSection
                     lumaSection
                     Spacer().frame(height: AmachSpacing.xxl)
@@ -467,6 +470,17 @@ struct MetricDetailView: View {
         }
         .padding(.horizontal, AmachSpacing.xs)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
+    // MARK: Sleep Stages Section
+
+    private var sleepStagesSection: some View {
+        let stageTrend = dashboard.sleepStagesTrend[selectedRange.trendPeriod] ?? []
+        return SleepStagesChart(
+            stagesTrend: stageTrend,
+            efficiency: dashboard.today.sleepStages.efficiency,
+            selectedRange: selectedRange.rawValue
+        )
     }
 
     // MARK: Data Info Section

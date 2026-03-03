@@ -21,8 +21,22 @@ struct DashboardTodayData {
     var restingHeartRate: Double = 0
     var sleepHours: Double = 0
     var sleepEfficiency: Double? = nil
+    var sleepStages: SleepStageBreakdown = SleepStageBreakdown()
     var respiratoryRate: Double = 0
     var vo2Max: Double = 0
+}
+
+// MARK: - Sleep Stage Breakdown (last night)
+
+struct SleepStageBreakdown {
+    var coreMinutes: Int = 0     // Light sleep (NREM 1/2)
+    var deepMinutes: Int = 0     // Deep sleep (NREM 3)
+    var remMinutes: Int = 0      // REM sleep
+    var awakeMinutes: Int = 0    // Awake during sleep window
+    var efficiency: Double? = nil
+
+    var totalSleepMinutes: Int { coreMinutes + deepMinutes + remMinutes }
+    var totalSleepHours: Double { Double(totalSleepMinutes) / 60.0 }
 }
 
 // MARK: - Trend Models
@@ -31,6 +45,17 @@ struct TrendPoint: Identifiable {
     let id = UUID()
     let date: Date
     let value: Double
+}
+
+struct SleepStageTrendPoint: Identifiable {
+    let id = UUID()
+    let date: Date
+    let coreHours: Double
+    let deepHours: Double
+    let remHours: Double
+    let awakeHours: Double
+
+    var totalHours: Double { coreHours + deepHours + remHours }
 }
 
 enum TrendPeriod: String, CaseIterable {
@@ -58,6 +83,7 @@ final class DashboardService: ObservableObject {
     @Published var heartRateTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var hrvTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var sleepTrend: [TrendPeriod: [TrendPoint]] = [:]
+    @Published var sleepStagesTrend: [TrendPeriod: [SleepStageTrendPoint]] = [:]
     @Published var calsTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var isLoading = false
     @Published var error: String?
@@ -96,6 +122,7 @@ final class DashboardService: ObservableObject {
             unit: .kilocalorie()
         )
         async let sleepFetch = fetchSleepAllPeriods()
+        async let sleepStagesFetch = fetchSleepStagesAllPeriods()
 
         today = await todayFetch
         stepsTrend = await stepsFetch
@@ -103,6 +130,7 @@ final class DashboardService: ObservableObject {
         hrvTrend = await hrvFetch
         calsTrend = await calsFetch
         sleepTrend = await sleepFetch
+        sleepStagesTrend = await sleepStagesFetch
 
         isLoading = false
         lastLoaded = Date()
@@ -129,7 +157,7 @@ final class DashboardService: ObservableObject {
         async let vo2 = stat(.vo2Max, start: startOfDay, end: now, opts: .mostRecent, unit: vo2Unit)
         async let sleep = fetchLastNightSleep()
 
-        let (sleepHrs, sleepEff) = await sleep
+        let (sleepHrs, sleepEff, sleepStages) = await sleep
 
         return DashboardTodayData(
             steps: await steps ?? 0,
@@ -142,6 +170,7 @@ final class DashboardService: ObservableObject {
             restingHeartRate: await rhr ?? 0,
             sleepHours: sleepHrs,
             sleepEfficiency: sleepEff,
+            sleepStages: sleepStages,
             respiratoryRate: await rr ?? 0,
             vo2Max: await vo2 ?? 0
         )
@@ -292,9 +321,9 @@ final class DashboardService: ObservableObject {
         }
     }
 
-    private func fetchLastNightSleep() async -> (hours: Double, efficiency: Double?) {
+    private func fetchLastNightSleep() async -> (hours: Double, efficiency: Double?, stages: SleepStageBreakdown) {
         guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
-            return (0, nil)
+            return (0, nil, SleepStageBreakdown())
         }
         let now = Date()
         let cal = Calendar.current
@@ -311,23 +340,111 @@ final class DashboardService: ObservableObject {
                 sortDescriptors: nil
             ) { _, samples, _ in
                 guard let samples = samples as? [HKCategorySample] else {
-                    continuation.resume(returning: (0, nil))
+                    continuation.resume(returning: (0, nil, SleepStageBreakdown()))
                     return
                 }
-                let asleepRawValues: Set<Int> = [1, 3, 4, 5]
                 var totalSleep: Double = 0
                 var totalInBed: Double = 0
+                var stages = SleepStageBreakdown()
 
                 for sample in samples {
                     let hours = sample.endDate.timeIntervalSince(sample.startDate) / 3600
-                    if asleepRawValues.contains(sample.value) {
-                        totalSleep += hours
-                    } else if sample.value == 0 { // inBed
+                    let mins = Int(hours * 60)
+                    switch sample.value {
+                    case 0:  // inBed
                         totalInBed += hours
+                    case 1:  // asleepUnspecified → count as core
+                        totalSleep += hours
+                        stages.coreMinutes += mins
+                    case 2:  // awake during sleep window
+                        stages.awakeMinutes += mins
+                    case 3:  // asleepCore
+                        totalSleep += hours
+                        stages.coreMinutes += mins
+                    case 4:  // asleepDeep
+                        totalSleep += hours
+                        stages.deepMinutes += mins
+                    case 5:  // asleepREM
+                        totalSleep += hours
+                        stages.remMinutes += mins
+                    default:
+                        break
                     }
                 }
                 let efficiency = totalInBed > 0 ? totalSleep / totalInBed : nil
-                continuation.resume(returning: (totalSleep, efficiency))
+                stages.efficiency = efficiency
+                continuation.resume(returning: (totalSleep, efficiency, stages))
+            }
+            store.execute(query)
+        }
+    }
+
+    private func fetchSleepStagesAllPeriods() async -> [TrendPeriod: [SleepStageTrendPoint]] {
+        var result: [TrendPeriod: [SleepStageTrendPoint]] = [:]
+        for period in TrendPeriod.allCases {
+            result[period] = await fetchSleepStagesDailyTrend(days: period.days)
+        }
+        return result
+    }
+
+    private func fetchSleepStagesDailyTrend(days: Int) async -> [SleepStageTrendPoint] {
+        guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        let now = Date()
+        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: now)!
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: now, options: .strictStartDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, _ in
+                guard let samples = samples as? [HKCategorySample] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+
+                var coreByDay: [String: Double] = [:]
+                var deepByDay: [String: Double] = [:]
+                var remByDay: [String: Double] = [:]
+                var awakeByDay: [String: Double] = [:]
+
+                for sample in samples {
+                    let key = formatter.string(from: sample.endDate)
+                    let hours = sample.endDate.timeIntervalSince(sample.startDate) / 3600
+                    switch sample.value {
+                    case 1, 3:  coreByDay[key, default: 0] += hours   // unspecified + core
+                    case 2:     awakeByDay[key, default: 0] += hours
+                    case 4:     deepByDay[key, default: 0] += hours
+                    case 5:     remByDay[key, default: 0] += hours
+                    default:    break
+                    }
+                }
+
+                var points: [SleepStageTrendPoint] = []
+                for dayOffset in 0..<days {
+                    guard let day = Calendar.current.date(byAdding: .day, value: -dayOffset, to: now) else { continue }
+                    let key = formatter.string(from: day)
+                    let core = coreByDay[key] ?? 0
+                    let deep = deepByDay[key] ?? 0
+                    let rem = remByDay[key] ?? 0
+                    let awake = awakeByDay[key] ?? 0
+                    if core + deep + rem > 0 {
+                        points.append(SleepStageTrendPoint(
+                            date: day,
+                            coreHours: core,
+                            deepHours: deep,
+                            remHours: rem,
+                            awakeHours: awake
+                        ))
+                    }
+                }
+                points.sort { $0.date < $1.date }
+                continuation.resume(returning: points)
             }
             store.execute(query)
         }
