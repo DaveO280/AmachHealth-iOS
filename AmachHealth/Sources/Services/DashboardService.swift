@@ -130,6 +130,7 @@ final class DashboardService: ObservableObject {
     @Published var sleepTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var sleepStagesTrend: [TrendPeriod: [SleepStageTrendPoint]] = [:]
     @Published var calsTrend: [TrendPeriod: [TrendPoint]] = [:]
+    @Published var exerciseTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var rhrTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var vo2Trend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var rrTrend: [TrendPeriod: [TrendPoint]] = [:]
@@ -170,6 +171,11 @@ final class DashboardService: ObservableObject {
             options: .cumulativeSum,
             unit: .kilocalorie()
         )
+        async let exerciseFetch = fetchAllPeriods(
+            identifier: .appleExerciseTime,
+            options: .cumulativeSum,
+            unit: .minute()
+        )
         async let sleepFetch = fetchSleepAllPeriods()
         async let sleepStagesFetch = fetchSleepStagesAllPeriods()
         async let rhrFetch = fetchAllPeriods(
@@ -196,6 +202,7 @@ final class DashboardService: ObservableObject {
         heartRateTrend = await hrFetch
         hrvTrend = await hrvFetch
         calsTrend = await calsFetch
+        exerciseTrend = await exerciseFetch
         sleepTrend = await sleepFetch
         sleepStagesTrend = await sleepStagesFetch
         rhrTrend = await rhrFetch

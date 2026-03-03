@@ -1,11 +1,13 @@
 // HeartRateZonesChart.swift
 // AmachHealth
 //
-// Horizontal zone bar chart showing today's time-in-zone distribution.
+// Donut chart showing today's time-in-zone distribution.
+// Uses SectorMark (Swift Charts, iOS 17+).
 // Used in MetricDetailView for the Heart Rate metric.
 // Zones are computed from raw HR samples by DashboardService.fetchTodayHRZones().
 
 import SwiftUI
+import Charts
 
 // ============================================================
 // MARK: - HR ZONES CHART
@@ -15,21 +17,29 @@ struct HeartRateZonesChart: View {
 
     let zones: HeartRateZoneMinutes
 
-    // Zone display definitions — ordered 5→1 (highest effort at top)
-    private struct ZoneDef {
-        let number: Int
+    // Zone display definitions — ordered Z1→Z5 (chart draws clockwise from top)
+    private struct ZoneDef: Identifiable {
+        let id: Int
         let name: String
         let description: String
         let color: Color
+        let minutes: Double
     }
 
-    private let zoneDefs: [ZoneDef] = [
-        ZoneDef(number: 5, name: "Peak",      description: ">90%",    color: Color(hex: "EF4444")),
-        ZoneDef(number: 4, name: "Threshold", description: "80–90%",  color: Color(hex: "F97316")),
-        ZoneDef(number: 3, name: "Aerobic",   description: "70–80%",  color: Color(hex: "F59E0B")),
-        ZoneDef(number: 2, name: "Fat Burn",  description: "60–70%",  color: Color(hex: "34D399")),
-        ZoneDef(number: 1, name: "Recovery",  description: "<60%",    color: Color(hex: "60A5FA")),
-    ]
+    private var zoneDefs: [ZoneDef] {
+        [
+            ZoneDef(id: 1, name: "Recovery",  description: "<60%",   color: Color(hex: "60A5FA"), minutes: zones.zone1),
+            ZoneDef(id: 2, name: "Fat Burn",  description: "60–70%", color: Color(hex: "34D399"), minutes: zones.zone2),
+            ZoneDef(id: 3, name: "Aerobic",   description: "70–80%", color: Color(hex: "F59E0B"), minutes: zones.zone3),
+            ZoneDef(id: 4, name: "Threshold", description: "80–90%", color: Color(hex: "F97316"), minutes: zones.zone4),
+            ZoneDef(id: 5, name: "Peak",      description: ">90%",   color: Color(hex: "EF4444"), minutes: zones.zone5),
+        ]
+    }
+
+    // Only zones with data, used for the chart sectors
+    private var activeSectors: [ZoneDef] {
+        zoneDefs.filter { $0.minutes > 0 }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
@@ -38,20 +48,19 @@ struct HeartRateZonesChart: View {
             if zones.total < 0.5 {
                 noDataView
             } else {
-                VStack(spacing: 6) {
-                    ForEach(zoneDefs, id: \.number) { zone in
-                        zoneRow(zone)
-                    }
+                HStack(alignment: .center, spacing: AmachSpacing.lg) {
+                    donutChart
+                    legendColumn
+                    Spacer()
                 }
-
-                totalRow
+                .padding(.top, AmachSpacing.xs)
             }
         }
         .padding(AmachSpacing.md)
         .amachCard()
     }
 
-    // MARK: - Subviews
+    // MARK: - Header
 
     private var headerRow: some View {
         HStack {
@@ -67,52 +76,66 @@ struct HeartRateZonesChart: View {
         }
     }
 
-    private func zoneRow(_ zone: ZoneDef) -> some View {
-        let mins = zones.minutes(for: zone.number)
-        let frac = zones.fraction(for: zone.number)
+    // MARK: - Donut Chart
 
-        return HStack(spacing: AmachSpacing.sm) {
-            // Zone label
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Z\(zone.number) \(zone.name)")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(zone.color)
-                Text(zone.description)
-                    .font(.system(size: 9))
-                    .foregroundStyle(Color.amachTextTertiary)
+    private var donutChart: some View {
+        ZStack {
+            Chart(activeSectors) { sector in
+                SectorMark(
+                    angle: .value("Minutes", sector.minutes),
+                    innerRadius: .ratio(0.58),
+                    angularInset: 1.5
+                )
+                .foregroundStyle(sector.color)
+                .cornerRadius(3)
             }
-            .frame(width: 74, alignment: .leading)
+            .frame(width: 120, height: 120)
 
-            // Bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(zone.color.opacity(0.10))
-                        .frame(height: 14)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(zone.color.opacity(0.80))
-                        .frame(width: max(4, geo.size.width * frac), height: 14)
+            // Center: total minutes
+            VStack(spacing: 1) {
+                Text("\(Int(zones.total))")
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.amachTextPrimary)
+                Text("min")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+        }
+        .frame(width: 120, height: 120)
+        .accessibilityLabel("Heart rate zones, \(Int(zones.total)) total minutes tracked today")
+    }
+
+    // MARK: - Legend Column (Z5 at top → Z1 at bottom)
+
+    private var legendColumn: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(zoneDefs.reversed())) { zone in
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(zone.color.opacity(zone.minutes > 0 ? 1 : 0.25))
+                        .frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Z\(zone.id) \(zone.name)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(zone.minutes > 0 ? zone.color : Color.amachTextTertiary)
+                        Text(zone.description)
+                            .font(.system(size: 9))
+                            .foregroundStyle(Color.amachTextTertiary)
+                    }
+                    Spacer()
+                    Text(
+                        zone.minutes == 0 ? "—" :
+                        zone.minutes < 1  ? "<1m" :
+                        "\(Int(zone.minutes))m"
+                    )
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(zone.minutes > 0 ? zone.color : Color.amachTextTertiary)
                 }
             }
-            .frame(height: 14)
-
-            // Minutes
-            Text(mins < 1 ? "<1m" : "\(Int(mins))m")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(mins > 0 ? zone.color : Color.amachTextTertiary)
-                .frame(width: 30, alignment: .trailing)
         }
     }
 
-    private var totalRow: some View {
-        HStack {
-            Spacer()
-            Text("Total tracked: \(Int(zones.total)) min")
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachTextSecondary)
-        }
-        .padding(.top, 2)
-    }
+    // MARK: - No Data
 
     private var noDataView: some View {
         Text("No heart rate data recorded today")

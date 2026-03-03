@@ -185,6 +185,8 @@ struct MetricDetailView: View {
         case "restingHeartRate": return dashboard.rhrTrend[period] ?? []
         case "vo2Max":          return dashboard.vo2Trend[period] ?? []
         case "respiratoryRate": return dashboard.rrTrend[period] ?? []
+        case "calories":        return dashboard.calsTrend[period] ?? []
+        case "exercise":        return dashboard.exerciseTrend[period] ?? []
         default:                return []
         }
     }
@@ -515,8 +517,7 @@ struct MetricDetailView: View {
         let stageTrend = dashboard.sleepStagesTrend[selectedRange.trendPeriod] ?? []
         return SleepStagesChart(
             stagesTrend: stageTrend,
-            efficiency: dashboard.today.sleepStages.efficiency,
-            selectedRange: selectedRange.rawValue
+            todayEfficiency: dashboard.today.sleepStages.efficiency
         )
     }
 

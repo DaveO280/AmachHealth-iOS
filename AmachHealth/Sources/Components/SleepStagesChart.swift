@@ -1,8 +1,9 @@
 // SleepStagesChart.swift
 // AmachHealth
 //
-// Stacked bar chart showing nightly sleep stage breakdown (core/deep/REM/awake)
-// and sleep efficiency. Used in MetricDetailView for the sleep metric.
+// Stacked bar chart showing nightly sleep stage breakdown (core/deep/REM/awake),
+// period averages for each stage, and sleep efficiency.
+// Used in MetricDetailView for the sleep metric.
 
 import SwiftUI
 import Charts
@@ -14,8 +15,7 @@ import Charts
 struct SleepStagesChart: View {
 
     let stagesTrend: [SleepStageTrendPoint]
-    let efficiency: Double?         // last night's efficiency (0.0–1.0)
-    let selectedRange: String       // "7D" / "30D" / "90D" for label
+    let todayEfficiency: Double?         // last night's efficiency (0.0–1.0)
 
     // Flat data model for Swift Charts series stacking
     private struct StageBar: Identifiable {
@@ -41,6 +41,43 @@ struct SleepStagesChart: View {
         }
     }
 
+    // MARK: - Computed period averages
+
+    private var validNights: [SleepStageTrendPoint] {
+        stagesTrend.filter { $0.totalHours > 0 }
+    }
+
+    private var avgDeep: Double {
+        guard !validNights.isEmpty else { return 0 }
+        return validNights.map(\.deepHours).reduce(0, +) / Double(validNights.count)
+    }
+
+    private var avgREM: Double {
+        guard !validNights.isEmpty else { return 0 }
+        return validNights.map(\.remHours).reduce(0, +) / Double(validNights.count)
+    }
+
+    private var avgCore: Double {
+        guard !validNights.isEmpty else { return 0 }
+        return validNights.map(\.coreHours).reduce(0, +) / Double(validNights.count)
+    }
+
+    private var avgAwake: Double {
+        guard !validNights.isEmpty else { return 0 }
+        return validNights.map(\.awakeHours).reduce(0, +) / Double(validNights.count)
+    }
+
+    /// Period-average efficiency. Falls back to todayEfficiency if no trend data.
+    private var displayEfficiency: Double? {
+        let nights = validNights.filter { $0.totalHours + $0.awakeHours > 0 }
+        if nights.isEmpty { return todayEfficiency }
+        let sum = nights.reduce(0.0) { acc, n in
+            let total = n.totalHours + n.awakeHours
+            return acc + (total > 0 ? n.totalHours / total : 0)
+        }
+        return sum / Double(nights.count)
+    }
+
     // Ordered deep → rem → core → awake so deep is bottom of stack
     private var barData: [StageBar] {
         stagesTrend.flatMap { point -> [StageBar] in
@@ -56,6 +93,9 @@ struct SleepStagesChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
             headerRow
+            if !validNights.isEmpty {
+                averagesRow
+            }
             legendRow
             chartBody
         }
@@ -73,7 +113,7 @@ struct SleepStagesChart: View {
                 .foregroundStyle(Color.amachTextSecondary)
                 .tracking(1.2)
             Spacer()
-            if let eff = efficiency {
+            if let eff = displayEfficiency {
                 efficiencyBadge(eff)
             }
         }
@@ -91,7 +131,7 @@ struct SleepStagesChart: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(efficiencyColor(efficiency).opacity(0.1))
+        .background(efficiencyColor(efficiency).opacity(0.10))
         .clipShape(Capsule())
     }
 
@@ -99,6 +139,39 @@ struct SleepStagesChart: View {
         if eff >= 0.85 { return Color.Amach.Health.optimal }
         if eff >= 0.70 { return Color.Amach.Health.borderline }
         return Color.Amach.Health.critical
+    }
+
+    // MARK: - Period Averages Row
+
+    private var averagesRow: some View {
+        HStack(spacing: AmachSpacing.xs) {
+            stageAvgCell(stage: .deep,  hours: avgDeep)
+            stageAvgCell(stage: .rem,   hours: avgREM)
+            stageAvgCell(stage: .core,  hours: avgCore)
+            stageAvgCell(stage: .awake, hours: avgAwake)
+        }
+    }
+
+    private func stageAvgCell(stage: Stage, hours: Double) -> some View {
+        VStack(spacing: 2) {
+            Text(stage.rawValue)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(stage.color)
+            Text(String(format: "%.1fh", hours))
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundStyle(hours > 0 ? Color.amachTextPrimary : Color.amachTextTertiary)
+            Text("avg/night")
+                .font(.system(size: 8))
+                .foregroundStyle(Color.amachTextTertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 7)
+        .background(stage.color.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AmachRadius.sm))
+        .overlay(
+            RoundedRectangle(cornerRadius: AmachRadius.sm)
+                .stroke(stage.color.opacity(0.18), lineWidth: 1)
+        )
     }
 
     // MARK: - Legend
