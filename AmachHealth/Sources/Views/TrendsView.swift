@@ -2,16 +2,12 @@
 // AmachHealth
 //
 // Tab 2: Health history and pattern view.
-// Shows multi-metric trends organized by category.
+// Shows all metric trends organised by category with a global period picker.
+// Sub-charts (sleep stages, HR zone distribution) appear directly below
+// their parent metric card so context is never lost.
 //
-// Layout:
-//   NavHeader        title + time range selector
-//   CategoryPicker   pill strip (All, Cardiovascular, Sleep, Activity, Bloodwork)
-//   MetricCharts     full-width charts for selected category
-//   LumaPatterns     AI-detected pattern callouts (if available)
-//
-// Design goal: "Read the signals." This screen is for curious optimizers
-// who want to understand patterns across time — not just today's snapshot.
+// Design goal: "Read the signals." Curious optimisers who want to understand
+// patterns across time — not just today's snapshot.
 
 import SwiftUI
 import Charts
@@ -33,7 +29,7 @@ enum HealthCategory: String, CaseIterable {
         case .cardiovascular: return "heart.fill"
         case .sleep:          return "moon.fill"
         case .activity:       return "figure.walk"
-        case .bodyComp:       return "scalemass.fill"
+        case .bodyComp:       return "lungs.fill"
         }
     }
 
@@ -43,7 +39,7 @@ enum HealthCategory: String, CaseIterable {
         case .cardiovascular: return Color(hex: "F87171")
         case .sleep:          return Color(hex: "818CF8")
         case .activity:       return Color.amachAccent
-        case .bodyComp:       return Color.amachPrimaryBright
+        case .bodyComp:       return Color(hex: "34D399")
         }
     }
 }
@@ -120,30 +116,18 @@ struct TrendsView: View {
                         }
                         .padding(.horizontal, AmachSpacing.sm + 4)
                         .padding(.vertical, AmachSpacing.sm)
-                        .background(
-                            selectedCategory == cat
-                                ? cat.color
-                                : Color.amachSurface
-                        )
-                        .foregroundStyle(
-                            selectedCategory == cat
-                                ? Color.white
-                                : Color.amachTextSecondary
-                        )
+                        .background(selectedCategory == cat ? cat.color : Color.amachSurface)
+                        .foregroundStyle(selectedCategory == cat ? Color.white : Color.amachTextSecondary)
                         .clipShape(Capsule())
                         .overlay(
-                            Capsule()
-                                .stroke(
-                                    selectedCategory == cat
-                                        ? cat.color.opacity(0.3)
-                                        : Color.amachPrimary.opacity(0.1),
-                                    lineWidth: 1
-                                )
+                            Capsule().stroke(
+                                selectedCategory == cat
+                                    ? cat.color.opacity(0.3)
+                                    : Color.amachPrimary.opacity(0.1),
+                                lineWidth: 1
+                            )
                         )
-                        .shadow(
-                            color: selectedCategory == cat ? cat.color.opacity(0.3) : .clear,
-                            radius: 6
-                        )
+                        .shadow(color: selectedCategory == cat ? cat.color.opacity(0.3) : .clear, radius: 6)
                     }
                     .accessibilityAddTraits(selectedCategory == cat ? .isSelected : [])
                 }
@@ -167,16 +151,8 @@ struct TrendsView: View {
                 .fontWeight(.semibold)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(
-                    selectedPeriod == period
-                        ? Color.amachPrimary
-                        : Color.amachSurface
-                )
-                .foregroundStyle(
-                    selectedPeriod == period
-                        ? .white
-                        : Color.amachTextSecondary
-                )
+                .background(selectedPeriod == period ? Color.amachPrimary : Color.amachSurface)
+                .foregroundStyle(selectedPeriod == period ? .white : Color.amachTextSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: 7))
                 .accessibilityAddTraits(selectedPeriod == period ? .isSelected : [])
             }
@@ -193,68 +169,104 @@ struct TrendsView: View {
             emptyState
         } else {
             VStack(spacing: AmachSpacing.md) {
-                ForEach(metrics, id: \.title) { config in
-                    TrendChartCard(
-                        title: config.title,
-                        icon: config.icon,
-                        data: config.data,
-                        color: config.color,
-                        unit: config.unit,
-                        period: selectedPeriod
-                    )
+                ForEach(metrics) { config in
+                    // Primary trend chart
+                    TrendChartCard(config: config, period: selectedPeriod)
+
+                    // Sleep stages appear directly below the Sleep card
+                    if config.id == "sleep" {
+                        SleepStagesChart(
+                            stagesTrend: dashboard.sleepStagesTrend[selectedPeriod] ?? [],
+                            todayEfficiency: dashboard.today.sleepStages.efficiency
+                        )
+                    }
+
+                    // HR zone distribution appears directly below the Exercise card
+                    if config.id == "exercise" {
+                        HeartRateZonesChart(
+                            zones: dashboard.hrZonesTrend[selectedPeriod] ?? HeartRateZoneMinutes(),
+                            periodLabel: selectedPeriod.rawValue
+                        )
+                    }
                 }
             }
         }
     }
 
-    private struct TrendMetricConfig {
+    // MARK: Metric Configs
+
+    struct TrendMetricConfig: Identifiable {
+        let id: String
         let title: String
         let icon: String
         let data: [TrendPoint]
         let color: Color
         let unit: String
+        let category: HealthCategory
+        var decimalPlaces: Int = 0
+    }
+
+    private var allMetrics: [TrendMetricConfig] {
+        [
+            TrendMetricConfig(
+                id: "heartRate", title: "Heart Rate", icon: "heart.fill",
+                data: dashboard.heartRateTrend[selectedPeriod] ?? [],
+                color: Color(hex: "F87171"), unit: "bpm", category: .cardiovascular),
+            TrendMetricConfig(
+                id: "restingHeartRate", title: "Resting HR", icon: "heart.text.square.fill",
+                data: dashboard.rhrTrend[selectedPeriod] ?? [],
+                color: Color(hex: "FB7185"), unit: "bpm", category: .cardiovascular),
+            TrendMetricConfig(
+                id: "hrv", title: "HRV", icon: "waveform.path.ecg",
+                data: dashboard.hrvTrend[selectedPeriod] ?? [],
+                color: Color.amachPrimaryBright, unit: "ms", category: .cardiovascular),
+            TrendMetricConfig(
+                id: "sleep", title: "Sleep", icon: "moon.fill",
+                data: dashboard.sleepTrend[selectedPeriod] ?? [],
+                color: Color(hex: "818CF8"), unit: "hrs", category: .sleep, decimalPlaces: 1),
+            TrendMetricConfig(
+                id: "steps", title: "Steps", icon: "figure.walk",
+                data: dashboard.stepsTrend[selectedPeriod] ?? [],
+                color: Color.amachPrimaryBright, unit: "steps", category: .activity),
+            TrendMetricConfig(
+                id: "exercise", title: "Exercise", icon: "figure.run",
+                data: dashboard.exerciseTrend[selectedPeriod] ?? [],
+                color: Color.amachAccent, unit: "min", category: .activity),
+            TrendMetricConfig(
+                id: "calories", title: "Active Cal", icon: "flame.fill",
+                data: dashboard.calsTrend[selectedPeriod] ?? [],
+                color: Color.amachAccent, unit: "kcal", category: .activity),
+            TrendMetricConfig(
+                id: "vo2Max", title: "VO₂ Max", icon: "lungs.fill",
+                data: dashboard.vo2Trend[selectedPeriod] ?? [],
+                color: Color(hex: "34D399"), unit: "mL/kg/min", category: .bodyComp, decimalPlaces: 1),
+            TrendMetricConfig(
+                id: "respiratoryRate", title: "Resp. Rate", icon: "wind",
+                data: dashboard.rrTrend[selectedPeriod] ?? [],
+                color: Color(hex: "60A5FA"), unit: "br/min", category: .bodyComp, decimalPlaces: 1),
+        ]
     }
 
     private var visibleMetrics: [TrendMetricConfig] {
-        let all: [TrendMetricConfig] = [
-            .init(title: "Heart Rate", icon: "heart.fill",
-                  data: dashboard.heartRateTrend[selectedPeriod] ?? [],
-                  color: Color(hex: "F87171"), unit: "bpm"),
-            .init(title: "HRV", icon: "waveform.path.ecg",
-                  data: dashboard.hrvTrend[selectedPeriod] ?? [],
-                  color: Color.amachPrimaryBright, unit: "ms"),
-            .init(title: "Steps", icon: "figure.walk",
-                  data: dashboard.stepsTrend[selectedPeriod] ?? [],
-                  color: Color.amachPrimaryBright, unit: "steps"),
-            .init(title: "Sleep", icon: "moon.fill",
-                  data: dashboard.sleepTrend[selectedPeriod] ?? [],
-                  color: Color(hex: "818CF8"), unit: "hrs"),
-        ]
-
         switch selectedCategory {
-        case .all:
-            return all
-        case .cardiovascular:
-            return all.filter { ["Heart Rate", "HRV"].contains($0.title) }
-        case .sleep:
-            return all.filter { ["Sleep"].contains($0.title) }
-        case .activity:
-            return all.filter { ["Steps"].contains($0.title) }
-        case .bodyComp:
-            return [] // Coming soon
+        case .all:            return allMetrics
+        case .cardiovascular: return allMetrics.filter { $0.category == .cardiovascular }
+        case .sleep:          return allMetrics.filter { $0.category == .sleep }
+        case .activity:       return allMetrics.filter { $0.category == .activity }
+        case .bodyComp:       return allMetrics.filter { $0.category == .bodyComp }
         }
     }
+
+    // MARK: Empty State
 
     private var emptyState: some View {
         VStack(spacing: AmachSpacing.md) {
             Image(systemName: selectedCategory.icon)
                 .font(.system(size: 36))
                 .foregroundStyle(selectedCategory.color.opacity(0.4))
-
             Text("No \(selectedCategory.rawValue) data yet")
                 .font(AmachType.h3)
                 .foregroundStyle(Color.amachTextPrimary)
-
             Text("Connect Apple Health and sync your data to see trends here.")
                 .font(AmachType.caption)
                 .foregroundStyle(Color.amachTextSecondary)
@@ -292,6 +304,8 @@ struct TrendsView: View {
             return "Sleep quality compounds. Three consecutive nights under 7 hours creates a measurable cognitive and metabolic debt that can take longer than one good night to recover from."
         case .activity:
             return "Step consistency matters more than peak days. A steady 7,000–8,000 steps daily has stronger health associations than irregular high-step days followed by sedentary ones."
+        case .bodyComp:
+            return "VO₂ Max is one of the strongest predictors of longevity — each 1 MET improvement reduces all-cause mortality risk by ~10–15%. Respiratory rate trends can also flag early illness or under-recovery before you feel it."
         default:
             return "Looking at your data across the selected period, I can spot patterns that single-day views miss — recovery cycles, stress responses, sleep-activity correlations. Ask me what you're curious about."
         }
@@ -302,17 +316,17 @@ struct TrendsView: View {
 // ============================================================
 // MARK: - TREND CHART CARD
 // ============================================================
-// Full-width chart card with header, chart, stat summary.
+// Full-width chart card: header, dynamic line chart, min/avg/max stats.
+// DragGesture uses minimumDistance: 10 so ScrollView keeps vertical scroll.
 
 struct TrendChartCard: View {
-    let title: String
-    let icon: String
-    let data: [TrendPoint]
-    let color: Color
-    let unit: String
+    let config: TrendsView.TrendMetricConfig
     let period: TrendPeriod
 
     @State private var selectedPoint: TrendPoint? = nil
+
+    private var data: [TrendPoint] { config.data }
+    private var color: Color { config.color }
 
     private var stats: (min: Double, max: Double, avg: Double)? {
         guard !data.isEmpty else { return nil }
@@ -320,18 +334,37 @@ struct TrendChartCard: View {
         return (vals.min() ?? 0, vals.max() ?? 0, vals.reduce(0, +) / Double(vals.count))
     }
 
+    /// Dynamic Y-axis: min(data) − 5 … max(data) + 5, never below 0
+    private var chartYDomain: ClosedRange<Double> {
+        guard !data.isEmpty else { return 0...100 }
+        let minVal = data.map(\.value).min()!
+        let maxVal = data.map(\.value).max()!
+        let lower = max(0, minVal - 5)
+        let upper = maxVal + 5
+        if lower >= upper { return max(0, lower - 10)...(upper + 10) }
+        return lower...upper
+    }
+
+    /// Format a value for display using this metric's precision rules
+    private func fmt(_ v: Double) -> String {
+        if config.id == "steps" {
+            return v >= 1000 ? String(format: "%.0fk", v / 1000) : String(Int(v))
+        }
+        return config.decimalPlaces > 0 ? String(format: "%.1f", v) : String(Int(v))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.md) {
-            // Header
+            // Header: icon + name + latest value
             HStack(spacing: AmachSpacing.sm) {
-                Image(systemName: icon)
+                Image(systemName: config.icon)
                     .font(.system(size: 13))
                     .foregroundStyle(color)
                     .frame(width: 22, height: 22)
                     .background(color.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
 
-                Text(title)
+                Text(config.title)
                     .font(AmachType.h3)
                     .foregroundStyle(Color.amachTextPrimary)
 
@@ -339,17 +372,18 @@ struct TrendChartCard: View {
 
                 if let last = data.last {
                     HStack(alignment: .lastTextBaseline, spacing: 3) {
-                        Text(String(format: "%.0f", last.value))
+                        Text(fmt(last.value))
                             .font(AmachType.dataValue(size: 18))
                             .foregroundStyle(Color.amachTextPrimary)
-                        Text(unit)
+                            .contentTransition(.numericText())
+                        Text(config.unit)
                             .font(AmachType.tiny)
                             .foregroundStyle(Color.amachTextSecondary)
                     }
                 }
             }
 
-            // Chart
+            // Chart or no-data placeholder
             if data.isEmpty {
                 noDataPlaceholder
             } else {
@@ -359,15 +393,15 @@ struct TrendChartCard: View {
             // Stats row
             if let s = stats {
                 HStack(spacing: 0) {
-                    statCell(label: "MIN", value: String(format: "%.0f", s.min))
+                    statCell(label: "MIN", value: fmt(s.min))
                     Spacer()
                     Divider().frame(height: 24).overlay(Color.amachPrimary.opacity(0.1))
                     Spacer()
-                    statCell(label: "AVG", value: String(format: "%.0f", s.avg))
+                    statCell(label: "AVG", value: fmt(s.avg))
                     Spacer()
                     Divider().frame(height: 24).overlay(Color.amachPrimary.opacity(0.1))
                     Spacer()
-                    statCell(label: "MAX", value: String(format: "%.0f", s.max))
+                    statCell(label: "MAX", value: fmt(s.max))
                 }
             }
         }
@@ -375,11 +409,13 @@ struct TrendChartCard: View {
         .amachCard()
     }
 
+    // MARK: Chart
+
     private var chartBody: some View {
         Chart(data) { point in
             LineMark(
                 x: .value("Date", point.date),
-                y: .value(title, point.value)
+                y: .value(config.title, point.value)
             )
             .foregroundStyle(color)
             .interpolationMethod(.catmullRom)
@@ -387,7 +423,7 @@ struct TrendChartCard: View {
 
             AreaMark(
                 x: .value("Date", point.date),
-                y: .value(title, point.value)
+                y: .value(config.title, point.value)
             )
             .foregroundStyle(
                 LinearGradient(
@@ -401,7 +437,7 @@ struct TrendChartCard: View {
             if let sel = selectedPoint, sel.id == point.id {
                 PointMark(
                     x: .value("Date", point.date),
-                    y: .value(title, point.value)
+                    y: .value(config.title, point.value)
                 )
                 .foregroundStyle(color)
                 .symbolSize(60)
@@ -423,11 +459,13 @@ struct TrendChartCard: View {
                     .foregroundStyle(Color.amachTextTertiary)
             }
         }
+        .chartYScale(domain: chartYDomain)
         .chartOverlay { proxy in
             GeometryReader { geo in
                 Rectangle().fill(.clear).contentShape(Rectangle())
                     .gesture(
-                        DragGesture(minimumDistance: 0)
+                        // minimumDistance: 10 — lets ScrollView claim vertical pans first
+                        DragGesture(minimumDistance: 10)
                             .onChanged { val in
                                 let x = val.location.x - geo.frame(in: .local).minX
                                 if let date: Date = proxy.value(atX: x) {
@@ -446,6 +484,8 @@ struct TrendChartCard: View {
         }
         .frame(height: 120)
     }
+
+    // MARK: Helpers
 
     private var noDataPlaceholder: some View {
         HStack {
@@ -477,8 +517,8 @@ struct TrendChartCard: View {
 
     private var xAxisCount: Int {
         switch period {
-        case .week: return 4
-        case .month: return 5
+        case .week:        return 4
+        case .month:       return 5
         case .threeMonths: return 4
         }
     }

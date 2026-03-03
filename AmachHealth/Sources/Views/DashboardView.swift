@@ -7,7 +7,7 @@
 // Layout (top → bottom):
 //   Header         brand mark + greeting + sync status + score ring
 //   LumaInsight    proactive AI insight card (if data available)
-//   Today Metrics  6-card 2-column grid — tappable, each navigates to detail
+//   Today Metrics  6-card 2-column grid — today values, display-only
 //   Empty State    when no data is synced (first-time user)
 //
 // Design principle: "Clarity Over Cleverness."
@@ -23,7 +23,6 @@ struct DashboardView: View {
     @ObservedObject private var lumaContext = LumaContextService.shared
 
     @State private var showLuma = false
-    @State private var selectedMetric: MetricInfo? = nil
 
     private var hasData: Bool {
         dashboard.today.steps > 0
@@ -65,9 +64,6 @@ struct DashboardView: View {
                 }
             }
             .navigationBarHidden(true)
-            .navigationDestination(item: $selectedMetric) { metric in
-                MetricDetailView(metric: metric)
-            }
         }
         .task {
             await dashboard.load()
@@ -239,31 +235,25 @@ struct DashboardView: View {
 
             LazyVGrid(
                 columns: AmachLayout.twoColumnGrid,
-                spacing: AmachLayout.cardMinHeight <= 100 ? AmachSpacing.cardGap : AmachSpacing.cardGap
+                spacing: AmachSpacing.cardGap
             ) {
-                tappableMetricCard(.steps(dashboard.today.steps))
-                tappableMetricCard(.calories(dashboard.today.activeCalories))
-                tappableMetricCard(.heartRate(dashboard.today.heartRateAvg))
-                tappableMetricCard(.sleep(dashboard.today.sleepHours))
-                tappableMetricCard(.hrv(dashboard.today.hrv))
-                tappableMetricCard(.exercise(dashboard.today.exerciseMinutes))
-                tappableMetricCard(.restingHeartRate(dashboard.today.restingHeartRate))
-                tappableMetricCard(.vo2Max(dashboard.today.vo2Max))
-                tappableMetricCard(.respiratoryRate(dashboard.today.respiratoryRate))
+                metricCard(.steps(dashboard.today.steps))
+                metricCard(.calories(dashboard.today.activeCalories))
+                metricCard(.heartRate(dashboard.today.heartRateAvg))
+                metricCard(.sleep(dashboard.today.sleepHours))
+                metricCard(.hrv(dashboard.today.hrv))
+                metricCard(.exercise(dashboard.today.exerciseMinutes))
+                metricCard(.restingHeartRate(dashboard.today.restingHeartRate))
+                metricCard(.vo2Max(dashboard.today.vo2Max))
+                metricCard(.respiratoryRate(dashboard.today.respiratoryRate))
             }
         }
     }
 
     @ViewBuilder
-    private func tappableMetricCard(_ metric: MetricInfo) -> some View {
-        Button {
-            AmachHaptics.cardTap()
-            selectedMetric = metric
-        } label: {
-            EnhancedMetricCard(metric: metric)
-        }
-        .buttonStyle(MetricCardButtonStyle())
-        .accessibilityLabel("\(metric.label): \(metric.value) \(metric.unit). Status: \(statusLabel(metric.status)). Tap for details.")
+    private func metricCard(_ metric: MetricInfo) -> some View {
+        EnhancedMetricCard(metric: metric)
+            .accessibilityLabel("\(metric.label): \(metric.value) \(metric.unit). Status: \(statusLabel(metric.status)).")
     }
 
     // ============================================================

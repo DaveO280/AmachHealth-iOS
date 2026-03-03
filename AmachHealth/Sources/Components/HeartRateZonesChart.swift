@@ -27,14 +27,19 @@ struct HeartRateZonesChart: View {
         let minutes: Double
     }
 
+    // Z1 (<60%) is resting/ambient HR — always dominant at rest, not indicative for exercise analysis.
     private var zoneDefs: [ZoneDef] {
         [
-            ZoneDef(id: 1, name: "Recovery",  description: "<60%",   color: Color(hex: "60A5FA"), minutes: zones.zone1),
             ZoneDef(id: 2, name: "Fat Burn",  description: "60–70%", color: Color(hex: "34D399"), minutes: zones.zone2),
             ZoneDef(id: 3, name: "Aerobic",   description: "70–80%", color: Color(hex: "F59E0B"), minutes: zones.zone3),
             ZoneDef(id: 4, name: "Threshold", description: "80–90%", color: Color(hex: "F97316"), minutes: zones.zone4),
             ZoneDef(id: 5, name: "Peak",      description: ">90%",   color: Color(hex: "EF4444"), minutes: zones.zone5),
         ]
+    }
+
+    // Total across Z2–Z5 only (Z1 excluded)
+    private var displayTotal: Double {
+        zones.zone2 + zones.zone3 + zones.zone4 + zones.zone5
     }
 
     // Only zones with data, used for the chart sectors
@@ -46,7 +51,7 @@ struct HeartRateZonesChart: View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
             headerRow
 
-            if zones.total < 0.5 {
+            if displayTotal < 0.5 {
                 noDataView
             } else {
                 HStack(alignment: .center, spacing: AmachSpacing.lg) {
@@ -92,9 +97,9 @@ struct HeartRateZonesChart: View {
             }
             .frame(width: 120, height: 120)
 
-            // Center: total minutes
+            // Center: Z2–Z5 total minutes
             VStack(spacing: 1) {
-                Text("\(Int(zones.total))")
+                Text("\(Int(displayTotal))")
                     .font(.system(size: 22, weight: .bold, design: .monospaced))
                     .foregroundStyle(Color.amachTextPrimary)
                 Text("min")
@@ -103,7 +108,7 @@ struct HeartRateZonesChart: View {
             }
         }
         .frame(width: 120, height: 120)
-        .accessibilityLabel("Heart rate zones, \(Int(zones.total)) total minutes tracked")
+        .accessibilityLabel("Heart rate zones, \(Int(displayTotal)) active minutes tracked")
     }
 
     // MARK: - Legend Column (Z5 at top → Z1 at bottom)
