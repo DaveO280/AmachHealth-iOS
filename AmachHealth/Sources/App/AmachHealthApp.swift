@@ -27,6 +27,10 @@ struct AmachHealthApp: App {
                 .environmentObject(lumaContext)
                 .preferredColorScheme(.dark)
                 .task {
+                    // Initialize Privy SDK (restores session if user was previously authenticated).
+                    // In dev-mock mode (Privy SDK not installed), this sets up the dev wallet.
+                    wallet.initializePrivy()
+
                     // Silently request HealthKit on first launch if not yet authorized
                     if healthKit.isHealthKitAvailable && !healthKit.isAuthorized {
                         try? await healthKit.requestAuthorization()
