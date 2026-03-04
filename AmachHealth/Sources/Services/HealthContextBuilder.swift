@@ -22,35 +22,35 @@ struct HealthContextBuilder {
 
         let metrics = AIChatMetrics(
             steps: MetricContext(
-                average: weekAverage(dashboard.stepsTrend),
-                min: weekMin(dashboard.stepsTrend),
-                max: weekMax(dashboard.stepsTrend),
+                average: monthAverage(dashboard.stepsTrend),
+                min: monthMin(dashboard.stepsTrend),
+                max: monthMax(dashboard.stepsTrend),
                 latest: today.steps > 0 ? today.steps : nil,
                 trend: computeTrend(dashboard.stepsTrend)
             ),
             heartRate: MetricContext(
-                average: weekAverage(dashboard.heartRateTrend),
-                min: today.heartRateMin > 0 ? today.heartRateMin : nil,
-                max: today.heartRateMax > 0 ? today.heartRateMax : nil,
+                average: monthAverage(dashboard.heartRateTrend),
+                min: monthMin(dashboard.heartRateTrend),
+                max: monthMax(dashboard.heartRateTrend),
                 latest: today.heartRateAvg > 0 ? today.heartRateAvg : nil,
                 trend: computeTrend(dashboard.heartRateTrend)
             ),
             hrv: MetricContext(
-                average: weekAverage(dashboard.hrvTrend),
-                min: weekMin(dashboard.hrvTrend),
-                max: weekMax(dashboard.hrvTrend),
+                average: monthAverage(dashboard.hrvTrend),
+                min: monthMin(dashboard.hrvTrend),
+                max: monthMax(dashboard.hrvTrend),
                 latest: today.hrv > 0 ? today.hrv : nil,
                 trend: computeTrend(dashboard.hrvTrend)
             ),
             sleep: MetricContext(
-                average: weekAverage(dashboard.sleepTrend),
-                min: weekMin(dashboard.sleepTrend),
-                max: weekMax(dashboard.sleepTrend),
+                average: monthAverage(dashboard.sleepTrend),
+                min: monthMin(dashboard.sleepTrend),
+                max: monthMax(dashboard.sleepTrend),
                 latest: today.sleepHours > 0 ? today.sleepHours : nil,
                 trend: computeTrend(dashboard.sleepTrend)
             ),
             exercise: MetricContext(
-                average: weekAverage(dashboard.calsTrend),
+                average: monthAverage(dashboard.calsTrend),
                 min: nil,
                 max: nil,
                 latest: today.exerciseMinutes > 0 ? today.exerciseMinutes : nil,
@@ -70,17 +70,26 @@ struct HealthContextBuilder {
                 average: nil, min: nil, max: nil,
                 latest: today.respiratoryRate,
                 trend: nil
-            ) : nil
+            ) : nil,
+            recoveryScore: today.recoveryScore?.score,
+            sleepDeepHours: sleepStageMetric(
+                from: dashboard.sleepStagesTrend,
+                keyPath: \.deepHours
+            ),
+            sleepRemHours: sleepStageMetric(
+                from: dashboard.sleepStagesTrend,
+                keyPath: \.remHours
+            )
         )
 
         let formatter = ISO8601DateFormatter()
         let now = Date()
-        let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        let monthAgo = Calendar.current.date(byAdding: .day, value: -30, to: now)!
 
         return AIChatContext(
             metrics: metrics,
             dateRange: AIChatDateRange(
-                start: formatter.string(from: weekAgo),
+                start: formatter.string(from: monthAgo),
                 end: formatter.string(from: now)
             )
         )
@@ -115,16 +124,41 @@ struct HealthContextBuilder {
 
     // MARK: - Helpers
 
-    private static func weekAverage(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
-        guard let weekData = trendData[.week], !weekData.isEmpty else { return nil }
-        return weekData.map(\.value).reduce(0, +) / Double(weekData.count)
+    private static func monthAverage(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
+        guard let data = trendData[.month], !data.isEmpty else { return nil }
+        return data.map(\.value).reduce(0, +) / Double(data.count)
     }
 
-    private static func weekMin(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
-        trendData[.week]?.map(\.value).min()
+    private static func monthMin(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
+        trendData[.month]?.map(\.value).min()
     }
 
-    private static func weekMax(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
-        trendData[.week]?.map(\.value).max()
+    private static func monthMax(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
+        trendData[.month]?.map(\.value).max()
+    }
+
+    private static func sleepStageMetric(
+        from trend: [TrendPeriod: [SleepStageTrendPoint]],
+        keyPath: KeyPath<SleepStageTrendPoint, Double>
+    ) -> MetricContext? {
+        guard let data = trend[.month], !data.isEmpty else { return nil }
+        let values = data.map { $0[keyPath: keyPath] }
+        guard values.contains(where: { $0 > 0 }) else { return nil }
+
+        let avg = values.reduce(0, +) / Double(values.count)
+        let min = values.min()
+        let max = values.max()
+        let latest = data.last?[keyPath: keyPath]
+
+        return MetricContext(
+            average: avg,
+            min: min,
+            max: max,
+            latest: latest,
+            trend: computeTrend(
+                // Reuse TrendPoint-based trend by projecting hours into generic points
+                [.month: data.map { TrendPoint(date: $0.date, value: $0[keyPath: keyPath]) }]
+            )
+        )
     }
 }

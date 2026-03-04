@@ -83,11 +83,18 @@ struct AIChatContext: Encodable {
     let dateRange: AIChatDateRange?
     // Populated only for Luma-initiated proactive conversations
     let proactive: ProactiveInsightContext?
+    let memory: AIChatMemoryCapsule?
 
-    init(metrics: AIChatMetrics? = nil, dateRange: AIChatDateRange? = nil, proactive: ProactiveInsightContext? = nil) {
+    init(
+        metrics: AIChatMetrics? = nil,
+        dateRange: AIChatDateRange? = nil,
+        proactive: ProactiveInsightContext? = nil,
+        memory: AIChatMemoryCapsule? = nil
+    ) {
         self.metrics = metrics
         self.dateRange = dateRange
         self.proactive = proactive
+        self.memory = memory
     }
 }
 
@@ -100,6 +107,9 @@ struct AIChatMetrics: Encodable {
     let restingHeartRate: MetricContext?
     let vo2Max: MetricContext?
     let respiratoryRate: MetricContext?
+    let recoveryScore: Int?
+    let sleepDeepHours: MetricContext?
+    let sleepRemHours: MetricContext?
 }
 
 struct MetricContext: Encodable {
@@ -113,6 +123,169 @@ struct MetricContext: Encodable {
 struct AIChatDateRange: Encodable {
     let start: String
     let end: String
+}
+
+struct AIChatMemoryCapsule: Encodable {
+    let activeGoals: [String]
+    let activeConcerns: [String]
+    let medications: [String]
+    let conditions: [String]
+    let recentSessionNotes: [String]
+}
+
+// MARK: - Conversation Memory Types (iOS)
+//
+// Lightweight mirror of the web ConversationMemory structures, used to build
+// the memory capsule that gets injected into AIChatContext on-device.
+
+enum FactCategory: String, Codable {
+    case medication
+    case condition
+    case goal
+    case concern
+    case preference
+}
+
+enum MemoryImportance: String, Codable {
+    case critical
+    case high
+    case medium
+    case low
+}
+
+struct CriticalFact: Codable, Identifiable {
+    let id: UUID
+    let category: FactCategory
+    let value: String
+    let context: String?
+    let dateIdentified: Date
+    var isActive: Bool
+}
+
+struct SessionSummary: Codable, Identifiable {
+    let id: UUID
+    let date: Date
+    let summary: String
+    let topics: [String]
+    let importance: MemoryImportance
+    let messageCount: Int
+}
+
+@MainActor
+final class ConversationMemoryStore: ObservableObject {
+    static let shared = ConversationMemoryStore()
+
+    @Published private(set) var facts: [CriticalFact] = []
+    @Published private(set) var summaries: [SessionSummary] = []
+
+    private let storageURL: URL = {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        return docs.appendingPathComponent("amach_conversation_memory.json")
+    }()
+
+    private struct PersistedPayload: Codable {
+        var facts: [CriticalFact]
+        var summaries: [SessionSummary]
+    }
+
+    private init() {
+        loadFromDisk()
+    }
+
+    func upsert(facts newFacts: [CriticalFact], summary: SessionSummary) {
+        var mergedFacts = Dictionary(uniqueKeysWithValues: facts.map { ($0.id, $0) })
+        for fact in newFacts {
+            mergedFacts[fact.id] = fact
+        }
+        facts = Array(mergedFacts.values)
+
+        if let idx = summaries.firstIndex(where: { $0.id == summary.id }) {
+            summaries[idx] = summary
+        } else {
+            summaries.append(summary)
+        }
+
+        facts.sort { $0.dateIdentified < $1.dateIdentified }
+        if facts.count > 200 {
+            facts = Array(facts.suffix(200))
+        }
+
+        summaries.sort { $0.date < $1.date }
+        if summaries.count > 40 {
+            summaries = Array(summaries.suffix(40))
+        }
+
+        saveToDisk()
+    }
+
+    func buildMemoryCapsule() -> AIChatMemoryCapsule? {
+        let activeFacts = facts.filter { $0.isActive }
+        guard !activeFacts.isEmpty || !summaries.isEmpty else { return nil }
+
+        func normalized(_ text: String, maxLen: Int) -> String {
+            let collapsed = text.replacingOccurrences(
+                of: "\\s+",
+                with: " ",
+                options: .regularExpression
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            if collapsed.count <= maxLen { return collapsed }
+            let idx = collapsed.index(collapsed.startIndex, offsetBy: maxLen)
+            return String(collapsed[..<idx]).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+        }
+
+        func latestValues(for category: FactCategory, limit: Int?) -> [String] {
+            let filtered = activeFacts.filter { $0.category == category }
+                .sorted { $0.dateIdentified < $1.dateIdentified }
+            let sliced = limit != nil ? Array(filtered.suffix(limit!)) : filtered
+            return sliced.map { normalized($0.value, maxLen: 120) }
+        }
+
+        let activeGoals = latestValues(for: .goal, limit: 6)
+        let activeConcerns = latestValues(for: .concern, limit: 6)
+        // Bound medications/conditions for payload size: keep latest 20 each
+        let medications = latestValues(for: .medication, limit: 20)
+        let conditions = latestValues(for: .condition, limit: 20)
+
+        let recentSummaries = summaries
+            .sorted { $0.date < $1.date }
+            .suffix(3)
+            .map { summary in
+                normalized(summary.summary, maxLen: 150)
+            }
+
+        if activeGoals.isEmpty,
+           activeConcerns.isEmpty,
+           medications.isEmpty,
+           conditions.isEmpty,
+           recentSummaries.isEmpty {
+            return nil
+        }
+
+        return AIChatMemoryCapsule(
+            activeGoals: activeGoals,
+            activeConcerns: activeConcerns,
+            medications: medications,
+            conditions: conditions,
+            recentSessionNotes: recentSummaries
+        )
+    }
+
+    private func saveToDisk() {
+        let payload = PersistedPayload(facts: facts, summaries: summaries)
+        guard let data = try? JSONEncoder().encode(payload) else { return }
+        try? data.write(to: storageURL, options: .atomic)
+    }
+
+    private func loadFromDisk() {
+        guard
+            let data = try? Data(contentsOf: storageURL),
+            let payload = try? JSONDecoder().decode(PersistedPayload.self, from: data)
+        else { return }
+
+        facts = payload.facts
+        summaries = payload.summaries
+    }
 }
 
 struct AIChatHistoryMessage: Codable {

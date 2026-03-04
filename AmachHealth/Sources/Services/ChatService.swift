@@ -42,6 +42,8 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let finalContext = enrichContextWithMemory(context ?? HealthContextBuilder.buildCurrentContext())
+
         let userMsg = ChatMessage(role: .user, content: trimmed)
         currentSession.messages.append(userMsg)
         currentSession.updatedAt = .now
@@ -57,7 +59,7 @@ final class ChatService: ObservableObject {
                 .suffix(18)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
-            let response = try await api.sendChatMessage(trimmed, history: Array(history), context: context)
+            let response = try await api.sendChatMessage(trimmed, history: Array(history), context: finalContext)
 
             let assistantMsg = ChatMessage(role: .assistant, content: response.content)
             currentSession.messages.append(assistantMsg)
@@ -90,6 +92,8 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let finalContext = enrichContextWithMemory(context ?? HealthContextBuilder.buildCurrentContext())
+
         // 1. Append user message
         currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
         currentSession.updatedAt = .now
@@ -114,7 +118,7 @@ final class ChatService: ObservableObject {
             let stream = api.streamLumaChat(
                 trimmed,
                 history: Array(history),
-                context: context,
+                context: finalContext,
                 screen: screen,
                 metric: metric
             )
@@ -277,6 +281,8 @@ final class ChatService: ObservableObject {
         } catch {
             // Non-critical — memory works without summaries, just less rich
         }
+
+        await extractAndStoreConversationMemory(from: session)
     }
 
     // Maps HealthKit metric type identifiers to natural language search terms
@@ -291,6 +297,201 @@ final class ChatService: ObservableObject {
         case "respiratoryRate":          return ["breathing", "respiratory", "breath"]
         case "oxygenSaturation":         return ["oxygen", "spo2", "saturation"]
         default:                         return [metricType.lowercased()]
+        }
+    }
+
+    // MARK: - Conversation Memory Extraction
+
+    private func extractAndStoreConversationMemory(from session: ChatSession) async {
+        guard shouldExtractMemory(from: session) else { return }
+
+        let messages = session.messages
+        var conversationText = messages.map { message in
+            let roleLabel = message.role == .user ? "User" : "Assistant"
+            return "\(roleLabel): \(message.content)"
+        }.joined(separator: "\n\n")
+
+        // Hard cap transcript length for memory extraction to avoid oversized requests.
+        let maxChars = 8000
+        if conversationText.count > maxChars {
+            conversationText = String(conversationText.suffix(maxChars))
+        }
+
+        let factPrompt = """
+        You are a health assistant memory system. Analyze the conversation and extract important facts about the user that should be remembered for future conversations.
+
+        Extract facts in these categories:
+        - goal: Health goals the user has mentioned (e.g., "lose 10 pounds", "run a marathon")
+        - concern: Health concerns or worries (e.g., "worried about blood pressure", "experiencing fatigue")
+        - condition: Medical conditions or diagnoses mentioned (e.g., "has type 2 diabetes", "takes blood pressure medication")
+        - preference: User preferences for health advice (e.g., "prefers natural remedies", "vegetarian diet")
+        - medication: Medications or supplements the user is taking (e.g., "on 12.5mg enclomiphene", "takes magnesium at night")
+
+        Rules:
+        - Only extract facts explicitly stated or strongly implied by the user
+        - Do not infer or assume facts not in the conversation
+        - Focus on health-relevant information
+        - Skip generic greetings or small talk
+        - Each fact should be self-contained and understandable without the conversation
+
+        Return a JSON object with this structure:
+        {
+          "facts": [
+            {
+              "category": "goal|concern|condition|preference|medication",
+              "value": "the fact statement",
+              "context": "brief context about when/why this was mentioned"
+            }
+          ]
+        }
+
+        Conversation:
+        \(conversationText)
+        """
+
+        let summaryPrompt = """
+        You are a health assistant memory system. Create a brief summary of this conversation for future reference.
+
+        The summary should:
+        - Capture the main topics discussed
+        - Note any decisions or action items
+        - Highlight key health insights shared
+        - Be concise (1–3 sentences)
+        - Focus on what would be useful context for future conversations
+
+        Return JSON with this structure:
+        {
+          "summary": "Brief summary of the conversation",
+          "topics": ["topic1", "topic2"],
+          "importance": "critical|high|medium|low"
+        }
+
+        Conversation:
+        \(conversationText)
+        """
+
+        do {
+            async let factsResponse = api.sendChatMessage(factPrompt, history: [])
+            async let summaryResponse = api.sendChatMessage(summaryPrompt, history: [])
+
+            let (factsResult, summaryResult) = try await (factsResponse, summaryResponse)
+
+            let facts = parseFacts(from: factsResult.content)
+            let summary = parseSessionSummary(
+                from: summaryResult.content,
+                messageCount: session.messages.count
+            )
+
+            guard let sessionSummary = summary else { return }
+
+            ConversationMemoryStore.shared.upsert(facts: facts, summary: sessionSummary)
+        } catch {
+            // Non-critical — chat still works without long-term memory
+        }
+    }
+
+    private func shouldExtractMemory(from session: ChatSession) -> Bool {
+        let userMessages = session.messages.filter { $0.role == .user }
+        guard userMessages.count >= 2 else { return false }
+
+        let totalLength = userMessages.reduce(0) { $0 + $1.content.count }
+        guard totalLength >= 100 else { return false }
+
+        let joined = userMessages.map { $0.content.lowercased() }.joined(separator: " ")
+        let healthKeywords = [
+            "sleep", "hrv", "heart", "blood pressure", "cholesterol",
+            "glucose", "diabetes", "zone 2", "workout", "steps",
+            "medication", "supplement", "fatigue", "anxiety", "stress"
+        ]
+        return healthKeywords.contains { joined.contains($0) }
+    }
+
+    private func parseFacts(from response: String) -> [CriticalFact] {
+        guard let jsonData = extractFirstJSONObject(from: response) else { return [] }
+        struct RawFact: Decodable {
+            let category: String
+            let value: String
+            let context: String?
+        }
+        struct Payload: Decodable {
+            let facts: [RawFact]?
+        }
+
+        do {
+            let payload = try JSONDecoder().decode(Payload.self, from: jsonData)
+            let rawFacts = payload.facts ?? []
+            let now = Date()
+            return rawFacts.compactMap { raw in
+                guard let category = FactCategory(rawValue: raw.category) else { return nil }
+                return CriticalFact(
+                    id: UUID(),
+                    category: category,
+                    value: raw.value,
+                    context: raw.context,
+                    dateIdentified: now,
+                    isActive: true
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    private func parseSessionSummary(from response: String, messageCount: Int) -> SessionSummary? {
+        guard let jsonData = extractFirstJSONObject(from: response) else { return nil }
+        struct RawSummary: Decodable {
+            let summary: String
+            let topics: [String]?
+            let importance: String?
+        }
+
+        do {
+            let raw = try JSONDecoder().decode(RawSummary.self, from: jsonData)
+            let trimmed = raw.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+
+            let importance = MemoryImportance(rawValue: raw.importance ?? "medium") ?? .medium
+
+            return SessionSummary(
+                id: UUID(),
+                date: Date(),
+                summary: trimmed,
+                topics: raw.topics ?? [],
+                importance: importance,
+                messageCount: messageCount
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func extractFirstJSONObject(from response: String) -> Data? {
+        guard let startIndex = response.firstIndex(of: "{"),
+              let endIndex = response.lastIndex(of: "}") else {
+            return nil
+        }
+        let jsonSubstring = response[startIndex...endIndex]
+        return jsonSubstring.data(using: .utf8)
+    }
+
+    private func enrichContextWithMemory(_ base: AIChatContext?) -> AIChatContext? {
+        let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule()
+
+        switch (base, memoryCapsule) {
+        case (nil, nil):
+            return nil
+        case (nil, let memory?):
+            return AIChatContext(memory: memory)
+        case (let existing?, nil):
+            return existing
+        case (let existing?, let memory?):
+            if existing.memory != nil { return existing }
+            return AIChatContext(
+                metrics: existing.metrics,
+                dateRange: existing.dateRange,
+                proactive: existing.proactive,
+                memory: memory
+            )
         }
     }
 
