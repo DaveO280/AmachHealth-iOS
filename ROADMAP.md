@@ -35,11 +35,13 @@ These are tracked here so they don't get lost as we proceed with other work.
 ## 🔨 In Progress
 
 ### Privy SDK Integration (Phase 1)
-- Install Privy iOS SDK via SPM (`privy-io/privy-ios` v2.9+)
-- Rewrite `WalletService.swift` with real SDK calls
-- CryptoKit PBKDF2 key derivation matching web exactly
-- Add wallet connect to Sync tab (deferred auth — Option C)
-- Existing web users: Privy recovers wallet → same address → same encryption key
+- ✅ Install Privy iOS SDK via SPM (`privy-io/privy-ios` v2.9.2)
+- ✅ Rewrite `WalletService.swift` with real SDK calls (`#if canImport(PrivySDK)`)
+- ✅ CommonCrypto PBKDF2 key derivation matching web `walletEncryption.ts` exactly
+- ✅ `initializePrivy()` call wired into `AmachHealthApp.swift` on launch
+- 🔲 Set real Privy App ID + Client ID (replace placeholders in `WalletService.swift`)
+- 🔲 Add wallet connect UI to Sync tab (deferred auth — Option C)
+- 🔲 End-to-end test: existing web user logs in on iOS → same wallet → decrypts Storj data
 
 ---
 

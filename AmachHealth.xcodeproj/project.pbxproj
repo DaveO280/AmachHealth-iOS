@@ -43,6 +43,8 @@
 		AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000122 /* HealthContextBuilder.swift */; };
 		AA0000000000000000000223 /* SleepStagesChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000123 /* SleepStagesChart.swift */; };
 		AA0000000000000000000224 /* HeartRateZonesChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000124 /* HeartRateZonesChart.swift */; };
+		AA0000000000000000000225 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000125 /* Assets.xcassets */; };
+		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,6 +87,7 @@
 		AA0000000000000000000122 /* HealthContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthContextBuilder.swift; path = AmachHealth/Sources/Services/HealthContextBuilder.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000123 /* SleepStagesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SleepStagesChart.swift; path = AmachHealth/Sources/Components/SleepStagesChart.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000124 /* HeartRateZonesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HeartRateZonesChart.swift; path = AmachHealth/Sources/Components/HeartRateZonesChart.swift; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000125 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = "Amach Health/Amach Health/Assets.xcassets"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -92,6 +95,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB0000000000000000000003 /* PrivySDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -235,6 +239,7 @@
 			children = (
 				AA0000000000000000000002 /* Info.plist */,
 				AA0000000000000000000003 /* AmachHealth.entitlements */,
+				AA0000000000000000000125 /* Assets.xcassets */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -255,6 +260,9 @@
 			dependencies = (
 			);
 			name = "Amach Health";
+			packageProductDependencies = (
+				BB0000000000000000000002 /* Privy */,
+			);
 			productName = "Amach Health";
 			productReference = AA0000000000000000000001 /* Amach Health.app */;
 			productType = "com.apple.product-type.application";
@@ -283,6 +291,9 @@
 				Base,
 			);
 			mainGroup = AA0000000000000000000400;
+			packageReferences = (
+				BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */,
+			);
 			productRefGroup = AA0000000000000000000402 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -297,6 +308,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000000225 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -539,6 +551,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/privy-io/privy-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BB0000000000000000000002 /* Privy */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */;
+			productName = Privy;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = AA0000000000000000000700 /* Project object */;
 }

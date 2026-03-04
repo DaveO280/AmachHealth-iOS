@@ -17,15 +17,13 @@ let package = Package(
     ],
     dependencies: [
         // Privy iOS SDK for wallet integration
-        // .package(url: "https://github.com/privy-io/privy-ios", from: "1.0.0"),
-
-        // Additional dependencies as needed
+        .package(url: "https://github.com/privy-io/privy-ios", from: "2.9.0"),
     ],
     targets: [
         .target(
             name: "AmachHealth",
             dependencies: [
-                // "PrivySDK",
+                .product(name: "Privy", package: "privy-ios"),
             ],
             path: "Sources"
         ),
