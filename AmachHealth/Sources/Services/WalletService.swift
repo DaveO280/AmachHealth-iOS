@@ -34,11 +34,11 @@ final class WalletService: ObservableObject {
 
     // Privy config — set your App ID and Client ID from the Privy Dashboard.
     // The Client ID is created under App Settings → Clients → "iOS" client type.
-    private let privyAppId = "YOUR_PRIVY_APP_ID"        // TODO: Replace
-    private let privyClientId = "YOUR_IOS_CLIENT_ID"    // TODO: Replace
+    private let privyAppId = "cmiev4g03026zl80cpoyjccwu"        // TODO: Replace
+    private let privyClientId = "client-WY6TLxngkdjGfUtmZkKe5evREPGvJ7Z7jeQXBd5BcxJE5"    // TODO: Replace
 
     #if canImport(PrivySDK)
-    private var privy: PrivySDK.Privy?
+    private var privy: (any Privy)?
     #endif
 
     // ──────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ final class WalletService: ObservableObject {
     func initializePrivy() {
         #if canImport(PrivySDK)
         let config = PrivyConfig(appId: privyAppId, appClientId: privyClientId)
-        self.privy = Privy(config: config)
+        self.privy = PrivySdk.initialize(config: config)
 
         // Check for an existing authenticated session (returning user).
         Task { await restoreSessionIfAvailable() }
@@ -113,24 +113,26 @@ final class WalletService: ObservableObject {
 
         do {
             // 1. Check if already authenticated (returning user, same session)
-            let authState = privy.authState
-            let user: PrivyUser
+            let authState = await privy.getAuthState()
+            let user: any PrivyUser
 
             switch authState {
             case .authenticated(let existingUser):
                 user = existingUser
             case .unauthenticated:
-                // Present Privy login UI (email OTP, Apple, Google, etc.)
-                user = try await privy.login()
+                // Trigger Apple OAuth — works for web users who signed up with Apple.
+                // TODO: Add a login method selection sheet in HealthSyncView so users
+                //       who signed up via email/Google can choose their method here.
+                user = try await privy.oAuth.login(with: .apple)
             default:
                 throw WalletError.connectionFailed(
                     NSError(domain: "WalletService", code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "Unexpected auth state"])
+                            userInfo: [NSLocalizedDescriptionKey: "Auth state not ready, try again"])
                 )
             }
 
             // 2. Get existing embedded wallet or create one
-            let wallet: EmbeddedEthereumWallet
+            let wallet: any EmbeddedEthereumWallet
             if let existing = user.embeddedEthereumWallets.first {
                 wallet = existing
             } else {
@@ -161,7 +163,7 @@ final class WalletService: ObservableObject {
     private func restoreSessionIfAvailable() async {
         guard let privy = privy else { return }
 
-        let authState = privy.authState
+        let authState = await privy.getAuthState()
         switch authState {
         case .authenticated(let user):
             guard let wallet = user.embeddedEthereumWallets.first else { return }
@@ -215,7 +217,10 @@ final class WalletService: ObservableObject {
         encryptionKey = nil
 
         #if canImport(PrivySDK)
-        try? await privy?.logout()
+        if let privy = privy,
+           case .authenticated(let user) = await privy.getAuthState() {
+            await user.logout()
+        }
         #endif
     }
 
@@ -232,8 +237,7 @@ final class WalletService: ObservableObject {
         #if canImport(PrivySDK)
         guard let privy = privy else { throw WalletError.notConfigured }
 
-        let authState = privy.authState
-        guard case .authenticated(let user) = authState,
+        guard case .authenticated(let user) = await privy.getAuthState(),
               let wallet = user.embeddedEthereumWallets.first else {
             throw WalletError.notConnected
         }
@@ -255,7 +259,7 @@ final class WalletService: ObservableObject {
 
     #if canImport(PrivySDK)
     /// Sign the deterministic message, derive PBKDF2 key, store in Keychain.
-    private func deriveAndStoreEncryptionKey(wallet: EmbeddedEthereumWallet) async throws {
+    private func deriveAndStoreEncryptionKey(wallet: any EmbeddedEthereumWallet) async throws {
         isLoading = true
         defer { isLoading = false }
 
@@ -303,7 +307,7 @@ final class WalletService: ObservableObject {
 
         #if canImport(PrivySDK)
         guard let privy = privy,
-              case .authenticated(let user) = privy.authState,
+              case .authenticated(let user) = await privy.getAuthState(),
               let wallet = user.embeddedEthereumWallets.first else {
             throw WalletError.notConnected
         }
