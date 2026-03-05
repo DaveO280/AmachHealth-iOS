@@ -25,6 +25,7 @@ struct ProfileView: View {
     @State private var showDisconnectAlert = false
     @State private var showDeleteAlert = false
     @State private var showingOpenSettings = false
+    @State private var showingConnectWallet = false
 
     // Luma proactive intelligence toggle — backed by UserDefaults
     @AppStorage("luma.proactiveEnabled") private var lumaProactiveEnabled = false
@@ -67,6 +68,12 @@ struct ProfileView: View {
                 }
             } message: {
                 Text("This permanently deletes your Amach account and all stored data. This cannot be undone.")
+            }
+            .sheet(isPresented: $showingConnectWallet) {
+                ConnectWalletSheet()
+                    .environmentObject(wallet)
+                    .presentationDetents([.medium])
+                    .presentationBackground(Color.amachSurface)
             }
         }
     }
@@ -190,7 +197,7 @@ struct ProfileView: View {
                 subtitle: wallet.isConnected ? truncate(wallet.address ?? "") : "Not connected",
                 isConnected: wallet.isConnected,
                 action: wallet.isConnected ? nil : {
-                    Task { try? await wallet.connect() }
+                    showingConnectWallet = true
                 },
                 actionLabel: "Connect"
             )
@@ -603,7 +610,7 @@ struct ProfileView: View {
                 .listRowBackground(Color.amachSurface)
             } else {
                 Button {
-                    Task { try? await wallet.connect() }
+                    showingConnectWallet = true
                 } label: {
                     HStack {
                         Image(systemName: "wallet.pass.fill")

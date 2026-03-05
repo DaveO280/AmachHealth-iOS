@@ -45,6 +45,7 @@
 		AA0000000000000000000224 /* HeartRateZonesChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000124 /* HeartRateZonesChart.swift */; };
 		AA0000000000000000000225 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000125 /* Assets.xcassets */; };
 		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
+		BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* ConnectWalletSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -88,6 +89,7 @@
 		AA0000000000000000000123 /* SleepStagesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SleepStagesChart.swift; path = AmachHealth/Sources/Components/SleepStagesChart.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000124 /* HeartRateZonesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HeartRateZonesChart.swift; path = AmachHealth/Sources/Components/HeartRateZonesChart.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000125 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = "Amach Health/Amach Health/Assets.xcassets"; sourceTree = SOURCE_ROOT; };
+		BB0000000000000000000005 /* ConnectWalletSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectWalletSheet.swift; path = AmachHealth/Sources/Views/ConnectWalletSheet.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -223,6 +225,7 @@
 			isa = PBXGroup;
 			children = (
 				AA000000000000000000011A /* ChatView.swift */,
+				BB0000000000000000000005 /* ConnectWalletSheet.swift */,
 				AA000000000000000000011B /* DashboardView.swift */,
 				AA000000000000000000011C /* HealthSyncView.swift */,
 				AA000000000000000000011D /* LumaSensitivityView.swift */,
@@ -347,6 +350,7 @@
 				AA0000000000000000000218 /* LumaProactiveService.swift in Sources */,
 				AA0000000000000000000219 /* WalletService.swift in Sources */,
 				AA000000000000000000021A /* ChatView.swift in Sources */,
+				BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */,
 				AA000000000000000000021B /* DashboardView.swift in Sources */,
 				AA000000000000000000021C /* HealthSyncView.swift in Sources */,
 				AA000000000000000000021D /* LumaSensitivityView.swift in Sources */,

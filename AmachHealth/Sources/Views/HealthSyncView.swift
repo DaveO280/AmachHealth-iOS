@@ -11,6 +11,7 @@ struct HealthSyncView: View {
     @StateObject private var syncService = HealthDataSyncService.shared
 
     @State private var showingDatePicker = false
+    @State private var showingConnectWallet = false
     @State private var syncStartDate = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
 
     var body: some View {
@@ -44,6 +45,12 @@ struct HealthSyncView: View {
             .sheet(isPresented: $showingDatePicker) {
                 datePicker
             }
+            .sheet(isPresented: $showingConnectWallet) {
+                ConnectWalletSheet()
+                    .environmentObject(wallet)
+                    .presentationDetents([.medium])
+                    .presentationBackground(Color.amachSurface)
+            }
         }
     }
 
@@ -72,7 +79,7 @@ struct HealthSyncView: View {
                     : "Not connected",
                 isConnected: wallet.isConnected,
                 action: wallet.isConnected ? nil : {
-                    Task { try? await wallet.connect() }
+                    showingConnectWallet = true
                 },
                 actionLabel: "Connect"
             )

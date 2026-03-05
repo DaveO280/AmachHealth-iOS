@@ -28,6 +28,8 @@ final class WalletService: ObservableObject {
     @Published var encryptionKey: WalletEncryptionKey?
     @Published var isLoading = false
     @Published var error: String?
+    /// Email pending OTP verification (set by sendEmailCode, cleared on success/failure).
+    @Published var pendingEmail: String?
 
     /// True after first successful Privy auth (persisted via UserDefaults).
     @Published var hasAuthenticatedBefore: Bool
@@ -90,92 +92,86 @@ final class WalletService: ObservableObject {
     // MARK: - Authentication
     // ──────────────────────────────────────────────────────────
 
-    /// Connect wallet using Privy.
-    /// For new users: creates an embedded wallet after login.
-    /// For existing web users: Privy automatically recovers the same wallet.
-    func connect() async throws {
+    // ──────────────────────────────────────────────────────────
+    // MARK: - Email OTP Login (matches web app loginMethods: ["email"])
+    // ──────────────────────────────────────────────────────────
+
+    /// Step 1 — request OTP. Call from ConnectWalletSheet after user enters email.
+    func sendEmailCode(to email: String) async throws {
+        error = nil
         #if canImport(PrivySDK)
-        try await connectWithPrivy()
+        guard let privy else { throw WalletError.notConfigured }
+        isLoading = true
+        defer { isLoading = false }
+        try await privy.email.sendCode(to: email)
+        pendingEmail = email
         #else
-        try await connectDevMock()
+        // Dev mock: skip straight to code step
+        pendingEmail = email
         #endif
     }
 
-    #if canImport(PrivySDK)
-    private func connectWithPrivy() async throws {
-        guard let privy = privy else {
-            throw WalletError.notConfigured
-        }
-
-        isLoading = true
+    /// Step 2 — verify OTP, recover/create wallet, derive encryption key.
+    /// Call from ConnectWalletSheet after user enters 6-digit code.
+    func loginWithEmailCode(_ code: String) async throws {
         error = nil
+        #if canImport(PrivySDK)
+        guard let privy, let email = pendingEmail else { throw WalletError.notConfigured }
+        isLoading = true
         defer { isLoading = false }
-
         do {
-            // 1. Check if already authenticated (returning user, same session)
-            let authState = await privy.getAuthState()
-            let user: any PrivyUser
-
-            switch authState {
-            case .authenticated(let existingUser):
-                user = existingUser
-            case .unauthenticated:
-                // Trigger Apple OAuth — works for web users who signed up with Apple.
-                // TODO: Add a login method selection sheet in HealthSyncView so users
-                //       who signed up via email/Google can choose their method here.
-                user = try await privy.oAuth.login(with: .apple)
-            default:
-                throw WalletError.connectionFailed(
-                    NSError(domain: "WalletService", code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "Auth state not ready, try again"])
-                )
-            }
-
-            // 2. Get existing embedded wallet or create one
-            let wallet: any EmbeddedEthereumWallet
-            if let existing = user.embeddedEthereumWallets.first {
-                wallet = existing
-            } else {
-                wallet = try await user.createEthereumWallet()
-            }
-
-            self.address = wallet.address.lowercased()
-            self.isConnected = true
-            self.hasAuthenticatedBefore = true
-            UserDefaults.standard.set(true, forKey: "amach_has_authenticated")
-
-            // 3. Try loading encryption key from Keychain first (avoids re-signing)
-            if let cached = try? loadEncryptionKeyFromKeychain(for: wallet.address.lowercased()) {
-                self.encryptionKey = cached
-                return
-            }
-
-            // 4. Derive encryption key (requires wallet signature)
-            try await deriveAndStoreEncryptionKey(wallet: wallet)
-
+            let user = try await privy.email.loginWithCode(code, sentTo: email)
+            try await finishConnecting(user: user)
+            pendingEmail = nil
         } catch {
             self.error = error.localizedDescription
             throw WalletError.connectionFailed(error)
         }
+        #else
+        try await connectDevMock()
+        pendingEmail = nil
+        #endif
     }
 
-    /// Restore a previous Privy session on app launch (no login UI shown).
+    #if canImport(PrivySDK)
+    /// Shared wallet setup called after any successful login.
+    private func finishConnecting(user: any PrivyUser) async throws {
+        // Get existing embedded wallet or create one
+        let wallet: any EmbeddedEthereumWallet
+        if let existing = user.embeddedEthereumWallets.first {
+            wallet = existing
+        } else {
+            wallet = try await user.createEthereumWallet()
+        }
+
+        self.address = wallet.address.lowercased()
+        self.isConnected = true
+        self.hasAuthenticatedBefore = true
+        UserDefaults.standard.set(true, forKey: "amach_has_authenticated")
+
+        // Try Keychain first (avoids re-signing on every launch)
+        if let cached = try? loadEncryptionKeyFromKeychain(for: wallet.address.lowercased()) {
+            self.encryptionKey = cached
+            return
+        }
+
+        // Derive encryption key (requires wallet signature — first connection only)
+        try await deriveAndStoreEncryptionKey(wallet: wallet)
+    }
+
+    /// Restore a previous Privy session on app launch (silent — no login UI shown).
     private func restoreSessionIfAvailable() async {
         guard let privy = privy else { return }
 
         let authState = await privy.getAuthState()
-        switch authState {
-        case .authenticated(let user):
-            guard let wallet = user.embeddedEthereumWallets.first else { return }
-            self.address = wallet.address.lowercased()
-            self.isConnected = true
+        guard case .authenticated(let user) = authState else { return }
 
-            // Load encryption key from Keychain
-            if let cached = try? loadEncryptionKeyFromKeychain(for: wallet.address.lowercased()) {
-                self.encryptionKey = cached
-            }
-        default:
-            break
+        guard let wallet = user.embeddedEthereumWallets.first else { return }
+        self.address = wallet.address.lowercased()
+        self.isConnected = true
+
+        if let cached = try? loadEncryptionKeyFromKeychain(for: wallet.address.lowercased()) {
+            self.encryptionKey = cached
         }
     }
     #endif
@@ -499,6 +495,7 @@ enum WalletError: LocalizedError {
     case signingFailed(Error)
     case keyDerivationFailed(Int32)
     case keychainError(OSStatus)
+    case useLoginSheet   // caller should present ConnectWalletSheet
 
     var errorDescription: String? {
         switch self {
@@ -508,6 +505,8 @@ enum WalletError: LocalizedError {
             return "Privy SDK not configured. Call initializePrivy() first."
         case .notImplemented:
             return "Privy SDK not installed. Add via Xcode: File → Add Package Dependencies → github.com/privy-io/privy-ios"
+        case .useLoginSheet:
+            return "Please use the Connect Wallet button to sign in."
         case .noEncryptionKey:
             return "No encryption key available"
         case .invalidHex:
