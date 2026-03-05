@@ -103,8 +103,13 @@ final class WalletService: ObservableObject {
         guard let privy else { throw WalletError.notConfigured }
         isLoading = true
         defer { isLoading = false }
-        try await privy.email.sendCode(to: email)
-        pendingEmail = email
+        do {
+            try await privy.email.sendCode(to: email)
+            pendingEmail = email
+        } catch {
+            self.error = error.localizedDescription
+            throw error
+        }
         #else
         // Dev mock: skip straight to code step
         pendingEmail = email
