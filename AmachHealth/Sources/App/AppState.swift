@@ -67,11 +67,11 @@ final class AppState {
         get { _onboardingComplete }
         set {
             _onboardingComplete = newValue
-            UserDefaults.standard.set(newValue, forKey: "amach.onboardingComplete")
+            UserDefaults.standard.set(newValue, forKey: "onboardingComplete")
         }
     }
     private var _onboardingComplete: Bool =
-        UserDefaults.standard.bool(forKey: "amach.onboardingComplete")
+        UserDefaults.standard.bool(forKey: "onboardingComplete")
 
     // ── App-Level Toast ───────────────────────────────────────
 

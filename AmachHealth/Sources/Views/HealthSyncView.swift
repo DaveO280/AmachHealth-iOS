@@ -22,10 +22,14 @@ struct HealthSyncView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         connectionSection
-                        syncProgressSection
-                        lastSyncSection
-                        syncControlSection
-                        storageLink
+                        if wallet.isConnected {
+                            syncProgressSection
+                            lastSyncSection
+                            syncControlSection
+                            storageLink
+                        } else {
+                            walletGateCard
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 40)
@@ -395,6 +399,93 @@ struct HealthSyncView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Wallet Gate
+
+    private var walletGateCard: some View {
+        VStack(alignment: .leading, spacing: 20) {
+
+            // Header
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.amachPrimary.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.amachPrimaryBright)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Unlock Cloud Sync")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Text("Connect a wallet for encrypted storage & rewards")
+                        .font(.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+            }
+
+            // Feature list
+            VStack(alignment: .leading, spacing: 10) {
+                featureRow(icon: "externaldrive.fill",             text: "Encrypted storage on Storj")
+                featureRow(icon: "chart.line.uptrend.xyaxis",     text: "Long-term health trends")
+                featureRow(icon: "arrow.triangle.2.circlepath",   text: "Cross-device sync")
+                featureRow(icon: "star.fill",                     text: "Earn rewards for your data")
+            }
+
+            // CTAs
+            VStack(spacing: 10) {
+                Link(destination: URL(string: "https://amachhealth.com")!) {
+                    HStack(spacing: 6) {
+                        Text("Request Early Access")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .padding(.horizontal, 18)
+                    .background(Color.amachPrimary)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+
+                Button { showingConnectWallet = true } label: {
+                    Text("Connect Existing Wallet")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.amachPrimary.opacity(0.1))
+                        .foregroundStyle(Color.amachPrimaryBright)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1)
+                        )
+                }
+            }
+        }
+        .padding(18)
+        .background(Color.amachSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.amachPrimary.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func featureRow(icon: String, text: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.amachPrimaryBright)
+                .frame(width: 20)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(Color.amachTextSecondary)
+        }
     }
 
     // MARK: - Helpers
