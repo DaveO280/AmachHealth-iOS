@@ -318,6 +318,24 @@ final class WalletService: ObservableObject {
         #endif
     }
 
+    /// Returns a usable encryption key, re-deriving it if needed.
+    /// When `forceRefresh` is true, always prompt for a fresh signature.
+    func ensureEncryptionKey(forceRefresh: Bool = false) async throws -> WalletEncryptionKey {
+        guard isConnected else { throw WalletError.notConnected }
+
+        if !forceRefresh, let encryptionKey {
+            return encryptionKey
+        }
+
+        try await rederiveEncryptionKey()
+
+        guard let encryptionKey else {
+            throw WalletError.noEncryptionKey
+        }
+
+        return encryptionKey
+    }
+
     // ──────────────────────────────────────────────────────────
     // MARK: - PBKDF2 Key Derivation (Cross-Platform Compatible)
     // ──────────────────────────────────────────────────────────

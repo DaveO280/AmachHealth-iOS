@@ -215,11 +215,17 @@ struct TimelineView: View {
     }
 
     private func loadEventsIfPossible() async {
-        guard let encryptionKey = wallet.encryptionKey else { return }
-        await timeline.loadEvents(
-            walletAddress: encryptionKey.walletAddress,
-            encryptionKey: encryptionKey
-        )
+        guard wallet.isConnected else { return }
+
+        do {
+            let encryptionKey = try await wallet.ensureEncryptionKey()
+            await timeline.loadEvents(
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey
+            )
+        } catch {
+            timeline.error = error.localizedDescription
+        }
     }
 }
 

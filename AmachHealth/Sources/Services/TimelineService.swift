@@ -15,6 +15,7 @@ final class TimelineService: ObservableObject {
     @Published var error: String?
 
     private let api = AmachAPIClient.shared
+    private let wallet = WalletService.shared
     private let cacheKey = "amach_timeline_events"
 
     private init() {
@@ -33,7 +34,7 @@ final class TimelineService: ObservableObject {
         defer { isLoading = false }
 
         do {
-            let storjEvents = try await api.listTimelineEvents(
+            let storjEvents = try await loadStorjEvents(
                 walletAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
@@ -121,5 +122,47 @@ final class TimelineService: ObservableObject {
         }
 
         return byID.values.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    private func loadStorjEvents(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> [TimelineEvent] {
+        do {
+            return try await api.listTimelineEvents(
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey
+            )
+        } catch {
+            guard shouldRetryWithFreshSignature(error) else {
+                throw error
+            }
+
+            let refreshedKey = try await wallet.ensureEncryptionKey(forceRefresh: true)
+            return try await api.listTimelineEvents(
+                walletAddress: walletAddress,
+                encryptionKey: refreshedKey
+            )
+        }
+    }
+
+    private func shouldRetryWithFreshSignature(_ error: Error) -> Bool {
+        if wallet.encryptionKey == nil {
+            return true
+        }
+
+        let message = error.localizedDescription.lowercased()
+        let retryTriggers = [
+            "encryption",
+            "decrypt",
+            "decryption",
+            "signature",
+            "key mismatch",
+            "invalid key",
+            "failed to decode",
+            "substring"
+        ]
+
+        return retryTriggers.contains { message.contains($0) }
     }
 }

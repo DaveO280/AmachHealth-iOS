@@ -137,7 +137,7 @@ final class AmachAPIClient {
         encryptionKey: WalletEncryptionKey
     ) async throws -> StorjStoreResult {
         let request = StorjRequest(
-            action: "timeline/store",
+            action: "storage/store",
             userAddress: walletAddress,
             encryptionKey: encryptionKey,
             data: AnyCodable(event),
@@ -162,40 +162,29 @@ final class AmachAPIClient {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> [TimelineEvent] {
-        let listRequest = StorjListRequest(
-            action: "timeline/list",
-            userAddress: walletAddress,
+        let items = try await listHealthData(
+            walletAddress: walletAddress,
             encryptionKey: encryptionKey,
             dataType: "timeline-event"
         )
 
-        do {
-            let response: StorjResponse<TimelineEventCollection> = try await post(
-                path: "/api/storj",
-                body: listRequest
+        var events: [TimelineEvent] = []
+        events.reserveCapacity(items.count)
+
+        for item in items.sorted(by: { $0.uploadedAt > $1.uploadedAt }) {
+            var event = try await retrieveStoredData(
+                storjUri: item.uri,
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey,
+                as: TimelineEvent.self
             )
-            if response.success, let items = response.result?.events, !items.isEmpty {
-                return items.sorted { $0.timestamp > $1.timestamp }
+            if event.attestationTxHash == nil {
+                event.attestationTxHash = item.attestationTxHash
             }
-        } catch {
-            // Older web timeline implementations use timeline/retrieve instead of timeline/list.
-            // Fall through to the retrieval contract so existing user timelines still load.
+            events.append(event)
         }
 
-        let retrieveRequest = TimelineRequest(
-            action: "timeline/retrieve",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey
-        )
-
-        let retrieveResponse: StorjResponse<TimelineEventCollection> = try await post(
-            path: "/api/storj",
-            body: retrieveRequest
-        )
-        guard retrieveResponse.success, let items = retrieveResponse.result?.events else {
-            throw APIError.requestFailed(retrieveResponse.error ?? "Timeline retrieve failed")
-        }
-        return items.sorted { $0.timestamp > $1.timestamp }
+        return events.sorted { $0.timestamp > $1.timestamp }
     }
 
     func listLabRecords(
