@@ -191,12 +191,13 @@ final class AmachAPIClient {
                 timelineAPIDebug("Decoded timeline event \(event.id) of type \(event.eventType.rawValue)")
                 events.append(event)
             } catch {
-                timelineAPIDebug("Failed to retrieve/decode timeline item \(item.uri): \(error.localizedDescription)")
-                throw error
+                // Skip individual decode/retrieval failures — don't let one bad event kill the whole load
+                timelineAPIDebug("Skipping timeline item \(item.uri): \(error.localizedDescription)")
+                continue
             }
         }
 
-        timelineAPIDebug("Returning \(events.count) decoded timeline events")
+        timelineAPIDebug("Returning \(events.count) decoded timeline events (skipped \(items.count - events.count))")
         return events.sorted { $0.timestamp > $1.timestamp }
     }
 
