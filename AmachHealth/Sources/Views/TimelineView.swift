@@ -28,6 +28,8 @@ struct TimelineView: View {
                                     .tint(Color.amachPrimaryBright)
                                     .frame(maxWidth: .infinity, alignment: .center)
                                     .padding(.top, AmachSpacing.xl)
+                            } else if let error = timeline.error, filteredEvents.isEmpty {
+                                errorState(error)
                             } else if filteredEvents.isEmpty {
                                 emptyState
                             } else {
@@ -158,6 +160,27 @@ struct TimelineView: View {
                 .font(AmachType.caption)
                 .foregroundStyle(Color.amachTextSecondary)
                 .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AmachSpacing.xxl)
+    }
+
+    private func errorState(_ error: String) -> some View {
+        VStack(spacing: AmachSpacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(Color.amachWarning)
+            Text("Couldn't load timeline")
+                .font(AmachType.h3)
+                .foregroundStyle(Color.amachTextPrimary)
+            Text(error)
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextSecondary)
+                .multilineTextAlignment(.center)
+            Button("Try Again") {
+                Task { await loadEventsIfPossible() }
+            }
+            .amachSecondaryButtonStyle()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AmachSpacing.xxl)

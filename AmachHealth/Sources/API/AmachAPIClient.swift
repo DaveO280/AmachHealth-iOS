@@ -162,16 +162,38 @@ final class AmachAPIClient {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> [TimelineEvent] {
-        let request = StorjListRequest(
+        let listRequest = StorjListRequest(
             action: "timeline/list",
             userAddress: walletAddress,
             encryptionKey: encryptionKey,
             dataType: "timeline-event"
         )
 
-        let response: StorjResponse<[TimelineEvent]> = try await post(path: "/api/storj", body: request)
-        guard response.success, let items = response.result else {
-            throw APIError.requestFailed(response.error ?? "Timeline list failed")
+        do {
+            let response: StorjResponse<TimelineEventCollection> = try await post(
+                path: "/api/storj",
+                body: listRequest
+            )
+            if response.success, let items = response.result?.events, !items.isEmpty {
+                return items.sorted { $0.timestamp > $1.timestamp }
+            }
+        } catch {
+            // Older web timeline implementations use timeline/retrieve instead of timeline/list.
+            // Fall through to the retrieval contract so existing user timelines still load.
+        }
+
+        let retrieveRequest = TimelineRequest(
+            action: "timeline/retrieve",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey
+        )
+
+        let retrieveResponse: StorjResponse<TimelineEventCollection> = try await post(
+            path: "/api/storj",
+            body: retrieveRequest
+        )
+        guard retrieveResponse.success, let items = retrieveResponse.result?.events else {
+            throw APIError.requestFailed(retrieveResponse.error ?? "Timeline retrieve failed")
         }
         return items.sorted { $0.timestamp > $1.timestamp }
     }
@@ -544,6 +566,12 @@ struct AttestationRequest: Encodable {
     let userAddress: String
 }
 
+struct TimelineRequest: Encodable {
+    let action: String
+    let userAddress: String
+    let encryptionKey: WalletEncryptionKey
+}
+
 struct CreateAttestationRequest: Encodable {
     let userAddress: String
     let encryptionKey: WalletEncryptionKey
@@ -566,6 +594,35 @@ struct StorjStoreResult: Decodable {
     let storjUri: String
     let contentHash: String
     let size: Int?
+}
+
+struct TimelineEventCollection: Decodable {
+    let events: [TimelineEvent]
+
+    init(events: [TimelineEvent]) {
+        self.events = events
+    }
+
+    init(from decoder: Decoder) throws {
+        if let singleValue = try? decoder.singleValueContainer(),
+           let events = try? singleValue.decode([TimelineEvent].self) {
+            self.events = events
+            return
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.events =
+            (try? container.decode([TimelineEvent].self, forKey: .events))
+            ?? (try? container.decode([TimelineEvent].self, forKey: .timeline))
+            ?? (try? container.decode([TimelineEvent].self, forKey: .items))
+            ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case events
+        case timeline
+        case items
+    }
 }
 
 struct StorjListItem: Decodable, Identifiable {

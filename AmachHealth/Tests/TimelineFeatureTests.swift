@@ -133,3 +133,49 @@ final class CreateAttestationResponseTests: XCTestCase {
         XCTAssertEqual(response.attestation?.blockNumber, 42)
     }
 }
+
+final class TimelineEventCollectionTests: XCTestCase {
+    func test_decodes_raw_array_shape() throws {
+        let json = """
+        [
+          {
+            "id": "evt_1",
+            "eventType": "GENERAL_NOTE",
+            "timestamp": "2026-03-01T10:00:00Z",
+            "data": { "notes": "Started new protocol" },
+            "metadata": { "platform": "web", "version": "1", "source": "user" }
+          }
+        ]
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let collection = try decoder.decode(TimelineEventCollection.self, from: json)
+
+        XCTAssertEqual(collection.events.count, 1)
+        XCTAssertEqual(collection.events.first?.id, "evt_1")
+    }
+
+    func test_decodes_wrapped_events_shape() throws {
+        let json = """
+        {
+          "events": [
+            {
+              "id": "evt_2",
+              "eventType": "LIFESTYLE_CHANGE",
+              "timestamp": "2026-03-01T10:00:00Z",
+              "data": { "change": "Started zone 2" },
+              "metadata": { "platform": "web", "version": "1", "source": "user" }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let collection = try decoder.decode(TimelineEventCollection.self, from: json)
+
+        XCTAssertEqual(collection.events.count, 1)
+        XCTAssertEqual(collection.events.first?.eventType, .lifestyleChange)
+    }
+}
