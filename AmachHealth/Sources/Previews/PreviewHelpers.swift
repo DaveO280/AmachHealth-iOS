@@ -125,7 +125,7 @@ enum MockData {
         s.lastSyncResult = SyncResult(
             success: true, storjUri: "storj://amach/abc123",
             contentHash: "0x4f2e8a1b", tier: "GOLD", score: 87,
-            metricsCount: 31, daysCovered: 90, error: nil
+            metricsCount: 31, daysCovered: 90, attestationTxHash: nil, error: nil
         )
         s.lastSyncDate = Date().addingTimeInterval(-1800)
 
@@ -171,7 +171,7 @@ enum MockData {
         s.lastSyncResult = SyncResult(
             success: true, storjUri: nil, contentHash: nil,
             tier: "SILVER", score: 72, metricsCount: 28,
-            daysCovered: 35, error: nil
+            daysCovered: 35, attestationTxHash: nil, error: nil
         )
         s.lastSyncDate = Date().addingTimeInterval(-900)
 
@@ -216,7 +216,7 @@ enum MockData {
         s.lastSyncResult = SyncResult(
             success: true, storjUri: nil, contentHash: nil,
             tier: "BRONZE", score: 52, metricsCount: 18,
-            daysCovered: 14, error: nil
+            daysCovered: 14, attestationTxHash: nil, error: nil
         )
         s.lastSyncDate = Date().addingTimeInterval(-7200)
 
@@ -299,7 +299,7 @@ enum MockData {
         w.address = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F"
         HealthDataSyncService.shared.lastSyncResult = SyncResult(
             success: false, storjUri: nil, contentHash: nil,
-            tier: nil, score: nil, metricsCount: nil, daysCovered: nil,
+            tier: nil, score: nil, metricsCount: nil, daysCovered: nil, attestationTxHash: nil,
             error: "Upload failed: connection timed out. Your data is safe — tap Retry."
         )
     }

@@ -105,11 +105,21 @@ final class HealthDataSyncService: ObservableObject {
                 encryptionKey: encryptionKey
             )
 
-            // Step 8: Record attestation (happens on backend)
+            // Step 8: Record attestation on-chain via backend.
             syncState = .syncing(progress: 0.9, message: "Creating on-chain attestation...")
 
-            // The web app handles attestation after Storj save
-            // For iOS, we could call a separate attestation endpoint or let web handle it
+            let attestation = try? await api.createAttestation(
+                storjUri: storeResult.storjUri,
+                dataType: "apple-health-full-export",
+                action: "store",
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey,
+                metadata: [
+                    "tier": manifest.completeness.tier,
+                    "score": String(manifest.completeness.score),
+                    "dateRange": "\(manifest.dateRange.start)_\(manifest.dateRange.end)"
+                ]
+            )
 
             // Step 9: Complete!
             syncState = .syncing(progress: 1.0, message: "Sync complete!")
@@ -122,6 +132,7 @@ final class HealthDataSyncService: ObservableObject {
                 score: manifest.completeness.score,
                 metricsCount: metricsPresent.count,
                 daysCovered: completeness.daysCovered,
+                attestationTxHash: attestation?.txHash,
                 error: nil
             )
 
@@ -149,6 +160,7 @@ final class HealthDataSyncService: ObservableObject {
                 score: nil,
                 metricsCount: nil,
                 daysCovered: nil,
+                attestationTxHash: nil,
                 error: error.localizedDescription
             )
 
@@ -174,6 +186,19 @@ final class HealthDataSyncService: ObservableObject {
                 encryptionKey: encryptionKey
             )
 
+            let attestation = try? await api.createAttestation(
+                storjUri: storeResult.storjUri,
+                dataType: "apple-health-full-export",
+                action: "store",
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey,
+                metadata: [
+                    "tier": payload.manifest.completeness.tier,
+                    "score": String(payload.manifest.completeness.score),
+                    "dateRange": "\(payload.manifest.dateRange.start)_\(payload.manifest.dateRange.end)"
+                ]
+            )
+
             let result = SyncResult(
                 success: true,
                 storjUri: storeResult.storjUri,
@@ -182,6 +207,7 @@ final class HealthDataSyncService: ObservableObject {
                 score: payload.manifest.completeness.score,
                 metricsCount: payload.manifest.metricsPresent.count,
                 daysCovered: payload.manifest.completeness.daysCovered,
+                attestationTxHash: attestation?.txHash,
                 error: nil
             )
 
@@ -328,6 +354,7 @@ struct SyncResult: Equatable {
     let score: Int?
     let metricsCount: Int?
     let daysCovered: Int?
+    let attestationTxHash: String?
     let error: String?
 }
 

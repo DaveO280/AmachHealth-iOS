@@ -12,7 +12,11 @@ struct HealthSyncView: View {
 
     @State private var showingDatePicker = false
     @State private var showingConnectWallet = false
+    @State private var showingUploadLabData = false
     @State private var syncStartDate = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
+    @State private var labItems: [StorjListItem] = []
+    @State private var isLoadingLabRecords = false
+    @State private var labError: String?
 
     var body: some View {
         NavigationStack {
@@ -26,6 +30,7 @@ struct HealthSyncView: View {
                             syncProgressSection
                             lastSyncSection
                             syncControlSection
+                            labRecordsSection
                             storageLink
                         } else {
                             walletGateCard
@@ -54,6 +59,22 @@ struct HealthSyncView: View {
                     .environmentObject(wallet)
                     .presentationDetents([.medium])
                     .presentationBackground(Color.amachSurface)
+            }
+            .sheet(isPresented: $showingUploadLabData) {
+                UploadLabDataSheet {
+                    await loadLabRecords()
+                }
+                .environmentObject(wallet)
+                .presentationDetents([.large])
+                .presentationBackground(Color.amachSurface)
+            }
+            .task(id: wallet.isConnected) {
+                if wallet.isConnected {
+                    await loadLabRecords()
+                } else {
+                    labItems = []
+                    labError = nil
+                }
             }
         }
     }
@@ -258,6 +279,17 @@ struct HealthSyncView: View {
                             statPill(value: "\(days)", label: "Days")
                         }
                     }
+
+                    if let txHash = result.attestationTxHash {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Verified on ZKsync", systemImage: "checkmark.seal.fill")
+                                .font(AmachType.tiny)
+                                .foregroundStyle(Color.amachSuccess)
+                            Text(shortHash(txHash))
+                                .font(AmachType.dataMono)
+                                .foregroundStyle(Color.amachTextSecondary)
+                        }
+                    }
                 } else if let err = result.error {
                     Text(err)
                         .font(.caption)
@@ -401,6 +433,71 @@ struct HealthSyncView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - Lab Records
+
+    private var labRecordsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Lab & Records")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Text("Luma can read these to personalize your insights.")
+                        .font(.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+
+                Spacer()
+
+                Button("Upload") {
+                    showingUploadLabData = true
+                }
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.amachPrimary.opacity(0.15))
+                .foregroundStyle(Color.amachPrimaryBright)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1))
+            }
+
+            if isLoadingLabRecords {
+                ProgressView()
+                    .tint(Color.amachPrimaryBright)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            } else if let labError {
+                Text(labError)
+                    .font(.caption)
+                    .foregroundStyle(Color.amachDestructive)
+            } else if labItems.isEmpty {
+                Text("No DEXA or bloodwork records stored yet.")
+                    .font(.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .padding(.vertical, 6)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(labItems) { item in
+                        NavigationLink {
+                            LabRecordDetailView(item: item)
+                                .environmentObject(wallet)
+                        } label: {
+                            LabRecordCard(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.amachSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.amachPrimary.opacity(0.1), lineWidth: 1)
+        )
+    }
+
     // MARK: - Wallet Gate
 
     private var walletGateCard: some View {
@@ -509,6 +606,27 @@ struct HealthSyncView: View {
                 .foregroundStyle(Color.amachTextSecondary)
         }
     }
+
+    private func loadLabRecords() async {
+        guard let encryptionKey = wallet.encryptionKey else { return }
+        isLoadingLabRecords = true
+        defer { isLoadingLabRecords = false }
+
+        do {
+            labItems = try await AmachAPIClient.shared.listLabRecords(
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey
+            )
+            labError = nil
+        } catch {
+            labError = error.localizedDescription
+        }
+    }
+
+    private func shortHash(_ hash: String) -> String {
+        guard hash.count > 16 else { return hash }
+        return "\(hash.prefix(10))…\(hash.suffix(6))"
+    }
 }
 
 // MARK: - Storage List View
@@ -545,7 +663,14 @@ struct StorageListView: View {
                     ScrollView {
                         LazyVStack(spacing: 10) {
                             ForEach(items) { item in
-                                StorageItemCard(item: item)
+                                NavigationLink {
+                                    StorageDetailView(item: item)
+                                        .environmentObject(WalletService.shared)
+                                        .environmentObject(HealthDataSyncService.shared)
+                                } label: {
+                                    StorageItemCard(item: item)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -630,6 +755,60 @@ struct StorageItemCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .stroke(Color.amachPrimary.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+struct LabRecordCard: View {
+    let item: StorjListItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: item.dataType == "dexa" ? "figure.stand" : "drop.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(item.dataType == "dexa" ? Color.amachAccent : Color.amachPrimaryBright)
+                        .frame(width: 26, height: 26)
+                        .background((item.dataType == "dexa" ? Color.amachAccent : Color.amachPrimary).opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+
+                    Text(item.dataType == "dexa" ? "DEXA Scan" : "Bloodwork")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.amachTextPrimary)
+                }
+
+                Spacer()
+
+                Text(item.uploadDate, style: .date)
+                    .font(.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+
+            let summaries = [item.metadata?["summary1"], item.metadata?["summary2"]].compactMap { $0 }
+            if summaries.isEmpty {
+                Text("Stored securely on Storj")
+                    .font(.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+            } else {
+                Text(summaries.joined(separator: "  •  "))
+                    .font(.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .multilineTextAlignment(.leading)
+            }
+
+            if item.attestationTxHash != nil {
+                Label("Verified on ZKsync", systemImage: "checkmark.seal.fill")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachSuccess)
+            }
+        }
+        .padding(14)
+        .background(Color.amachBg.opacity(0.35))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.amachPrimary.opacity(0.08), lineWidth: 1)
         )
     }
 }

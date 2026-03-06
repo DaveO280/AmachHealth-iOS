@@ -44,6 +44,12 @@
 		AA0000000000000000000223 /* SleepStagesChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000123 /* SleepStagesChart.swift */; };
 		AA0000000000000000000224 /* HeartRateZonesChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000124 /* HeartRateZonesChart.swift */; };
 		AA0000000000000000000225 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000125 /* Assets.xcassets */; };
+		AA0000000000000000000226 /* TimelineModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000126 /* TimelineModels.swift */; };
+		AA0000000000000000000227 /* TimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000127 /* TimelineService.swift */; };
+		AA0000000000000000000228 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000128 /* TimelineView.swift */; };
+		AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000129 /* AddTimelineEventSheet.swift */; };
+		AA000000000000000000022A /* StorageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012A /* StorageDetailView.swift */; };
+		AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012B /* UploadLabDataSheet.swift */; };
 		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
 		BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* ConnectWalletSheet.swift */; };
 /* End PBXBuildFile section */
@@ -89,6 +95,12 @@
 		AA0000000000000000000123 /* SleepStagesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SleepStagesChart.swift; path = AmachHealth/Sources/Components/SleepStagesChart.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000124 /* HeartRateZonesChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HeartRateZonesChart.swift; path = AmachHealth/Sources/Components/HeartRateZonesChart.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000125 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = "Amach Health/Amach Health/Assets.xcassets"; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000126 /* TimelineModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineModels.swift; path = AmachHealth/Sources/Models/TimelineModels.swift; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000127 /* TimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineService.swift; path = AmachHealth/Sources/Services/TimelineService.swift; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000128 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineView.swift; path = AmachHealth/Sources/Views/TimelineView.swift; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000129 /* AddTimelineEventSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AddTimelineEventSheet.swift; path = AmachHealth/Sources/Views/AddTimelineEventSheet.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012A /* StorageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorageDetailView.swift; path = AmachHealth/Sources/Views/StorageDetailView.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012B /* UploadLabDataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadLabDataSheet.swift; path = AmachHealth/Sources/Views/UploadLabDataSheet.swift; sourceTree = SOURCE_ROOT; };
 		BB0000000000000000000005 /* ConnectWalletSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectWalletSheet.swift; path = AmachHealth/Sources/Views/ConnectWalletSheet.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -192,6 +204,7 @@
 				AA000000000000000000010D /* ChatModels.swift */,
 				AA000000000000000000010E /* HealthDataTypes.swift */,
 				AA000000000000000000010F /* HealthMemoryModels.swift */,
+				AA0000000000000000000126 /* TimelineModels.swift */,
 			);
 			name = Models;
 			sourceTree = "<group>";
@@ -216,6 +229,7 @@
 				AA0000000000000000000116 /* HealthKitService.swift */,
 				AA0000000000000000000117 /* HealthMemoryStore.swift */,
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
+				AA0000000000000000000127 /* TimelineService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
 			);
 			name = Services;
@@ -224,6 +238,7 @@
 		AA0000000000000000000418 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AA0000000000000000000129 /* AddTimelineEventSheet.swift */,
 				AA000000000000000000011A /* ChatView.swift */,
 				BB0000000000000000000005 /* ConnectWalletSheet.swift */,
 				AA000000000000000000011B /* DashboardView.swift */,
@@ -232,7 +247,10 @@
 				AA000000000000000000011E /* MetricDetailView.swift */,
 				AA000000000000000000011F /* OnboardingView.swift */,
 				AA0000000000000000000120 /* ProfileView.swift */,
+				AA000000000000000000012A /* StorageDetailView.swift */,
+				AA0000000000000000000128 /* TimelineView.swift */,
 				AA0000000000000000000121 /* TrendsView.swift */,
+				AA000000000000000000012B /* UploadLabDataSheet.swift */,
 			);
 			name = Views;
 			sourceTree = "<group>";
@@ -339,6 +357,7 @@
 				AA000000000000000000020D /* ChatModels.swift in Sources */,
 				AA000000000000000000020E /* HealthDataTypes.swift in Sources */,
 				AA000000000000000000020F /* HealthMemoryModels.swift in Sources */,
+				AA0000000000000000000226 /* TimelineModels.swift in Sources */,
 				AA0000000000000000000210 /* AmachPreviews.swift in Sources */,
 				AA0000000000000000000211 /* PreviewHelpers.swift in Sources */,
 				AA0000000000000000000212 /* AnomalyDetector.swift in Sources */,
@@ -348,7 +367,9 @@
 				AA0000000000000000000216 /* HealthKitService.swift in Sources */,
 				AA0000000000000000000217 /* HealthMemoryStore.swift in Sources */,
 				AA0000000000000000000218 /* LumaProactiveService.swift in Sources */,
+				AA0000000000000000000227 /* TimelineService.swift in Sources */,
 				AA0000000000000000000219 /* WalletService.swift in Sources */,
+				AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */,
 				AA000000000000000000021A /* ChatView.swift in Sources */,
 				BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */,
 				AA000000000000000000021B /* DashboardView.swift in Sources */,
@@ -357,8 +378,11 @@
 				AA000000000000000000021E /* MetricDetailView.swift in Sources */,
 				AA000000000000000000021F /* OnboardingView.swift in Sources */,
 				AA0000000000000000000220 /* ProfileView.swift in Sources */,
+				AA000000000000000000022A /* StorageDetailView.swift in Sources */,
+				AA0000000000000000000228 /* TimelineView.swift in Sources */,
 				AA0000000000000000000221 /* TrendsView.swift in Sources */,
 				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
+				AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

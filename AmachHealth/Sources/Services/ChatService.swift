@@ -42,7 +42,7 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let finalContext = enrichContextWithMemory(context ?? HealthContextBuilder.buildCurrentContext())
+        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext())
 
         let userMsg = ChatMessage(role: .user, content: trimmed)
         currentSession.messages.append(userMsg)
@@ -92,7 +92,7 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let finalContext = enrichContextWithMemory(context ?? HealthContextBuilder.buildCurrentContext())
+        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext())
 
         // 1. Append user message
         currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
@@ -189,7 +189,9 @@ final class ChatService: ObservableObject {
 
         let service = LumaProactiveService.shared
         let message = service.buildOpeningMessage(for: event)
-        let veniceContext = AIChatContext(proactive: service.buildVeniceContext(for: event))
+        let veniceContext = enrichContext(
+            AIChatContext(proactive: service.buildVeniceContext(for: event))
+        )
 
         // Luma-initiated placeholder — no user message above it
         let placeholder = ChatMessage(
@@ -474,25 +476,31 @@ final class ChatService: ObservableObject {
         return jsonSubstring.data(using: .utf8)
     }
 
-    private func enrichContextWithMemory(_ base: AIChatContext?) -> AIChatContext? {
+    private func enrichContext(_ base: AIChatContext?) -> AIChatContext? {
         let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule()
+        let walletAddress = wallet.isConnected ? wallet.address : nil
+        let encryptionKey = wallet.isConnected ? wallet.encryptionKey : nil
 
-        switch (base, memoryCapsule) {
-        case (nil, nil):
+        guard base != nil || memoryCapsule != nil || walletAddress != nil || encryptionKey != nil else {
             return nil
-        case (nil, let memory?):
-            return AIChatContext(memory: memory)
-        case (let existing?, nil):
-            return existing
-        case (let existing?, let memory?):
-            if existing.memory != nil { return existing }
+        }
+
+        guard let existing = base else {
             return AIChatContext(
-                metrics: existing.metrics,
-                dateRange: existing.dateRange,
-                proactive: existing.proactive,
-                memory: memory
+                memory: memoryCapsule,
+                userAddress: walletAddress,
+                encryptionKey: encryptionKey
             )
         }
+
+        return AIChatContext(
+            metrics: existing.metrics,
+            dateRange: existing.dateRange,
+            proactive: existing.proactive,
+            memory: existing.memory ?? memoryCapsule,
+            userAddress: existing.userAddress ?? walletAddress,
+            encryptionKey: existing.encryptionKey ?? encryptionKey
+        )
     }
 
     // MARK: - Persistence

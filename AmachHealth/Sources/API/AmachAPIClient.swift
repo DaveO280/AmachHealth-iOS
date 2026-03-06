@@ -95,6 +95,21 @@ final class AmachAPIClient {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> AppleHealthStorjPayload {
+        try await retrieveStoredData(
+            storjUri: storjUri,
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            as: AppleHealthStorjPayload.self
+        )
+    }
+
+    /// Retrieve and decode any Storj payload type.
+    func retrieveStoredData<T: Decodable>(
+        storjUri: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        as type: T.Type = T.self
+    ) async throws -> T {
         let request = StorjRetrieveRequest(
             action: "storage/retrieve",
             userAddress: walletAddress,
@@ -102,7 +117,7 @@ final class AmachAPIClient {
             storjUri: storjUri
         )
 
-        let response: StorjResponse<AppleHealthStorjPayload> = try await post(
+        let response: StorjResponse<T> = try await post(
             path: "/api/storj",
             body: request
         )
@@ -110,6 +125,104 @@ final class AmachAPIClient {
         guard response.success, let result = response.result else {
             throw APIError.requestFailed(response.error ?? "Unknown error")
         }
+
+        return result
+    }
+
+    // MARK: - Timeline Operations
+
+    func storeTimelineEvent(
+        event: TimelineEvent,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> StorjStoreResult {
+        let request = StorjRequest(
+            action: "timeline/store",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            data: AnyCodable(event),
+            dataType: "timeline-event",
+            options: StorjStoreOptions(
+                metadata: [
+                    "eventType": event.eventType.rawValue,
+                    "timestamp": ISO8601DateFormatter().string(from: event.timestamp),
+                    "platform": "ios"
+                ]
+            )
+        )
+
+        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Timeline store failed")
+        }
+        return result
+    }
+
+    func listTimelineEvents(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> [TimelineEvent] {
+        let request = StorjListRequest(
+            action: "timeline/list",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "timeline-event"
+        )
+
+        let response: StorjResponse<[TimelineEvent]> = try await post(path: "/api/storj", body: request)
+        guard response.success, let items = response.result else {
+            throw APIError.requestFailed(response.error ?? "Timeline list failed")
+        }
+        return items.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    func listLabRecords(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> [StorjListItem] {
+        async let bloodwork = listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "bloodwork"
+        )
+        async let dexa = listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "dexa"
+        )
+
+        return try await (bloodwork + dexa).sorted { $0.uploadedAt > $1.uploadedAt }
+    }
+
+    func storeLabRecord(
+        data: LabRecord,
+        dataType: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> StorjStoreResult {
+        let request = StorjRequest(
+            action: "storage/store",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            data: AnyCodable(data),
+            dataType: dataType,
+            options: StorjStoreOptions(
+                metadata: labRecordMetadata(for: data, dataType: dataType)
+            )
+        )
+
+        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Lab store failed")
+        }
+
+        _ = try? await createAttestation(
+            storjUri: result.storjUri,
+            dataType: dataType,
+            action: "store",
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey
+        )
 
         return result
     }
@@ -263,6 +376,36 @@ final class AmachAPIClient {
         return response.attestations
     }
 
+    func createAttestation(
+        storjUri: String,
+        dataType: String,
+        action: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        metadata: [String: String] = [:]
+    ) async throws -> AttestationResult {
+        let request = CreateAttestationRequest(
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            storjUri: storjUri,
+            dataType: dataType,
+            action: action,
+            metadata: metadata,
+            platform: "ios"
+        )
+
+        let response: CreateAttestationResponse = try await post(
+            path: "/api/attestations",
+            body: request
+        )
+
+        guard response.success, let result = response.attestation else {
+            throw APIError.requestFailed(response.error ?? "Attestation failed")
+        }
+
+        return result
+    }
+
     // MARK: - Private Methods
 
     private func post<T: Encodable, R: Decodable>(
@@ -314,6 +457,36 @@ final class AmachAPIClient {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode(R.self, from: data)
+    }
+
+    private func labRecordMetadata(for record: LabRecord, dataType: String) -> [String: String] {
+        var metadata: [String: String] = [
+            "date": ISO8601DateFormatter().string(from: record.date),
+            "platform": "ios",
+            "type": dataType
+        ]
+
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+
+        let summaryPairs = record.values
+            .sorted { $0.key < $1.key }
+            .prefix(2)
+            .compactMap { key, value -> String? in
+                guard let rendered = formatter.string(from: NSNumber(value: value)) else { return nil }
+                let unit = record.units[key].map { " \($0)" } ?? ""
+                return "\(key): \(rendered)\(unit)"
+            }
+
+        if let first = summaryPairs.first {
+            metadata["summary1"] = first
+        }
+        if summaryPairs.count > 1 {
+            metadata["summary2"] = Array(summaryPairs)[1]
+        }
+
+        return metadata
     }
 }
 
@@ -371,6 +544,16 @@ struct AttestationRequest: Encodable {
     let userAddress: String
 }
 
+struct CreateAttestationRequest: Encodable {
+    let userAddress: String
+    let encryptionKey: WalletEncryptionKey
+    let storjUri: String
+    let dataType: String
+    let action: String
+    let metadata: [String: String]
+    let platform: String
+}
+
 // MARK: - Response Types
 
 struct StorjResponse<T: Decodable>: Decodable {
@@ -418,6 +601,13 @@ struct StorjListItem: Decodable, Identifiable {
         guard parts.count == 2 else { return nil }
         return (String(parts[0]), String(parts[1]))
     }
+
+    var attestationTxHash: String? {
+        metadata?["attestationTxHash"]
+            ?? metadata?["attestationTxhash"]
+            ?? metadata?["txHash"]
+            ?? metadata?["txhash"]
+    }
 }
 
 struct HealthSummaryResponse: Decodable {
@@ -440,6 +630,18 @@ struct HealthSummary: Decodable {
 
 struct AttestationResponse: Decodable {
     let attestations: [AttestationInfo]
+}
+
+struct CreateAttestationResponse: Decodable {
+    let success: Bool
+    let attestation: AttestationResult?
+    let error: String?
+}
+
+struct AttestationResult: Decodable {
+    let txHash: String
+    let attestationUID: String?
+    let blockNumber: Int?
 }
 
 struct AttestationInfo: Decodable, Identifiable {

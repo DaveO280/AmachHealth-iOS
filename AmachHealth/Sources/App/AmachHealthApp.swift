@@ -11,6 +11,7 @@ struct AmachHealthApp: App {
     @StateObject private var syncService = HealthDataSyncService.shared
     @StateObject private var chatService = ChatService.shared
     @StateObject private var dashboard = DashboardService.shared
+    @StateObject private var timeline = TimelineService.shared
     @StateObject private var lumaContext = LumaContextService.shared
 
     @Environment(\.scenePhase) private var scenePhase
@@ -24,6 +25,7 @@ struct AmachHealthApp: App {
                 .environmentObject(syncService)
                 .environmentObject(chatService)
                 .environmentObject(dashboard)
+                .environmentObject(timeline)
                 .environmentObject(lumaContext)
                 .preferredColorScheme(.dark)
                 .task {
@@ -122,7 +124,7 @@ struct RootView: View {
 // ============================================================
 // MARK: - MAIN TAB VIEW
 // ============================================================
-// 4 tabs: Dashboard, Trends, Sync, Profile.
+// 5 tabs: Dashboard, Trends, Timeline, Sync, Profile.
 // Luma is NOT a tab — she's the FAB above this view.
 
 struct MainTabView: View {
@@ -131,6 +133,7 @@ struct MainTabView: View {
     @EnvironmentObject private var syncService: HealthDataSyncService
     @EnvironmentObject private var chatService: ChatService
     @EnvironmentObject private var dashboard: DashboardService
+    @EnvironmentObject private var timeline: TimelineService
 
     var body: some View {
         TabView {
@@ -146,13 +149,20 @@ struct MainTabView: View {
                     Label("Trends", systemImage: "chart.bar.xaxis")
                 }
 
-            // Tab 3: Sync & Upload
+            // Tab 3: Timeline
+            TimelineView()
+                .environmentObject(timeline)
+                .tabItem {
+                    Label("Timeline", systemImage: "calendar.badge.clock")
+                }
+
+            // Tab 4: Sync & Upload
             HealthSyncView()
                 .tabItem {
                     Label("Sync", systemImage: AmachIcon.sync)
                 }
 
-            // Tab 4: Profile
+            // Tab 5: Profile
             ProfileView()
                 .tabItem {
                     Label("Profile", systemImage: "person.fill")
@@ -215,6 +225,7 @@ typealias TierBadge = AmachTierBadge
         .environmentObject(HealthDataSyncService.shared)
         .environmentObject(ChatService.shared)
         .environmentObject(DashboardService.shared)
+        .environmentObject(TimelineService.shared)
         .preferredColorScheme(.dark)
 }
 

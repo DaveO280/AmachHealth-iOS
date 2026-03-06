@@ -84,17 +84,23 @@ struct AIChatContext: Encodable {
     // Populated only for Luma-initiated proactive conversations
     let proactive: ProactiveInsightContext?
     let memory: AIChatMemoryCapsule?
+    let userAddress: String?
+    let encryptionKey: WalletEncryptionKey?
 
     init(
         metrics: AIChatMetrics? = nil,
         dateRange: AIChatDateRange? = nil,
         proactive: ProactiveInsightContext? = nil,
-        memory: AIChatMemoryCapsule? = nil
+        memory: AIChatMemoryCapsule? = nil,
+        userAddress: String? = nil,
+        encryptionKey: WalletEncryptionKey? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
         self.proactive = proactive
         self.memory = memory
+        self.userAddress = userAddress
+        self.encryptionKey = encryptionKey
     }
 }
 
