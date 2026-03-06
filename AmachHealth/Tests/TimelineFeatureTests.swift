@@ -134,6 +134,70 @@ final class CreateAttestationResponseTests: XCTestCase {
     }
 }
 
+final class TimelineEventWebFormatTests: XCTestCase {
+    /// Web stores timestamp as Unix ms and metadata as { source, confidence, tags }
+    func test_decodes_web_stored_event() throws {
+        let json = """
+        {
+          "id": "web-evt-1",
+          "eventType": "MEDICATION_STARTED",
+          "timestamp": 1709510400000,
+          "data": { "name": "Metformin", "dosage": "500mg" },
+          "metadata": { "source": "user-input", "confidence": 1.0 }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let event = try decoder.decode(TimelineEvent.self, from: json)
+
+        XCTAssertEqual(event.id, "web-evt-1")
+        XCTAssertEqual(event.eventType, .medicationStarted)
+        XCTAssertEqual(event.data["name"], "Metformin")
+        XCTAssertEqual(event.metadata.source, .userEntered)
+        // Unix ms 1709510400000 = 2024-03-04T00:00:00Z
+        XCTAssertEqual(event.timestamp.timeIntervalSince1970, 1_709_510_400, accuracy: 1)
+    }
+
+    /// Unknown web event types should decode as .custom
+    func test_unknown_event_type_falls_back_to_custom() throws {
+        let json = """
+        {
+          "id": "web-evt-2",
+          "eventType": "SOME_FUTURE_TYPE",
+          "timestamp": 1709510400000,
+          "data": {},
+          "metadata": { "source": "user-input" }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let event = try decoder.decode(TimelineEvent.self, from: json)
+        XCTAssertEqual(event.eventType, .custom)
+    }
+
+    /// Web data values can be non-string (numbers, booleans)
+    func test_decodes_mixed_data_values() throws {
+        let json = """
+        {
+          "id": "web-evt-3",
+          "eventType": "WEIGHT_RECORDED",
+          "timestamp": 1709510400000,
+          "data": { "weight": 165, "unit": "lbs", "fasting": true },
+          "metadata": { "source": "user-input" }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let event = try decoder.decode(TimelineEvent.self, from: json)
+        XCTAssertEqual(event.data["weight"], "165")
+        XCTAssertEqual(event.data["unit"], "lbs")
+        XCTAssertEqual(event.data["fasting"], "true")
+    }
+}
+
 final class TimelineEventCollectionTests: XCTestCase {
     func test_decodes_raw_array_shape() throws {
         let json = """
