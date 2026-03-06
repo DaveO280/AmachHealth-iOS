@@ -305,6 +305,7 @@ final class WalletService: ObservableObject {
     /// Call from UI when `encryptionKey == nil` but `isConnected == true`.
     func rederiveEncryptionKey() async throws {
         guard isConnected else { throw WalletError.notConnected }
+        walletDebug("Re-deriving encryption key")
 
         #if canImport(PrivySDK)
         guard let privy = privy,
@@ -312,7 +313,9 @@ final class WalletService: ObservableObject {
               let wallet = user.embeddedEthereumWallets.first else {
             throw WalletError.notConnected
         }
+        walletDebug("Requesting fresh wallet signature for \(wallet.address.lowercased())")
         try await deriveAndStoreEncryptionKey(wallet: wallet)
+        walletDebug("Encryption key re-derived successfully")
         #else
         throw WalletError.notImplemented
         #endif
@@ -322,18 +325,28 @@ final class WalletService: ObservableObject {
     /// When `forceRefresh` is true, always prompt for a fresh signature.
     func ensureEncryptionKey(forceRefresh: Bool = false) async throws -> WalletEncryptionKey {
         guard isConnected else { throw WalletError.notConnected }
+        walletDebug("ensureEncryptionKey(forceRefresh: \(forceRefresh))")
 
         if !forceRefresh, let encryptionKey {
+            walletDebug("Using cached encryption key for \(encryptionKey.walletAddress)")
             return encryptionKey
         }
 
+        walletDebug("No usable cached encryption key, re-deriving")
         try await rederiveEncryptionKey()
 
         guard let encryptionKey else {
             throw WalletError.noEncryptionKey
         }
 
+        walletDebug("Returning refreshed encryption key for \(encryptionKey.walletAddress)")
         return encryptionKey
+    }
+
+    private func walletDebug(_ message: String) {
+        #if DEBUG
+        print("🔐 [WalletService] \(message)")
+        #endif
     }
 
     // ──────────────────────────────────────────────────────────

@@ -218,14 +218,24 @@ struct TimelineView: View {
         guard wallet.isConnected else { return }
 
         do {
+            timelineDebug("Starting Timeline load from view")
             let encryptionKey = try await wallet.ensureEncryptionKey()
+            timelineDebug("Using encryption key for \(encryptionKey.walletAddress)")
             await timeline.loadEvents(
                 walletAddress: encryptionKey.walletAddress,
                 encryptionKey: encryptionKey
             )
+            timelineDebug("Timeline load returned \(timeline.events.count) merged events")
         } catch {
+            timelineDebug("Timeline load failed before service call: \(error.localizedDescription)")
             timeline.error = error.localizedDescription
         }
+    }
+
+    private func timelineDebug(_ message: String) {
+        #if DEBUG
+        print("🕒 [TimelineView] \(message)")
+        #endif
     }
 }
 

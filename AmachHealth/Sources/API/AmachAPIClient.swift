@@ -136,6 +136,7 @@ final class AmachAPIClient {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> StorjStoreResult {
+        timelineAPIDebug("Storing timeline event \(event.id) for \(walletAddress)")
         let request = StorjRequest(
             action: "storage/store",
             userAddress: walletAddress,
@@ -153,8 +154,10 @@ final class AmachAPIClient {
 
         let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
         guard response.success, let result = response.result else {
+            timelineAPIDebug("Timeline store failed: \(response.error ?? "unknown error")")
             throw APIError.requestFailed(response.error ?? "Timeline store failed")
         }
+        timelineAPIDebug("Timeline store succeeded at \(result.storjUri)")
         return result
     }
 
@@ -162,28 +165,38 @@ final class AmachAPIClient {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> [TimelineEvent] {
+        timelineAPIDebug("Listing timeline Storj items for \(walletAddress)")
         let items = try await listHealthData(
             walletAddress: walletAddress,
             encryptionKey: encryptionKey,
             dataType: "timeline-event"
         )
+        timelineAPIDebug("storage/list returned \(items.count) timeline items")
 
         var events: [TimelineEvent] = []
         events.reserveCapacity(items.count)
 
         for item in items.sorted(by: { $0.uploadedAt > $1.uploadedAt }) {
-            var event = try await retrieveStoredData(
-                storjUri: item.uri,
-                walletAddress: walletAddress,
-                encryptionKey: encryptionKey,
-                as: TimelineEvent.self
-            )
-            if event.attestationTxHash == nil {
-                event.attestationTxHash = item.attestationTxHash
+            do {
+                timelineAPIDebug("Retrieving timeline item \(item.uri)")
+                var event = try await retrieveStoredData(
+                    storjUri: item.uri,
+                    walletAddress: walletAddress,
+                    encryptionKey: encryptionKey,
+                    as: TimelineEvent.self
+                )
+                if event.attestationTxHash == nil {
+                    event.attestationTxHash = item.attestationTxHash
+                }
+                timelineAPIDebug("Decoded timeline event \(event.id) of type \(event.eventType.rawValue)")
+                events.append(event)
+            } catch {
+                timelineAPIDebug("Failed to retrieve/decode timeline item \(item.uri): \(error.localizedDescription)")
+                throw error
             }
-            events.append(event)
         }
 
+        timelineAPIDebug("Returning \(events.count) decoded timeline events")
         return events.sorted { $0.timestamp > $1.timestamp }
     }
 
@@ -498,6 +511,12 @@ final class AmachAPIClient {
         }
 
         return metadata
+    }
+
+    private func timelineAPIDebug(_ message: String) {
+        #if DEBUG
+        print("📚 [TimelineAPI] \(message)")
+        #endif
     }
 }
 

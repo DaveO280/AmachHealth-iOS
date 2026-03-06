@@ -28,10 +28,14 @@ final class TimelineService: ObservableObject {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async {
-        events = loadFromCache()
+        let cachedEvents = loadFromCache()
+        events = cachedEvents
         isLoading = true
         error = nil
         defer { isLoading = false }
+
+        timelineDebug("Begin load for \(walletAddress)")
+        timelineDebug("Loaded \(cachedEvents.count) cached timeline events")
 
         do {
             let storjEvents = try await loadStorjEvents(
@@ -39,10 +43,14 @@ final class TimelineService: ObservableObject {
                 encryptionKey: encryptionKey
             )
             let anomalyEvents = HealthMemoryStore.shared.events.map(TimelineEvent.init(fromHealthEvent:))
+            timelineDebug("Loaded \(storjEvents.count) Storj timeline events")
+            timelineDebug("Loaded \(anomalyEvents.count) local anomaly events")
             let merged = merge(storjEvents: storjEvents, anomalies: anomalyEvents)
             events = merged
             saveToCache(merged)
+            timelineDebug("Merged timeline now has \(merged.count) events")
         } catch {
+            timelineDebug("Timeline load failed: \(error.localizedDescription)")
             self.error = error.localizedDescription
         }
     }
@@ -62,6 +70,7 @@ final class TimelineService: ObservableObject {
                 walletAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
+            timelineDebug("Stored timeline event \(event.id) at \(storeResult.storjUri)")
 
             var storedEvent = event
             if let attestation = try? await api.createAttestation(
@@ -77,6 +86,7 @@ final class TimelineService: ObservableObject {
 
             replaceLocalEvent(with: storedEvent)
         } catch {
+            timelineDebug("Failed to store timeline event \(event.id): \(error.localizedDescription)")
             events.removeAll { $0.id == event.id }
             saveToCache(events)
             self.error = error.localizedDescription
@@ -129,15 +139,19 @@ final class TimelineService: ObservableObject {
         encryptionKey: WalletEncryptionKey
     ) async throws -> [TimelineEvent] {
         do {
+            timelineDebug("Attempting Storj timeline load with current encryption key")
             return try await api.listTimelineEvents(
                 walletAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
         } catch {
+            timelineDebug("Storj timeline load failed with current key: \(error.localizedDescription)")
             guard shouldRetryWithFreshSignature(error) else {
+                timelineDebug("Will not retry with fresh signature")
                 throw error
             }
 
+            timelineDebug("Retrying timeline load after forcing encryption key refresh")
             let refreshedKey = try await wallet.ensureEncryptionKey(forceRefresh: true)
             return try await api.listTimelineEvents(
                 walletAddress: walletAddress,
@@ -164,5 +178,11 @@ final class TimelineService: ObservableObject {
         ]
 
         return retryTriggers.contains { message.contains($0) }
+    }
+
+    private func timelineDebug(_ message: String) {
+        #if DEBUG
+        print("🕒 [TimelineService] \(message)")
+        #endif
     }
 }
