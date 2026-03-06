@@ -753,12 +753,61 @@ struct AppleHealthStorjPayload: Codable {
 }
 
 // MARK: - Wallet Encryption Key (matches web app)
+//
+// Web type: { key: string, derivedAt: number, walletAddress: string }
+// iOS keeps Swift-friendly property names but serializes to web-compatible JSON.
 
 struct WalletEncryptionKey: Codable {
     let walletAddress: String
-    let encryptionKey: String
+    let encryptionKey: String   // The derived PBKDF2 hex key
     let signature: String
     let timestamp: Int
+
+    init(walletAddress: String, encryptionKey: String, signature: String, timestamp: Int) {
+        self.walletAddress = walletAddress
+        self.encryptionKey = encryptionKey
+        self.signature = signature
+        self.timestamp = timestamp
+    }
+
+    // Encode with web-compatible field names: "key" and "derivedAt"
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: WebCodingKeys.self)
+        try container.encode(walletAddress, forKey: .walletAddress)
+        try container.encode(encryptionKey, forKey: .key)
+        try container.encode(signature, forKey: .signature)
+        try container.encode(timestamp, forKey: .derivedAt)
+    }
+
+    // Decode from both web format ("key"/"derivedAt") and old iOS Keychain cache ("encryptionKey"/"timestamp")
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: FlexCodingKeys.self)
+        walletAddress = try container.decode(String.self, forKey: .walletAddress)
+
+        if let key = try? container.decode(String.self, forKey: .key) {
+            encryptionKey = key
+        } else {
+            encryptionKey = try container.decode(String.self, forKey: .encryptionKey)
+        }
+
+        signature = (try? container.decode(String.self, forKey: .signature)) ?? ""
+
+        if let derived = try? container.decode(Int.self, forKey: .derivedAt) {
+            timestamp = derived
+        } else if let ts = try? container.decode(Int.self, forKey: .timestamp) {
+            timestamp = ts
+        } else {
+            timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        }
+    }
+
+    private enum WebCodingKeys: String, CodingKey {
+        case walletAddress, key, signature, derivedAt
+    }
+
+    private enum FlexCodingKeys: String, CodingKey {
+        case walletAddress, key, encryptionKey, signature, derivedAt, timestamp
+    }
 }
 
 // MARK: - API Errors
