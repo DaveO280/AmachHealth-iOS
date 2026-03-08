@@ -20,6 +20,9 @@ struct ProfileView: View {
     @EnvironmentObject private var healthKit: HealthKitService
     @EnvironmentObject private var syncService: HealthDataSyncService
 
+    @State private var resolvedProfile: ResolvedProfile?
+    @State private var isLoadingProfile = false
+    @State private var profileError: String?
     @State private var attestations: [AttestationInfo] = []
     @State private var isLoadingAttestations = false
     @State private var showDisconnectAlert = false
@@ -38,6 +41,7 @@ struct ProfileView: View {
 
                 List {
                     profileHeaderSection
+                    profileBasicsSection
                     connectedSourcesSection
                     dataQualitySection
                     attestationsSection
@@ -52,7 +56,22 @@ struct ProfileView: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .task { await loadAttestations() }
+            .task {
+                await loadProfileBasics()
+                await loadAttestations()
+            }
+            .onChange(of: wallet.isConnected) { _, isConnected in
+                Task {
+                    if isConnected {
+                        await loadProfileBasics()
+                        await loadAttestations()
+                    } else {
+                        resolvedProfile = nil
+                        profileError = nil
+                        attestations = []
+                    }
+                }
+            }
             .alert("Disconnect Wallet", isPresented: $showDisconnectAlert) {
                 Button("Cancel", role: .cancel) {}
                 Button("Disconnect", role: .destructive) {
@@ -75,6 +94,118 @@ struct ProfileView: View {
                     .presentationDetents([.medium])
                     .presentationBackground(Color.amachSurface)
             }
+        }
+    }
+
+    // MARK: - Profile Basics
+
+    private var profileBasicsSection: some View {
+        Section {
+            if !wallet.isConnected {
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.amachTextSecondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Shared profile unavailable")
+                            .font(AmachType.caption)
+                            .foregroundStyle(Color.amachTextSecondary)
+                        Text("Connect your wallet to read your shared profile.")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
+                    }
+                }
+                .listRowBackground(Color.amachSurface)
+            } else if isLoadingProfile {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .tint(Color.amachPrimaryBright)
+                    Spacer()
+                }
+                .listRowBackground(Color.amachSurface)
+            } else if let resolvedProfile {
+                profileValueRow(
+                    icon: "calendar",
+                    title: "Birth Date",
+                    value: resolvedProfile.birthDate ?? "Not available"
+                )
+                profileValueRow(
+                    icon: "person.fill",
+                    title: "Sex",
+                    value: formattedSex(resolvedProfile.sex)
+                )
+                profileValueRow(
+                    icon: "ruler.fill",
+                    title: "Height",
+                    value: formattedHeight(resolvedProfile.height)
+                )
+                profileValueRow(
+                    icon: "scalemass.fill",
+                    title: "Weight",
+                    value: formattedWeight(resolvedProfile.weight)
+                )
+
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: "externaldrive.badge.icloud")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.amachPrimaryBright)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Resolved via backend")
+                            .font(AmachType.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.amachTextPrimary)
+
+                        let source = (resolvedProfile.source ?? "on-chain")
+                            .replacingOccurrences(of: "-", with: " ")
+                            .capitalized
+                        let version = resolvedProfile.version.map { "v\($0)" } ?? "v?"
+                        Text("\(source) • \(version)")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+
+                    Spacer()
+
+                    if resolvedProfile.isActive == true {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(Color.amachSuccess)
+                                .frame(width: 5, height: 5)
+                            Text("Active")
+                                .font(AmachType.tiny)
+                                .foregroundStyle(Color.amachSuccess)
+                        }
+                    }
+                }
+                .listRowBackground(Color.amachSurface)
+            } else {
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: "person.crop.rectangle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.amachTextSecondary.opacity(0.5))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("No shared profile found")
+                            .font(AmachType.caption)
+                            .foregroundStyle(Color.amachTextSecondary)
+                        Text(profileError ?? "Your wallet does not have a readable shared profile yet.")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
+                    }
+                }
+                .listRowBackground(Color.amachSurface)
+            }
+        } header: {
+            sectionHeader("Profile Basics")
+        } footer: {
+            Text("This section uses the same wallet identity as web and is intended to read your shared encrypted profile through the backend.")
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextSecondary)
+                .lineSpacing(2)
         }
     }
 
@@ -667,6 +798,23 @@ struct ProfileView: View {
         .listRowBackground(Color.amachSurface)
     }
 
+    private func profileValueRow(icon: String, title: String, value: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(Color.amachPrimaryBright)
+                .frame(width: 28)
+            Text(title)
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextPrimary)
+            Spacer()
+            Text(value)
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextSecondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .listRowBackground(Color.amachSurface)
+    }
+
     private func sectionHeader(_ text: String) -> some View {
         Text(text.uppercased())
             .font(AmachType.tiny)
@@ -678,6 +826,64 @@ struct ProfileView: View {
     private func truncate(_ address: String) -> String {
         guard address.count > 10 else { return address }
         return "\(address.prefix(6))…\(address.suffix(4))"
+    }
+
+    private func formattedSex(_ value: String?) -> String {
+        guard let value, !value.isEmpty else { return "Not available" }
+        return value
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+
+    private func formattedHeight(_ value: Double?) -> String {
+        guard let value else { return "Not available" }
+        let rounded = Int(value.rounded())
+        let feet = rounded / 12
+        let inches = rounded % 12
+        return "\(rounded) in (\(feet)'\(inches)\")"
+    }
+
+    private func formattedWeight(_ value: Double?) -> String {
+        guard let value else { return "Not available" }
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = value.rounded() == value ? 0 : 1
+        formatter.minimumFractionDigits = 0
+        let rendered = formatter.string(from: NSNumber(value: value)) ?? String(value)
+        return "\(rendered) lb"
+    }
+
+    private func loadProfileBasics() async {
+        guard wallet.isConnected else {
+            resolvedProfile = nil
+            profileError = nil
+            return
+        }
+
+        do {
+            isLoadingProfile = true
+            defer { isLoadingProfile = false }
+
+            let encryptionKey = try await wallet.ensureEncryptionKey()
+            resolvedProfile = try await AmachAPIClient.shared.readProfile(
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey
+            )
+            profileError = nil
+        } catch {
+            resolvedProfile = nil
+            profileError = friendlyProfileError(error.localizedDescription)
+        }
+    }
+
+    private func friendlyProfileError(_ message: String) -> String {
+        let lower = message.lowercased()
+        if lower.contains("404") || lower.contains("not found") {
+            return "Profile read endpoint is not available on the backend yet."
+        }
+        if lower.contains("wallet") || lower.contains("encryption") {
+            return message
+        }
+        return "Couldn't load shared profile right now."
     }
 
     private func loadAttestations() async {

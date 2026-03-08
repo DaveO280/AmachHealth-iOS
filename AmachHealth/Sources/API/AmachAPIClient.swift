@@ -117,7 +117,7 @@ final class AmachAPIClient {
             storjUri: storjUri
         )
 
-        let response: StorjResponse<T> = try await post(
+        let response: StorjResponse<StorjRetrievedData<T>> = try await post(
             path: "/api/storj",
             body: request
         )
@@ -126,7 +126,7 @@ final class AmachAPIClient {
             throw APIError.requestFailed(response.error ?? "Unknown error")
         }
 
-        return result
+        return result.data
     }
 
     // MARK: - Timeline Operations
@@ -205,18 +205,51 @@ final class AmachAPIClient {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> [StorjListItem] {
-        async let bloodwork = listHealthData(
+        async let bloodworkLegacy = listHealthData(
             walletAddress: walletAddress,
             encryptionKey: encryptionKey,
             dataType: "bloodwork"
         )
-        async let dexa = listHealthData(
+        async let dexaLegacy = listHealthData(
             walletAddress: walletAddress,
             encryptionKey: encryptionKey,
             dataType: "dexa"
         )
+        async let bloodworkFHIR = listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "bloodwork-report-fhir"
+        )
+        async let dexaFHIR = listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "dexa-report-fhir"
+        )
 
-        return try await (bloodwork + dexa).sorted { $0.uploadedAt > $1.uploadedAt }
+        let allItems = try await (bloodworkLegacy + dexaLegacy + bloodworkFHIR + dexaFHIR)
+        let deduped = dedupeLabItems(allItems)
+        if !deduped.isEmpty {
+            return deduped
+        }
+
+        let fallbackItems = try await listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: nil
+        )
+
+        return dedupeLabItems(
+            fallbackItems.filter { item in
+                let normalizedType = item.dataType.lowercased()
+                if normalizedType.contains("bloodwork") || normalizedType.contains("dexa") {
+                    return true
+                }
+
+                let reportType = item.metadata?["reporttype"]?.lowercased()
+                    ?? item.metadata?["type"]?.lowercased()
+                return reportType == "bloodwork" || reportType == "dexa"
+            }
+        )
     }
 
     func storeLabRecord(
@@ -248,6 +281,56 @@ final class AmachAPIClient {
             walletAddress: walletAddress,
             encryptionKey: encryptionKey
         )
+
+        return result
+    }
+
+    func retrieveBloodworkReport(
+        storjUri: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> RemoteBloodworkReport {
+        let request = ReportRetrieveRequest(
+            action: "report/retrieve",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            storjUri: storjUri,
+            reportType: "bloodwork"
+        )
+
+        let response: StorjResponse<RemoteBloodworkReport> = try await post(
+            path: "/api/storj",
+            body: request
+        )
+
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Failed to retrieve bloodwork report")
+        }
+
+        return result
+    }
+
+    func retrieveDexaReport(
+        storjUri: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> RemoteDexaReport {
+        let request = ReportRetrieveRequest(
+            action: "report/retrieve",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            storjUri: storjUri,
+            reportType: "dexa"
+        )
+
+        let response: StorjResponse<RemoteDexaReport> = try await post(
+            path: "/api/storj",
+            body: request
+        )
+
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Failed to retrieve DEXA report")
+        }
 
         return result
     }
@@ -431,6 +514,29 @@ final class AmachAPIClient {
         return result
     }
 
+    // MARK: - Profile
+
+    func readProfile(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> ResolvedProfile? {
+        let request = ProfileReadRequest(
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey
+        )
+
+        let response: ProfileReadResponse = try await post(
+            path: "/api/profile/read",
+            body: request
+        )
+
+        guard response.success else {
+            throw APIError.requestFailed(response.error ?? "Profile read failed")
+        }
+
+        return response.profile
+    }
+
     // MARK: - Private Methods
 
     private func post<T: Encodable, R: Decodable>(
@@ -514,6 +620,11 @@ final class AmachAPIClient {
         return metadata
     }
 
+    private func dedupeLabItems(_ items: [StorjListItem]) -> [StorjListItem] {
+        let uniqueByURI = Dictionary(items.map { ($0.uri, $0) }, uniquingKeysWith: { current, _ in current })
+        return uniqueByURI.values.sorted { $0.uploadedAt > $1.uploadedAt }
+    }
+
     private func timelineAPIDebug(_ message: String) {
         #if DEBUG
         print("📚 [TimelineAPI] \(message)")
@@ -546,11 +657,24 @@ struct StorjRetrieveRequest: Encodable {
     let storjUri: String
 }
 
+struct ReportRetrieveRequest: Encodable {
+    let action: String
+    let userAddress: String
+    let encryptionKey: WalletEncryptionKey
+    let storjUri: String
+    let reportType: String
+}
+
 struct StorjStoreOptions: Encodable {
     let metadata: [String: String]
 }
 
 struct HealthSummaryRequest: Encodable {
+    let userAddress: String
+    let encryptionKey: WalletEncryptionKey
+}
+
+struct ProfileReadRequest: Encodable {
     let userAddress: String
     let encryptionKey: WalletEncryptionKey
 }
@@ -603,6 +727,13 @@ struct StorjStoreResult: Decodable {
     let storjUri: String
     let contentHash: String
     let size: Int?
+}
+
+struct StorjRetrievedData<T: Decodable>: Decodable {
+    let data: T
+    let storjUri: String?
+    let contentHash: String?
+    let verified: Bool?
 }
 
 struct TimelineEventCollection: Decodable {
@@ -682,6 +813,71 @@ struct HealthSummaryResponse: Decodable {
     let error: String?
 }
 
+struct ProfileReadResponse: Decodable {
+    let success: Bool
+    let profile: ResolvedProfile?
+    let metadata: ResolvedProfileMetadata?
+    let error: String?
+}
+
+struct ResolvedProfile: Decodable {
+    let birthDate: String?
+    let sex: String?
+    let height: Double?
+    let weight: Double?
+    let source: String?
+    let updatedAt: TimeInterval?
+    let version: Int?
+    let isActive: Bool?
+}
+
+struct ResolvedProfileMetadata: Decodable {
+    let hasProfile: Bool?
+    let isActive: Bool?
+    let version: Int?
+}
+
+struct RemoteBloodworkReport: Decodable {
+    let type: String
+    let source: String?
+    let reportDate: String?
+    let laboratory: String?
+    let metrics: [RemoteBloodworkMetric]
+    let notes: [String]?
+}
+
+struct RemoteBloodworkMetric: Decodable, Identifiable {
+    var id: String { [panel ?? "", name, unit ?? ""].joined(separator: "|") }
+
+    let name: String
+    let value: Double?
+    let valueText: String?
+    let unit: String?
+    let referenceRange: String?
+    let panel: String?
+    let flag: String?
+}
+
+struct RemoteDexaReport: Decodable {
+    let type: String
+    let source: String?
+    let scanDate: String?
+    let totalBodyFatPercent: Double?
+    let totalLeanMassKg: Double?
+    let visceralFatRating: Double?
+    let visceralFatAreaCm2: Double?
+    let visceralFatVolumeCm3: Double?
+    let androidGynoidRatio: Double?
+    let boneDensityTotal: RemoteDexaBoneDensity?
+    let notes: [String]?
+}
+
+struct RemoteDexaBoneDensity: Decodable {
+    let bmd: Double?
+    let tScore: Double?
+    let zScore: Double?
+}
+
 struct HealthSummary: Decodable {
     let lastUpdated: Date?
     let metricsCount: Int
@@ -753,12 +949,67 @@ struct AppleHealthStorjPayload: Codable {
 }
 
 // MARK: - Wallet Encryption Key (matches web app)
+//
+// Web expects { key, derivedAt, walletAddress } while iOS keeps
+// Swift-friendly property names locally and in Keychain.
 
 struct WalletEncryptionKey: Codable {
     let walletAddress: String
     let encryptionKey: String
     let signature: String
     let timestamp: Int
+
+    init(walletAddress: String, encryptionKey: String, signature: String, timestamp: Int) {
+        self.walletAddress = walletAddress
+        self.encryptionKey = encryptionKey
+        self.signature = signature
+        self.timestamp = timestamp
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: WebCodingKeys.self)
+        try container.encode(walletAddress, forKey: .walletAddress)
+        try container.encode(encryptionKey, forKey: .key)
+        try container.encode(signature, forKey: .signature)
+        try container.encode(timestamp, forKey: .derivedAt)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: FlexCodingKeys.self)
+        walletAddress = try container.decode(String.self, forKey: .walletAddress)
+
+        if let key = try? container.decode(String.self, forKey: .key) {
+            encryptionKey = key
+        } else {
+            encryptionKey = try container.decode(String.self, forKey: .encryptionKey)
+        }
+
+        signature = (try? container.decode(String.self, forKey: .signature)) ?? ""
+
+        if let derivedAt = try? container.decode(Int.self, forKey: .derivedAt) {
+            timestamp = derivedAt
+        } else if let legacyTimestamp = try? container.decode(Int.self, forKey: .timestamp) {
+            timestamp = legacyTimestamp
+        } else {
+            timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        }
+    }
+
+    private enum WebCodingKeys: String, CodingKey {
+        case walletAddress
+        case key
+        case signature
+        case derivedAt
+    }
+
+    private enum FlexCodingKeys: String, CodingKey {
+        case walletAddress
+        case key
+        case encryptionKey
+        case signature
+        case derivedAt
+        case timestamp
+    }
 }
 
 // MARK: - API Errors

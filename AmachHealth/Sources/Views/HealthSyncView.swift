@@ -76,6 +76,10 @@ struct HealthSyncView: View {
                     labError = nil
                 }
             }
+            .onChange(of: syncService.lastSyncDate) { _, _ in
+                guard wallet.isConnected else { return }
+                Task { await loadLabRecords() }
+            }
         }
     }
 
@@ -608,19 +612,68 @@ struct HealthSyncView: View {
     }
 
     private func loadLabRecords() async {
-        guard let encryptionKey = wallet.encryptionKey else { return }
+        guard wallet.isConnected else {
+            labItems = []
+            labError = nil
+            return
+        }
+
         isLoadingLabRecords = true
         defer { isLoadingLabRecords = false }
 
         do {
-            labItems = try await AmachAPIClient.shared.listLabRecords(
+            let encryptionKey = try await wallet.ensureEncryptionKey()
+            labItems = try await loadLabRecords(
                 walletAddress: encryptionKey.walletAddress,
                 encryptionKey: encryptionKey
             )
             labError = nil
         } catch {
+            labItems = []
             labError = error.localizedDescription
         }
+    }
+
+    private func loadLabRecords(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> [StorjListItem] {
+        do {
+            return try await AmachAPIClient.shared.listLabRecords(
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey
+            )
+        } catch {
+            guard shouldRetryLabRecordsWithFreshSignature(error) else {
+                throw error
+            }
+
+            let refreshedKey = try await wallet.ensureEncryptionKey(forceRefresh: true)
+            return try await AmachAPIClient.shared.listLabRecords(
+                walletAddress: refreshedKey.walletAddress,
+                encryptionKey: refreshedKey
+            )
+        }
+    }
+
+    private func shouldRetryLabRecordsWithFreshSignature(_ error: Error) -> Bool {
+        if wallet.encryptionKey == nil {
+            return true
+        }
+
+        let message = error.localizedDescription.lowercased()
+        let retryTriggers = [
+            "encryption",
+            "decrypt",
+            "decryption",
+            "signature",
+            "key mismatch",
+            "invalid key",
+            "failed to decode",
+            "substring"
+        ]
+
+        return retryTriggers.contains { message.contains($0) }
     }
 
     private func shortHash(_ hash: String) -> String {
@@ -766,14 +819,14 @@ struct LabRecordCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 HStack(spacing: 8) {
-                    Image(systemName: item.dataType == "dexa" ? "figure.stand" : "drop.fill")
+                    Image(systemName: isDexa ? "figure.stand" : "drop.fill")
                         .font(.system(size: 13))
-                        .foregroundStyle(item.dataType == "dexa" ? Color.amachAccent : Color.amachPrimaryBright)
+                        .foregroundStyle(isDexa ? Color.amachAccent : Color.amachPrimaryBright)
                         .frame(width: 26, height: 26)
-                        .background((item.dataType == "dexa" ? Color.amachAccent : Color.amachPrimary).opacity(0.12))
+                        .background((isDexa ? Color.amachAccent : Color.amachPrimary).opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: 7))
 
-                    Text(item.dataType == "dexa" ? "DEXA Scan" : "Bloodwork")
+                    Text(title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.amachTextPrimary)
                 }
@@ -810,6 +863,21 @@ struct LabRecordCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.amachPrimary.opacity(0.08), lineWidth: 1)
         )
+    }
+
+    private var isDexa: Bool {
+        item.dataType == "dexa" || item.dataType == "dexa-report-fhir"
+    }
+
+    private var title: String {
+        switch item.dataType {
+        case "dexa", "dexa-report-fhir":
+            return "DEXA Scan"
+        case "bloodwork", "bloodwork-report-fhir":
+            return "Bloodwork"
+        default:
+            return item.dataType
+        }
     }
 }
 

@@ -310,6 +310,14 @@ struct TimelineEvent: Identifiable, Equatable {
         if isAnomaly, let metricType {
             return "\(metricType.timelineMetricName) anomaly"
         }
+        if eventType == .custom {
+            let orderedKeys = ["title", "event", "name", "details"]
+            for key in orderedKeys {
+                if let value = data[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                    return value
+                }
+            }
+        }
         return eventType.displayName
     }
 
@@ -322,7 +330,12 @@ struct TimelineEvent: Identifiable, Equatable {
             return nil
         }
 
-        let orderedKeys = ["name", "condition", "injury", "procedure", "panel", "change", "event", "title", "notes"]
+        let orderedKeys: [String]
+        if eventType == .custom {
+            orderedKeys = ["details", "notes", "event", "name", "title"]
+        } else {
+            orderedKeys = ["name", "condition", "injury", "procedure", "panel", "change", "event", "title", "notes"]
+        }
         for key in orderedKeys {
             if let value = data[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
                 return value

@@ -270,7 +270,7 @@ private struct TimelineEventCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(event.isAnomaly ? "Auto-detected" : event.eventType.displayName)
+                        Text(event.isAnomaly ? "Auto-detected" : event.titleText)
                             .font(AmachType.h3)
                             .foregroundStyle(Color.amachTextPrimary)
 
