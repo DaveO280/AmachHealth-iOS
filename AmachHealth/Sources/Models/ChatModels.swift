@@ -92,6 +92,8 @@ struct AIChatContext: Encodable {
     let memory: AIChatMemoryCapsule?
     let userAddress: String?
     let encryptionKey: WalletEncryptionKey?
+    /// Instruction injected so Luma never misreads partial-day accumulations.
+    let dataNote: String?
 
     init(
         metrics: AIChatMetrics? = nil,
@@ -99,7 +101,8 @@ struct AIChatContext: Encodable {
         proactive: ProactiveInsightContext? = nil,
         memory: AIChatMemoryCapsule? = nil,
         userAddress: String? = nil,
-        encryptionKey: WalletEncryptionKey? = nil
+        encryptionKey: WalletEncryptionKey? = nil,
+        dataNote: String? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
@@ -107,6 +110,7 @@ struct AIChatContext: Encodable {
         self.memory = memory
         self.userAddress = userAddress
         self.encryptionKey = encryptionKey
+        self.dataNote = dataNote
     }
 }
 
@@ -125,11 +129,12 @@ struct AIChatMetrics: Encodable {
 }
 
 struct MetricContext: Encodable {
-    let average: Double?
-    let min: Double?
-    let max: Double?
-    let latest: Double?
-    let trend: String? // "improving" | "stable" | "declining"
+    let average: Double?        // 30-day average (completed days)
+    let min: Double?            // 30-day minimum
+    let max: Double?            // 30-day maximum
+    let latest: Double?         // previous complete day's value (never today's partial)
+    let sevenDayAvg: Double?    // 7-day rolling average (completed days only)
+    let trend: String?          // "improving" | "stable" | "declining"
 }
 
 struct AIChatDateRange: Encodable {

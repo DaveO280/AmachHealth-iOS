@@ -198,21 +198,24 @@ struct DashboardView: View {
     }
 
     private var dashboardInsight: String {
-        let steps = dashboard.today.steps
         let hrv = dashboard.today.hrv
         let sleep = dashboard.today.sleepHours
         let hr = dashboard.today.heartRateAvg
 
+        // Recovery/sleep signals are always "previous complete data" — safe to reference directly
         if hrv > 60 && sleep >= 7 {
             return "Your body looks well-recovered. HRV is strong and sleep was solid. A good day for a workout or focused work."
-        } else if hrv < 30 {
+        } else if hrv < 30 && hrv > 0 {
             return "Your HRV is lower than usual — a sign your body may need recovery. Consider lighter activity today and check your sleep quality."
-        } else if sleep < 6 {
-            return "Short sleep night detected. Cognitive performance can take a 20–30% hit after under 6 hours. Hydrate and consider your workload today."
-        } else if steps > 10000 {
-            return "You hit 10k+ steps already — consistency here is one of the highest-return longevity habits. Keep it up."
+        } else if sleep < 6 && sleep > 0 {
+            return "Short sleep last night. Cognitive performance can take a 20–30% hit after under 6 hours. Hydrate and consider your workload today."
         } else if hr > 90 && hrv > 0 {
-            return "Your resting heart rate is elevated. This can reflect stress, dehydration, or early illness. Worth noting if it continues tomorrow."
+            return "Resting heart rate is elevated. This can reflect stress, dehydration, or early illness. Worth noting if it continues tomorrow."
+        }
+        // Step milestone: only fire after end of day (≥ 95% complete) to avoid false early positives
+        let stepsSevenDayAvg = weekAvg(dashboard.stepsTrend) ?? 0
+        if dayProgress >= 0.95 && dashboard.today.steps > 10000 && stepsSevenDayAvg > 0 {
+            return "You hit 10k+ steps today — consistency here is one of the highest-return longevity habits. Keep it up."
         }
         return "I'm tracking your activity, heart rate, and sleep to find patterns. Tap to ask me what I'm seeing or what to focus on today."
     }
@@ -220,6 +223,22 @@ struct DashboardView: View {
     // ============================================================
     // MARK: - Today Section (Metric Grid)
     // ============================================================
+
+    /// Fraction of the current day that has elapsed (0.0–1.0).
+    private var dayProgress: Double {
+        let now = Date()
+        let startOfDay = Calendar.current.startOfDay(for: now)
+        return min(1.0, now.timeIntervalSince(startOfDay) / 86400.0)
+    }
+
+    /// 7-day average (completed days only) for a given trend dictionary.
+    private func weekAvg(_ trend: [TrendPeriod: [TrendPoint]]) -> Double? {
+        guard let data = trend[.week], !data.isEmpty else { return nil }
+        let today = Calendar.current.startOfDay(for: Date())
+        let completed = data.filter { !Calendar.current.isDate($0.date, inSameDayAs: today) }
+        guard !completed.isEmpty else { return nil }
+        return completed.map(\.value).reduce(0, +) / Double(completed.count)
+    }
 
     private var todaySection: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
@@ -233,16 +252,24 @@ struct DashboardView: View {
                 }
             }
 
+            let progress = dayProgress
+
             LazyVGrid(
                 columns: AmachLayout.twoColumnGrid,
                 spacing: AmachSpacing.cardGap
             ) {
-                metricCard(.steps(dashboard.today.steps))
-                metricCard(.calories(dashboard.today.activeCalories))
+                metricCard(.steps(dashboard.today.steps,
+                                  sevenDayAvg: weekAvg(dashboard.stepsTrend),
+                                  dayProgress: progress))
+                metricCard(.calories(dashboard.today.activeCalories,
+                                     sevenDayAvg: weekAvg(dashboard.calsTrend),
+                                     dayProgress: progress))
                 metricCard(.heartRate(dashboard.today.heartRateAvg))
                 metricCard(.sleep(dashboard.today.sleepHours))
                 metricCard(.hrv(dashboard.today.hrv))
-                metricCard(.exercise(dashboard.today.exerciseMinutes))
+                metricCard(.exercise(dashboard.today.exerciseMinutes,
+                                     sevenDayAvg: weekAvg(dashboard.exerciseTrend),
+                                     dayProgress: progress))
                 metricCard(.restingHeartRate(dashboard.today.restingHeartRate))
                 metricCard(.vo2Max(dashboard.today.vo2Max))
                 metricCard(.respiratoryRate(dashboard.today.respiratoryRate))
@@ -414,6 +441,7 @@ struct DashboardView: View {
         switch status {
         case .optimal:    return "Optimal"
         case .borderline: return "Borderline"
+        case .belowTrend: return "Below trend"
         case .critical:   return "Needs attention"
         case .noData:     return "No data"
         }

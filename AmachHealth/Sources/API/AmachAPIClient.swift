@@ -411,7 +411,9 @@ final class AmachAPIClient {
                     // instead of rendering a blank assistant bubble
                     let content = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !content.isEmpty else {
+                        #if DEBUG
                         print("⚠️ [Luma] AI returned empty content")
+                        #endif
                         continuation.finish(throwing: APIError.requestFailed(
                             "Luma returned an empty response. Please try again."
                         ))
@@ -428,7 +430,9 @@ final class AmachAPIClient {
 
                     continuation.finish()
                 } catch {
+                    #if DEBUG
                     print("⚠️ [Luma] streamLumaChat error: \(error.localizedDescription)")
+                    #endif
                     continuation.finish(throwing: error)
                 }
             }

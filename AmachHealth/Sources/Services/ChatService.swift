@@ -566,7 +566,9 @@ final class ChatService: ObservableObject {
             }
         } catch {
             // Non-critical — local copy is intact, will retry next cycle
+            #if DEBUG
             print("⚠️ ChatService: Storj sync failed: \(error.localizedDescription)")
+            #endif
         }
     }
 }
