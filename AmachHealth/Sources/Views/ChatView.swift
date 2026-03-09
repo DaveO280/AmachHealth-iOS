@@ -365,6 +365,16 @@ struct ChatView: View {
         messageText = ""
         inputFocused = false
         AmachHaptics.buttonPress()
+
+        // If lab context is still loading (the .task hasn't finished), wait up to
+        // 4 seconds so the first message always has lab data available.
+        if labContext.isLoading {
+            let deadline = Date().addingTimeInterval(4)
+            while labContext.isLoading && Date() < deadline {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s poll
+            }
+        }
+
         let context = HealthContextBuilder.buildCurrentContext()
         await chatService.sendStreaming(text, context: context)
         // Haptic on completion is handled inside sendStreaming; no double-fire needed.

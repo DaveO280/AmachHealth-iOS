@@ -32,7 +32,12 @@ final class LabContextService: ObservableObject {
     func load(wallet: WalletService, force: Bool = false) async {
         guard !isLoading else { return }
         guard force || !hasAttempted else { return }
-        guard wallet.isConnected else { return }
+        guard wallet.isConnected else {
+            #if DEBUG
+            print("🧪 LabContextService: wallet not connected — skipping lab fetch")
+            #endif
+            return
+        }
 
         isLoading = true
         hasAttempted = true
@@ -40,26 +45,49 @@ final class LabContextService: ObservableObject {
 
         do {
             let key = try await wallet.ensureEncryptionKey()
+            #if DEBUG
+            print("🧪 LabContextService: fetching lab records for \(key.walletAddress.prefix(8))…")
+            #endif
+
             let items = try await api.listLabRecords(
                 walletAddress: key.walletAddress,
                 encryptionKey: key
             )
+            #if DEBUG
+            print("🧪 LabContextService: found \(items.count) lab items: \(items.map { "\($0.dataType)@\($0.uploadDate)" })")
+            #endif
 
             // Prioritise FHIR format; fall back to legacy key-value records
             let latestBloodwork = mostRecent(from: items, preferredType: "bloodwork-report-fhir", fallbackType: "bloodwork")
             let latestDexa      = mostRecent(from: items, preferredType: "dexa-report-fhir",      fallbackType: "dexa")
+            #if DEBUG
+            print("🧪 LabContextService: bloodwork candidate = \(latestBloodwork?.uri ?? "none"), dexa = \(latestDexa?.uri ?? "none")")
+            #endif
 
             async let bloodworkCtx = fetchBloodwork(item: latestBloodwork, key: key)
             async let dexaCtx      = fetchDexa(item: latestDexa, key: key)
 
             let bw = await bloodworkCtx
             let dx = await dexaCtx
+            #if DEBUG
+            print("🧪 LabContextService: bloodwork decoded = \(bw != nil), dexa decoded = \(dx != nil)")
+            #endif
 
             // Only set context if we actually got something
             if bw != nil || dx != nil {
                 context = LabResultsContext(bloodwork: bw, dexa: dx)
+                #if DEBUG
+                print("🧪 LabContextService: context set ✅")
+                #endif
+            } else {
+                #if DEBUG
+                print("🧪 LabContextService: no data decoded — context remains nil")
+                #endif
             }
         } catch {
+            #if DEBUG
+            print("🧪 LabContextService: load failed — \(error)")
+            #endif
             // Non-fatal: Luma works without lab context
         }
     }
@@ -76,7 +104,11 @@ final class LabContextService: ObservableObject {
                     encryptionKey: key,
                     as: RemoteBloodworkReport.self
                 )
-                return convertBloodworkReport(report)
+                let ctx = convertBloodworkReport(report)
+                #if DEBUG
+                print("🧪 LabContextService: FHIR bloodwork → \(ctx?.metrics.count ?? 0) metrics")
+                #endif
+                return ctx
             } else {
                 let record = try await api.retrieveStoredData(
                     storjUri: item.uri,
@@ -84,9 +116,16 @@ final class LabContextService: ObservableObject {
                     encryptionKey: key,
                     as: LabRecord.self
                 )
-                return convertLegacyBloodwork(record)
+                let ctx = convertLegacyBloodwork(record)
+                #if DEBUG
+                print("🧪 LabContextService: legacy bloodwork → \(ctx?.metrics.count ?? 0) metrics")
+                #endif
+                return ctx
             }
         } catch {
+            #if DEBUG
+            print("🧪 LabContextService: bloodwork fetch/decode failed — \(error)")
+            #endif
             return nil
         }
     }
@@ -101,6 +140,9 @@ final class LabContextService: ObservableObject {
                     encryptionKey: key,
                     as: RemoteDexaReport.self
                 )
+                #if DEBUG
+                print("🧪 LabContextService: FHIR dexa → bodyFat=\(report.totalBodyFatPercent as Any)")
+                #endif
                 return convertDexaReport(report)
             } else {
                 let record = try await api.retrieveStoredData(
@@ -109,9 +151,15 @@ final class LabContextService: ObservableObject {
                     encryptionKey: key,
                     as: LabRecord.self
                 )
+                #if DEBUG
+                print("🧪 LabContextService: legacy dexa → \(record.values.count) values")
+                #endif
                 return convertLegacyDexa(record)
             }
         } catch {
+            #if DEBUG
+            print("🧪 LabContextService: dexa fetch/decode failed — \(error)")
+            #endif
             return nil
         }
     }
