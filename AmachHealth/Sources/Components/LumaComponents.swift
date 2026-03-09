@@ -517,14 +517,20 @@ struct LumaSheetView: View {
 struct LumaMessageBubble: View {
     let message: ChatMessage
 
+    @State private var submittedFeedback: MessageFeedback?
+    @State private var showingCommentInput = false
+    @State private var feedbackComment = ""
+    @FocusState private var commentFocused: Bool
+
     private var isUser: Bool { message.role == .user }
+    private var isStreaming: Bool { message.content.isEmpty }
+    private var showFeedback: Bool { !isUser && !isStreaming }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: AmachSpacing.sm) {
             if isUser {
                 Spacer(minLength: 56)
             } else {
-                // Luma avatar
                 ZStack {
                     Circle()
                         .fill(Color.Amach.AI.base.opacity(0.18))
@@ -533,6 +539,7 @@ struct LumaMessageBubble: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.Amach.AI.p400)
                 }
+                .alignmentGuide(.bottom) { d in d[.bottom] }
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
@@ -548,9 +555,7 @@ struct LumaMessageBubble: View {
                             ? AnyShapeStyle(Color.amachPrimary)
                             : AnyShapeStyle(Color.Amach.AI.dark)
                     )
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: AmachRadius.lg)
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg))
                     .overlay(
                         RoundedRectangle(cornerRadius: AmachRadius.lg)
                             .stroke(
@@ -565,15 +570,149 @@ struct LumaMessageBubble: View {
                         radius: 6, y: 2
                     )
 
-                Text(message.timestamp, style: .time)
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextTertiary)
+                HStack(spacing: AmachSpacing.sm) {
+                    Text(message.timestamp, style: .time)
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextTertiary)
+
+                    if showFeedback {
+                        Spacer()
+                        feedbackButtons
+                    }
+                }
+
+                if showingCommentInput {
+                    feedbackCommentInput
+                        .transition(
+                            .opacity.combined(with: .move(edge: .top))
+                        )
+                }
             }
 
             if !isUser {
                 Spacer(minLength: 56)
             }
         }
+        .onAppear {
+            submittedFeedback = message.feedback
+        }
+        .onChange(of: showingCommentInput) { _, isShowing in
+            if isShowing { commentFocused = true }
+        }
+    }
+
+    // MARK: - Feedback Buttons
+
+    @ViewBuilder
+    private var feedbackButtons: some View {
+        let currentFeedback = submittedFeedback ?? message.feedback
+
+        if let given = currentFeedback {
+            HStack(spacing: 4) {
+                Image(systemName: given == .helpful ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(given == .helpful ? Color.amachSuccess : Color.amachTextSecondary)
+                Text(given == .helpful ? "Thanks" : "Got it")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.amachTextTertiary)
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        } else {
+            HStack(spacing: 2) {
+                feedbackButton(for: .helpful,   icon: "hand.thumbsup")
+                feedbackButton(for: .unhelpful, icon: "hand.thumbsdown")
+            }
+        }
+    }
+
+    private func feedbackButton(for rating: MessageFeedback, icon: String) -> some View {
+        Button {
+            AmachHaptics.toggle()
+            if rating == .unhelpful {
+                // Reveal comment input before submitting
+                withAnimation(AmachAnimation.spring) {
+                    showingCommentInput = true
+                }
+            } else {
+                withAnimation(AmachAnimation.spring) {
+                    submittedFeedback = rating
+                }
+                ChatService.shared.submitFeedback(rating, for: message.id)
+            }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.amachTextTertiary)
+                .frame(width: 28, height: 28)
+                .background(Color.amachSurface.opacity(0.6))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(rating == .helpful ? "Mark as helpful" : "Mark as not helpful")
+    }
+
+    // MARK: - Comment Input
+
+    private var feedbackCommentInput: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("What went wrong?")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.amachTextSecondary)
+
+            TextField("Describe the issue (optional)", text: $feedbackComment, axis: .vertical)
+                .lineLimit(2...4)
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextPrimary)
+                .tint(Color.Amach.AI.p400)
+                .focused($commentFocused)
+                .padding(.horizontal, AmachSpacing.sm + 2)
+                .padding(.vertical, AmachSpacing.sm)
+                .background(Color.amachSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AmachRadius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AmachRadius.sm)
+                        .stroke(Color.Amach.AI.base.opacity(0.3), lineWidth: 1)
+                )
+
+            HStack(spacing: AmachSpacing.sm) {
+                Spacer()
+
+                Button("Skip") {
+                    submitUnhelpful(comment: nil)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(Color.amachTextTertiary)
+
+                Button {
+                    submitUnhelpful(comment: feedbackComment.trimmingCharacters(in: .whitespacesAndNewlines))
+                } label: {
+                    Text("Send")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, AmachSpacing.md)
+                        .padding(.vertical, 6)
+                        .background(Color.Amach.AI.base)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(AmachSpacing.sm + 2)
+        .background(Color.Amach.AI.base.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: AmachRadius.sm))
+        .overlay(
+            RoundedRectangle(cornerRadius: AmachRadius.sm)
+                .stroke(Color.Amach.AI.base.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func submitUnhelpful(comment: String?) {
+        commentFocused = false
+        withAnimation(AmachAnimation.spring) {
+            showingCommentInput = false
+            submittedFeedback = .unhelpful
+        }
+        ChatService.shared.submitFeedback(.unhelpful, for: message.id, comment: comment?.isEmpty == false ? comment : nil)
+        AmachHaptics.success()
     }
 }
 

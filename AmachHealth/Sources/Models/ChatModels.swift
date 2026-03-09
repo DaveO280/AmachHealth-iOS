@@ -13,12 +13,18 @@ enum MessageRole: String, Codable {
     case system
 }
 
+enum MessageFeedback: String, Codable {
+    case helpful
+    case unhelpful
+}
+
 struct ChatMessage: Identifiable, Codable {
     var id: UUID
     let role: MessageRole
     var content: String
     let timestamp: Date
     var metadata: ChatMessageMetadata?  // non-nil for Luma-initiated proactive messages
+    var feedback: MessageFeedback?      // set when user rates a Luma response
 
     init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = .now, metadata: ChatMessageMetadata? = nil) {
         self.id = id
