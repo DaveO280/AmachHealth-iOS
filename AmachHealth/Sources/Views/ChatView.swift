@@ -18,6 +18,7 @@ struct ChatView: View {
     @StateObject private var chatService = ChatService.shared
     @EnvironmentObject private var healthKit: HealthKitService
     @ObservedObject private var lumaContext = LumaContextService.shared
+    @ObservedObject private var labContext = LabContextService.shared
 
     @State private var messageText = ""
     @State private var showingHistory = false
@@ -40,6 +41,11 @@ struct ChatView: View {
             }
             .navigationBarHidden(true)
             .onAppear { lumaContext.update(screen: "Chat") }
+            .task {
+                // Load lab results so Luma can answer questions about bloodwork,
+                // DEXA, lipids, etc. Safe to call repeatedly — loads once per session.
+                await LabContextService.shared.load(wallet: WalletService.shared)
+            }
         }
         .sheet(isPresented: $showingHistory) {
             ChatHistoryView(chatService: chatService)

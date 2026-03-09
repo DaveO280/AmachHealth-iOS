@@ -94,6 +94,8 @@ struct AIChatContext: Encodable {
     let encryptionKey: WalletEncryptionKey?
     /// Instruction injected so Luma never misreads partial-day accumulations.
     let dataNote: String?
+    /// Lab results (bloodwork + DEXA) loaded lazily when Chat opens.
+    let labResults: LabResultsContext?
 
     init(
         metrics: AIChatMetrics? = nil,
@@ -102,7 +104,8 @@ struct AIChatContext: Encodable {
         memory: AIChatMemoryCapsule? = nil,
         userAddress: String? = nil,
         encryptionKey: WalletEncryptionKey? = nil,
-        dataNote: String? = nil
+        dataNote: String? = nil,
+        labResults: LabResultsContext? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
@@ -111,6 +114,7 @@ struct AIChatContext: Encodable {
         self.userAddress = userAddress
         self.encryptionKey = encryptionKey
         self.dataNote = dataNote
+        self.labResults = labResults
     }
 }
 
@@ -140,6 +144,44 @@ struct MetricContext: Encodable {
 struct AIChatDateRange: Encodable {
     let start: String
     let end: String
+}
+
+// MARK: - Lab Results Context (bloodwork + DEXA for Luma)
+
+/// Formatted lab results injected into Luma's context when available.
+/// Populated lazily by LabContextService when the user opens Chat.
+struct LabResultsContext: Encodable {
+    let bloodwork: LabBloodworkContext?
+    let dexa: LabDexaContext?
+}
+
+struct LabBloodworkContext: Encodable {
+    let reportDate: String?
+    let laboratory: String?
+    /// Individual biomarkers — name, value, unit, reference range, flag (H/L/etc.)
+    let metrics: [LabMetricEntry]
+    let notes: [String]?
+}
+
+struct LabMetricEntry: Encodable {
+    let name: String
+    let value: Double?
+    let unit: String?
+    let referenceRange: String?
+    /// "H" = high, "L" = low, nil = in range
+    let flag: String?
+    let panel: String?
+}
+
+struct LabDexaContext: Encodable {
+    let scanDate: String?
+    let bodyFatPercent: Double?
+    let leanMassKg: Double?
+    let visceralFatRating: Double?
+    let androidGynoidRatio: Double?
+    let boneDensityTScore: Double?
+    let boneDensityZScore: Double?
+    let notes: [String]?
 }
 
 struct AIChatMemoryCapsule: Encodable {
