@@ -1,28 +1,11 @@
 // /api/feedback/route.ts
 // Drop this into src/app/api/feedback/route.ts in Amach-Website.
 //
-// Receives Luma response ratings. Stores rating + screen + platform,
-// plus an optional free-text comment the user explicitly typed.
-// No health chat content is included — only what the user writes here.
+// Receives Luma response ratings from iOS and web, then proxies them
+// to the admin app at ADMIN_API_URL — same pattern as /api/tracking.
 //
-// CREATE TABLE luma_feedback (
-//   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-//   created_at timestamptz NOT NULL DEFAULT now(),
-//   rating     text NOT NULL CHECK (rating IN ('helpful','unhelpful')),
-//   screen     text,
-//   platform   text NOT NULL DEFAULT 'web',
-//   comment    text          -- user-written, null when not provided
-// );
-//
-// Useful query:
-//   SELECT screen,
-//          COUNT(*) FILTER (WHERE rating='helpful')   AS helpful,
-//          COUNT(*) FILTER (WHERE rating='unhelpful') AS unhelpful,
-//          ROUND(
-//            100.0 * COUNT(*) FILTER (WHERE rating='helpful') / COUNT(*), 1
-//          ) AS pct_helpful
-//   FROM luma_feedback
-//   GROUP BY screen ORDER BY pct_helpful;
+// To view feedback in the admin app, handle POST /api/feedback there
+// and store/display it however you like alongside tracking data.
 
 import { NextRequest, NextResponse } from "next/server";
 
@@ -33,7 +16,7 @@ interface FeedbackPayload {
   comment?: string;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: FeedbackPayload;
 
   try {
@@ -51,20 +34,47 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Trim and cap comment length — user-provided text, so sanitise before storage
+  // Trim and cap comment — user-provided text
   const cleanComment = comment?.trim().slice(0, 500) || null;
 
-  // ── Persist ─────────────────────────────────────────────────
-  // Wire up your existing DB client here. Console-logs until then.
-  // Example with a hypothetical `db` import:
-  //
-  // import { db } from "@/lib/db";
-  // await db.lumaFeedback.create({ data: { rating, screen, platform, comment: cleanComment } });
-
   console.log(
-    `[feedback] ${rating.toUpperCase()} | screen=${screen ?? "?"} platform=${platform}` +
+    `📊 Luma feedback received: ${rating.toUpperCase()} | screen=${screen ?? "?"} platform=${platform}` +
       (cleanComment ? `\n  comment: ${cleanComment}` : "")
   );
 
-  return NextResponse.json({ success: true });
+  const adminApiUrl = process.env.ADMIN_API_URL || "http://localhost:3001/api";
+  const apiKey = process.env.ADMIN_API_KEY;
+
+  if (!apiKey) {
+    console.error("❌ ADMIN_API_KEY not configured");
+    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+  }
+
+  try {
+    const response = await fetch(`${adminApiUrl}/feedback`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({ rating, screen, platform, comment: cleanComment }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ Admin feedback API error (${response.status}):`, errorText);
+      throw new Error(`Admin feedback API responded with ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("✅ Feedback forwarded to admin app");
+    return NextResponse.json(data);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("❌ Failed to forward feedback:", errorMessage);
+    return NextResponse.json(
+      { error: "Failed to process feedback", details: errorMessage },
+      { status: 500 }
+    );
+  }
 }
