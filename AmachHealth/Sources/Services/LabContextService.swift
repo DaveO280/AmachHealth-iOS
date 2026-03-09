@@ -70,10 +70,11 @@ final class LabContextService: ObservableObject {
         guard let item else { return nil }
         do {
             if item.dataType == "bloodwork-report-fhir" {
-                let report = try await api.retrieveBloodworkReport(
+                let report = try await api.retrieveStoredData(
                     storjUri: item.uri,
                     walletAddress: key.walletAddress,
-                    encryptionKey: key
+                    encryptionKey: key,
+                    as: RemoteBloodworkReport.self
                 )
                 return convertBloodworkReport(report)
             } else {
@@ -94,10 +95,11 @@ final class LabContextService: ObservableObject {
         guard let item else { return nil }
         do {
             if item.dataType == "dexa-report-fhir" {
-                let report = try await api.retrieveDexaReport(
+                let report = try await api.retrieveStoredData(
                     storjUri: item.uri,
                     walletAddress: key.walletAddress,
-                    encryptionKey: key
+                    encryptionKey: key,
+                    as: RemoteDexaReport.self
                 )
                 return convertDexaReport(report)
             } else {
