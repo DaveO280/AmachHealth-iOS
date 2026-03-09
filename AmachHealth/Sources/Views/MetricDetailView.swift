@@ -189,9 +189,11 @@ extension MetricInfo {
             if value >= expected * 0.60 { return .belowTrend }
             return .critical
         }
-        // Absolute fallback (used in MetricDetailView period views)
+        // Absolute fallback — used in MetricDetailView period views (full-day averages).
+        // Never use .borderline for cumulative metrics: if you haven't finished the day
+        // it's below trend; if reviewing a period average it's still below trend not "borderline".
         if value >= absoluteOptimal { return .optimal }
-        if value >= absoluteBorderline { return .borderline }
+        if value >= absoluteBorderline { return .belowTrend }
         return .critical
     }
 }

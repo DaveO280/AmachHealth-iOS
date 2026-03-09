@@ -122,7 +122,8 @@ struct HealthContextBuilder {
                 start: formatter.string(from: monthAgo),
                 end: formatter.string(from: now)
             ),
-            dataNote: dataNote
+            dataNote: dataNote,
+            labResults: LabContextService.shared.context
         )
     }
 

@@ -518,7 +518,9 @@ final class ChatService: ObservableObject {
             proactive: existing.proactive,
             memory: existing.memory ?? memoryCapsule,
             userAddress: existing.userAddress ?? walletAddress,
-            encryptionKey: existing.encryptionKey ?? encryptionKey
+            encryptionKey: existing.encryptionKey ?? encryptionKey,
+            dataNote: existing.dataNote,
+            labResults: existing.labResults
         )
     }
 
