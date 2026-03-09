@@ -517,7 +517,14 @@ struct LumaSheetView: View {
 struct LumaMessageBubble: View {
     let message: ChatMessage
 
+    // Local state for instant visual feedback — reconciles with model on re-render
+    @State private var submittedFeedback: MessageFeedback?
+
     private var isUser: Bool { message.role == .user }
+    private var isStreaming: Bool { message.content.isEmpty }
+
+    // Show feedback controls only on complete Luma messages
+    private var showFeedback: Bool { !isUser && !isStreaming }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: AmachSpacing.sm) {
@@ -533,6 +540,7 @@ struct LumaMessageBubble: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.Amach.AI.p400)
                 }
+                .alignmentGuide(.bottom) { d in d[.bottom] }
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
@@ -565,15 +573,68 @@ struct LumaMessageBubble: View {
                         radius: 6, y: 2
                     )
 
-                Text(message.timestamp, style: .time)
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextTertiary)
+                HStack(spacing: AmachSpacing.sm) {
+                    Text(message.timestamp, style: .time)
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextTertiary)
+
+                    if showFeedback {
+                        Spacer()
+                        feedbackButtons
+                    }
+                }
             }
 
             if !isUser {
                 Spacer(minLength: 56)
             }
         }
+        .onAppear {
+            submittedFeedback = message.feedback
+        }
+    }
+
+    @ViewBuilder
+    private var feedbackButtons: some View {
+        let currentFeedback = submittedFeedback ?? message.feedback
+
+        if let given = currentFeedback {
+            // Submitted state — show which was selected
+            HStack(spacing: 4) {
+                Image(systemName: given == .helpful ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(given == .helpful ? Color.amachSuccess : Color.amachTextSecondary)
+                Text(given == .helpful ? "Thanks" : "Got it")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.amachTextTertiary)
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        } else {
+            // Unrated — show both thumbs
+            HStack(spacing: 2) {
+                feedbackButton(for: .helpful, icon: "hand.thumbsup")
+                feedbackButton(for: .unhelpful, icon: "hand.thumbsdown")
+            }
+        }
+    }
+
+    private func feedbackButton(for rating: MessageFeedback, icon: String) -> some View {
+        Button {
+            AmachHaptics.toggle()
+            withAnimation(AmachAnimation.spring) {
+                submittedFeedback = rating
+            }
+            ChatService.shared.submitFeedback(rating, for: message.id)
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.amachTextTertiary)
+                .frame(width: 28, height: 28)
+                .background(Color.amachSurface.opacity(0.6))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(rating == .helpful ? "Mark as helpful" : "Mark as not helpful")
     }
 }
 

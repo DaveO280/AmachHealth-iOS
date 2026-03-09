@@ -537,6 +537,37 @@ final class AmachAPIClient {
         return response.profile
     }
 
+    // MARK: - Feedback
+
+    /// Submit anonymized Luma response feedback to /api/feedback.
+    /// Sends only the raw message text — no health metrics, no wallet data.
+    /// Fire-and-forget: callers should use try? so a missing endpoint doesn't surface errors.
+    func submitChatFeedback(
+        rating: String,
+        userMessage: String?,
+        assistantMessage: String,
+        screen: String?
+    ) async throws {
+        struct FeedbackRequest: Encodable {
+            let rating: String
+            let userMessage: String?
+            let assistantMessage: String
+            let screen: String?
+            let platform: String
+        }
+        struct FeedbackResponse: Decodable {
+            let success: Bool?
+        }
+        let request = FeedbackRequest(
+            rating: rating,
+            userMessage: userMessage,
+            assistantMessage: assistantMessage,
+            screen: screen,
+            platform: "ios"
+        )
+        _ = try await post(path: "/api/feedback", body: request) as FeedbackResponse
+    }
+
     // MARK: - Private Methods
 
     private func post<T: Encodable, R: Decodable>(
