@@ -49,6 +49,15 @@ struct AmachHealthApp: App {
                         LumaProactiveService.shared.checkAndDeliverPendingInsight()
                     }
                 }
+                // Keep AppState in sync with service state changes mid-session.
+                // Without these, connecting a wallet or granting HealthKit after
+                // launch leaves AppState stale until the next app restart.
+                .onChange(of: wallet.isConnected) { _, connected in
+                    appState.setWallet(address: connected ? wallet.address : nil)
+                }
+                .onChange(of: healthKit.isAuthorized) { _, authorized in
+                    appState.setHealthKit(authorized: authorized)
+                }
         }
     }
 }
