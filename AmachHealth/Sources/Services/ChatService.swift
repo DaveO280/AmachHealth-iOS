@@ -248,19 +248,11 @@ final class ChatService: ObservableObject {
         currentSession.messages[idx].feedback = feedback
         saveToDisk()
 
-        // Capture the exchange before the async call
-        let assistantText = currentSession.messages[idx].content
-        let userText = idx > 0 ? currentSession.messages[idx - 1].content : nil
         let screen = LumaContextService.shared.currentScreen
 
         // Fire-and-forget — a failed submission doesn't matter
         Task {
-            try? await api.submitChatFeedback(
-                rating: feedback.rawValue,
-                userMessage: userText,
-                assistantMessage: assistantText,
-                screen: screen
-            )
+            try? await api.submitChatFeedback(rating: feedback.rawValue, screen: screen)
         }
     }
 
