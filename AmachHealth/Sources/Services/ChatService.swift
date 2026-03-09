@@ -240,19 +240,17 @@ final class ChatService: ObservableObject {
     /// Rate a Luma response. Captures the anonymized exchange and sends it to
     /// the backend for quality monitoring — no health metric values are included,
     /// only the raw text of the user prompt and Luma's reply.
-    func submitFeedback(_ feedback: MessageFeedback, for messageId: UUID) {
+    func submitFeedback(_ feedback: MessageFeedback, for messageId: UUID, comment: String? = nil) {
         guard let idx = currentSession.messages.firstIndex(where: { $0.id == messageId }),
               currentSession.messages[idx].role == .assistant else { return }
 
-        // Persist rating locally immediately
         currentSession.messages[idx].feedback = feedback
         saveToDisk()
 
         let screen = LumaContextService.shared.currentScreen
 
-        // Fire-and-forget — a failed submission doesn't matter
         Task {
-            try? await api.submitChatFeedback(rating: feedback.rawValue, screen: screen)
+            try? await api.submitChatFeedback(rating: feedback.rawValue, screen: screen, comment: comment)
         }
     }
 

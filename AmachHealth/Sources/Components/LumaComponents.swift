@@ -517,13 +517,13 @@ struct LumaSheetView: View {
 struct LumaMessageBubble: View {
     let message: ChatMessage
 
-    // Local state for instant visual feedback — reconciles with model on re-render
     @State private var submittedFeedback: MessageFeedback?
+    @State private var showingCommentInput = false
+    @State private var feedbackComment = ""
+    @FocusState private var commentFocused: Bool
 
     private var isUser: Bool { message.role == .user }
     private var isStreaming: Bool { message.content.isEmpty }
-
-    // Show feedback controls only on complete Luma messages
     private var showFeedback: Bool { !isUser && !isStreaming }
 
     var body: some View {
@@ -531,7 +531,6 @@ struct LumaMessageBubble: View {
             if isUser {
                 Spacer(minLength: 56)
             } else {
-                // Luma avatar
                 ZStack {
                     Circle()
                         .fill(Color.Amach.AI.base.opacity(0.18))
@@ -556,9 +555,7 @@ struct LumaMessageBubble: View {
                             ? AnyShapeStyle(Color.amachPrimary)
                             : AnyShapeStyle(Color.Amach.AI.dark)
                     )
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: AmachRadius.lg)
-                    )
+                    .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg))
                     .overlay(
                         RoundedRectangle(cornerRadius: AmachRadius.lg)
                             .stroke(
@@ -583,6 +580,13 @@ struct LumaMessageBubble: View {
                         feedbackButtons
                     }
                 }
+
+                if showingCommentInput {
+                    feedbackCommentInput
+                        .transition(
+                            .opacity.combined(with: .move(edge: .top))
+                        )
+                }
             }
 
             if !isUser {
@@ -592,14 +596,18 @@ struct LumaMessageBubble: View {
         .onAppear {
             submittedFeedback = message.feedback
         }
+        .onChange(of: showingCommentInput) { _, isShowing in
+            if isShowing { commentFocused = true }
+        }
     }
+
+    // MARK: - Feedback Buttons
 
     @ViewBuilder
     private var feedbackButtons: some View {
         let currentFeedback = submittedFeedback ?? message.feedback
 
         if let given = currentFeedback {
-            // Submitted state — show which was selected
             HStack(spacing: 4) {
                 Image(systemName: given == .helpful ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
                     .font(.system(size: 11))
@@ -610,9 +618,8 @@ struct LumaMessageBubble: View {
             }
             .transition(.opacity.combined(with: .scale(scale: 0.9)))
         } else {
-            // Unrated — show both thumbs
             HStack(spacing: 2) {
-                feedbackButton(for: .helpful, icon: "hand.thumbsup")
+                feedbackButton(for: .helpful,   icon: "hand.thumbsup")
                 feedbackButton(for: .unhelpful, icon: "hand.thumbsdown")
             }
         }
@@ -621,10 +628,17 @@ struct LumaMessageBubble: View {
     private func feedbackButton(for rating: MessageFeedback, icon: String) -> some View {
         Button {
             AmachHaptics.toggle()
-            withAnimation(AmachAnimation.spring) {
-                submittedFeedback = rating
+            if rating == .unhelpful {
+                // Reveal comment input before submitting
+                withAnimation(AmachAnimation.spring) {
+                    showingCommentInput = true
+                }
+            } else {
+                withAnimation(AmachAnimation.spring) {
+                    submittedFeedback = rating
+                }
+                ChatService.shared.submitFeedback(rating, for: message.id)
             }
-            ChatService.shared.submitFeedback(rating, for: message.id)
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 12))
@@ -635,6 +649,70 @@ struct LumaMessageBubble: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(rating == .helpful ? "Mark as helpful" : "Mark as not helpful")
+    }
+
+    // MARK: - Comment Input
+
+    private var feedbackCommentInput: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("What went wrong?")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.amachTextSecondary)
+
+            TextField("Describe the issue (optional)", text: $feedbackComment, axis: .vertical)
+                .lineLimit(2...4)
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextPrimary)
+                .tint(Color.Amach.AI.p400)
+                .focused($commentFocused)
+                .padding(.horizontal, AmachSpacing.sm + 2)
+                .padding(.vertical, AmachSpacing.sm)
+                .background(Color.amachSurface)
+                .clipShape(RoundedRectangle(cornerRadius: AmachRadius.sm))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AmachRadius.sm)
+                        .stroke(Color.Amach.AI.base.opacity(0.3), lineWidth: 1)
+                )
+
+            HStack(spacing: AmachSpacing.sm) {
+                Spacer()
+
+                Button("Skip") {
+                    submitUnhelpful(comment: nil)
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(Color.amachTextTertiary)
+
+                Button {
+                    submitUnhelpful(comment: feedbackComment.trimmingCharacters(in: .whitespacesAndNewlines))
+                } label: {
+                    Text("Send")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, AmachSpacing.md)
+                        .padding(.vertical, 6)
+                        .background(Color.Amach.AI.base)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .padding(AmachSpacing.sm + 2)
+        .background(Color.Amach.AI.base.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: AmachRadius.sm))
+        .overlay(
+            RoundedRectangle(cornerRadius: AmachRadius.sm)
+                .stroke(Color.Amach.AI.base.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func submitUnhelpful(comment: String?) {
+        commentFocused = false
+        withAnimation(AmachAnimation.spring) {
+            showingCommentInput = false
+            submittedFeedback = .unhelpful
+        }
+        ChatService.shared.submitFeedback(.unhelpful, for: message.id, comment: comment?.isEmpty == false ? comment : nil)
+        AmachHaptics.success()
     }
 }
 
