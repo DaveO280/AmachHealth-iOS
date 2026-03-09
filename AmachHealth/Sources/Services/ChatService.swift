@@ -42,7 +42,9 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext())
+        let labData = await HealthContextBuilder.buildLabContext()
+        print("🧪 [LabContext] bloodwork: \(labData?.bloodwork != nil), dexa: \(labData?.dexa != nil), events: \(labData?.recentEvents?.count ?? 0)")
+        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext(), labData: labData)
 
         let userMsg = ChatMessage(role: .user, content: trimmed)
         currentSession.messages.append(userMsg)
@@ -92,7 +94,9 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext())
+        let labData = await HealthContextBuilder.buildLabContext()
+        print("🧪 [LabContext] bloodwork: \(labData?.bloodwork != nil), dexa: \(labData?.dexa != nil), events: \(labData?.recentEvents?.count ?? 0)")
+        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext(), labData: labData)
 
         // 1. Append user message
         currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
@@ -476,7 +480,7 @@ final class ChatService: ObservableObject {
         return jsonSubstring.data(using: .utf8)
     }
 
-    private func enrichContext(_ base: AIChatContext?) -> AIChatContext? {
+    private func enrichContext(_ base: AIChatContext?, labData: LabDataContext? = nil) -> AIChatContext? {
         let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule()
         let walletAddress = wallet.isConnected ? wallet.address : nil
         let encryptionKey = wallet.isConnected ? wallet.encryptionKey : nil
@@ -489,7 +493,8 @@ final class ChatService: ObservableObject {
             return AIChatContext(
                 memory: memoryCapsule,
                 userAddress: walletAddress,
-                encryptionKey: encryptionKey
+                encryptionKey: encryptionKey,
+                labData: labData
             )
         }
 
@@ -499,7 +504,8 @@ final class ChatService: ObservableObject {
             proactive: existing.proactive,
             memory: existing.memory ?? memoryCapsule,
             userAddress: existing.userAddress ?? walletAddress,
-            encryptionKey: existing.encryptionKey ?? encryptionKey
+            encryptionKey: existing.encryptionKey ?? encryptionKey,
+            labData: existing.labData ?? labData
         )
     }
 

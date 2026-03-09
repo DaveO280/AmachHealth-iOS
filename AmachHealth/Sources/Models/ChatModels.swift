@@ -86,6 +86,8 @@ struct AIChatContext: Encodable {
     let memory: AIChatMemoryCapsule?
     let userAddress: String?
     let encryptionKey: WalletEncryptionKey?
+    /// Lab results (bloodwork, DEXA) and recent timeline events for Luma visibility
+    let labData: LabDataContext?
 
     init(
         metrics: AIChatMetrics? = nil,
@@ -93,7 +95,8 @@ struct AIChatContext: Encodable {
         proactive: ProactiveInsightContext? = nil,
         memory: AIChatMemoryCapsule? = nil,
         userAddress: String? = nil,
-        encryptionKey: WalletEncryptionKey? = nil
+        encryptionKey: WalletEncryptionKey? = nil,
+        labData: LabDataContext? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
@@ -101,6 +104,7 @@ struct AIChatContext: Encodable {
         self.memory = memory
         self.userAddress = userAddress
         self.encryptionKey = encryptionKey
+        self.labData = labData
     }
 }
 
@@ -292,6 +296,44 @@ final class ConversationMemoryStore: ObservableObject {
         facts = payload.facts
         summaries = payload.summaries
     }
+}
+
+// MARK: - Lab Data Context (bloodwork, DEXA, timeline events sent to Luma)
+
+struct LabDataContext: Encodable {
+    let bloodwork: [LabResultSummary]?
+    let dexa: [DexaResultSummary]?
+    let recentEvents: [TimelineEventSummary]?
+}
+
+struct LabResultSummary: Encodable {
+    let date: String
+    let glucose: Double?
+    let hba1c: Double?
+    let totalCholesterol: Double?
+    let ldl: Double?
+    let hdl: Double?
+    let triglycerides: Double?
+    let tsh: Double?
+    let vitaminD: Double?
+    let ferritin: Double?
+    let notes: String?
+}
+
+struct DexaResultSummary: Encodable {
+    let date: String
+    let bodyFatPercent: Double?
+    let leanMassKg: Double?
+    let boneDensityTScore: Double?
+    let visceralFat: Double?
+    let androidGynoidRatio: Double?
+    let notes: String?
+}
+
+struct TimelineEventSummary: Encodable {
+    let date: String
+    let type: String
+    let summary: String
 }
 
 struct AIChatHistoryMessage: Codable {
