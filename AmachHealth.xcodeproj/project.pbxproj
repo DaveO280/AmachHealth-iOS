@@ -27,6 +27,7 @@
 		AA0000000000000000000212 /* AnomalyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000112 /* AnomalyDetector.swift */; };
 		AA0000000000000000000213 /* ChatService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000113 /* ChatService.swift */; };
 		AA0000000000000000000214 /* DashboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000114 /* DashboardService.swift */; };
+		CC0000000000000000000002 /* LabContextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* LabContextService.swift */; };
 		AA0000000000000000000215 /* HealthDataSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000115 /* HealthDataSyncService.swift */; };
 		AA0000000000000000000216 /* HealthKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000116 /* HealthKitService.swift */; };
 		AA0000000000000000000217 /* HealthMemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000117 /* HealthMemoryStore.swift */; };
@@ -78,6 +79,7 @@
 		AA0000000000000000000112 /* AnomalyDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AnomalyDetector.swift; path = AmachHealth/Sources/Services/AnomalyDetector.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000113 /* ChatService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatService.swift; path = AmachHealth/Sources/Services/ChatService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000114 /* DashboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DashboardService.swift; path = AmachHealth/Sources/Services/DashboardService.swift; sourceTree = SOURCE_ROOT; };
+		CC0000000000000000000001 /* LabContextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LabContextService.swift; path = AmachHealth/Sources/Services/LabContextService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000115 /* HealthDataSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthDataSyncService.swift; path = AmachHealth/Sources/Services/HealthDataSyncService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000116 /* HealthKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthKitService.swift; path = AmachHealth/Sources/Services/HealthKitService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000117 /* HealthMemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMemoryStore.swift; path = AmachHealth/Sources/Services/HealthMemoryStore.swift; sourceTree = SOURCE_ROOT; };
@@ -224,6 +226,7 @@
 				AA0000000000000000000112 /* AnomalyDetector.swift */,
 				AA0000000000000000000113 /* ChatService.swift */,
 				AA0000000000000000000114 /* DashboardService.swift */,
+				CC0000000000000000000001 /* LabContextService.swift */,
 				AA0000000000000000000122 /* HealthContextBuilder.swift */,
 				AA0000000000000000000115 /* HealthDataSyncService.swift */,
 				AA0000000000000000000116 /* HealthKitService.swift */,
@@ -363,6 +366,7 @@
 				AA0000000000000000000212 /* AnomalyDetector.swift in Sources */,
 				AA0000000000000000000213 /* ChatService.swift in Sources */,
 				AA0000000000000000000214 /* DashboardService.swift in Sources */,
+				CC0000000000000000000002 /* LabContextService.swift in Sources */,
 				AA0000000000000000000215 /* HealthDataSyncService.swift in Sources */,
 				AA0000000000000000000216 /* HealthKitService.swift in Sources */,
 				AA0000000000000000000217 /* HealthMemoryStore.swift in Sources */,
