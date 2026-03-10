@@ -75,6 +75,23 @@ struct ChatSession: Identifiable, Codable {
     }
 }
 
+// MARK: - Context Block
+//
+// Pre-formatted plain-text context segment assembled on the iOS side.
+// The backend injects each block verbatim as a system message.
+// Adding a new data source (Whoop, CGM, Oura, Android) = new block on iOS,
+// zero backend changes required.
+//
+// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_dexa"
+//               | "goals" | "memory" | "timeline" | "cgm" | "whoop"
+
+struct ContextBlock: Encodable {
+    /// Semantic tag — used for debugging; backend treats all blocks equally.
+    let type: String
+    /// Pre-formatted text injected verbatim as a system message to Luma.
+    let content: String
+}
+
 // MARK: - API Request: POST /api/ai/chat
 
 struct AIChatRequest: Encodable {
@@ -89,32 +106,27 @@ struct AIChatContext: Encodable {
     let dateRange: AIChatDateRange?
     // Populated only for Luma-initiated proactive conversations
     let proactive: ProactiveInsightContext?
-    let memory: AIChatMemoryCapsule?
     let userAddress: String?
     let encryptionKey: WalletEncryptionKey?
-    /// Instruction injected so Luma never misreads partial-day accumulations.
-    let dataNote: String?
-    /// Lab results (bloodwork + DEXA) loaded lazily when Chat opens.
-    let labResults: LabResultsContext?
+    /// Pre-formatted context blocks assembled on iOS.
+    /// Each block is injected verbatim as a system message by the backend.
+    /// Replaces the typed labResults / memory / dataNote fields.
+    let contextBlocks: [ContextBlock]?
 
     init(
         metrics: AIChatMetrics? = nil,
         dateRange: AIChatDateRange? = nil,
         proactive: ProactiveInsightContext? = nil,
-        memory: AIChatMemoryCapsule? = nil,
         userAddress: String? = nil,
         encryptionKey: WalletEncryptionKey? = nil,
-        dataNote: String? = nil,
-        labResults: LabResultsContext? = nil
+        contextBlocks: [ContextBlock]? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
         self.proactive = proactive
-        self.memory = memory
         self.userAddress = userAddress
         self.encryptionKey = encryptionKey
-        self.dataNote = dataNote
-        self.labResults = labResults
+        self.contextBlocks = contextBlocks
     }
 }
 
