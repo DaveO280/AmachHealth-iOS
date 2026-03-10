@@ -54,17 +54,10 @@ final class ChatService: ObservableObject {
 
         do {
             // Send last 18 messages as history (9 exchanges, keeps context tight)
-            var historyForSend = currentSession.messages
+            let historyForSend = currentSession.messages
                 .dropLast()
                 .suffix(18)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
-
-            if historyForSend.isEmpty, let labCtx = LabContextService.shared.context {
-                historyForSend.insert(
-                    AIChatHistoryMessage(role: "system", content: formatLabContext(labCtx)),
-                    at: 0
-                )
-            }
 
             let response = try await api.sendChatMessage(trimmed, history: historyForSend, context: finalContext)
 
@@ -113,21 +106,10 @@ final class ChatService: ObservableObject {
         error = nil
 
         // History excludes the current user turn and the placeholder
-        var historyMessages = currentSession.messages
+        let historyMessages = currentSession.messages
             .dropLast(2)
             .suffix(18)
             .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
-
-        // On the first message of a session, prepend lab results as a system-role
-        // context entry. This is backend-independent: the history array is always
-        // forwarded verbatim to the AI, so lab data reaches Luma regardless of how
-        // the backend processes the `context.labResults` field.
-        if historyMessages.isEmpty, let labCtx = LabContextService.shared.context {
-            historyMessages.insert(
-                AIChatHistoryMessage(role: "system", content: formatLabContext(labCtx)),
-                at: 0
-            )
-        }
 
         let screen = LumaContextService.shared.currentScreen
         let metric = LumaContextService.shared.currentMetric
@@ -513,64 +495,16 @@ final class ChatService: ObservableObject {
         return jsonSubstring.data(using: .utf8)
     }
 
-    // MARK: - Lab Context Formatting
-
-    /// Formats lab results as a plain-text system message injected at the
-    /// beginning of each new session's history. Because the history array is
-    /// always passed verbatim to the AI (unlike context fields which may not
-    /// all be picked up by the backend prompt builder), this guarantees Luma
-    /// sees bloodwork and DEXA data regardless of backend changes.
-    private func formatLabContext(_ ctx: LabResultsContext) -> String {
-        var lines = ["The user has the following lab results on file. Use them when answering questions about bloodwork, lipids, body composition, DEXA, bone density, etc."]
-
-        if let bw = ctx.bloodwork {
-            var header = "BLOODWORK"
-            if let date = bw.reportDate { header += " (\(date))" }
-            if let lab = bw.laboratory { header += " — \(lab)" }
-            lines.append(header + ":")
-            for m in bw.metrics {
-                var entry = "  • \(m.name)"
-                if let v = m.value { entry += ": \(v)" }
-                if let u = m.unit { entry += " \(u)" }
-                if let r = m.referenceRange { entry += " [ref: \(r)]" }
-                if let f = m.flag, !f.isEmpty { entry += " ⚠️ \(f)" }
-                lines.append(entry)
-            }
-            if let notes = bw.notes, !notes.isEmpty {
-                lines.append("  Notes: " + notes.joined(separator: "; "))
-            }
-        }
-
-        if let dx = ctx.dexa {
-            var header = "DEXA SCAN"
-            if let date = dx.scanDate { header += " (\(date))" }
-            lines.append(header + ":")
-            if let v = dx.bodyFatPercent  { lines.append("  • Body fat: \(v)%") }
-            if let v = dx.leanMassKg      { lines.append("  • Lean mass: \(v) kg") }
-            if let v = dx.visceralFatRating { lines.append("  • Visceral fat rating: \(v)") }
-            if let v = dx.androidGynoidRatio { lines.append("  • Android/Gynoid ratio: \(v)") }
-            if let v = dx.boneDensityTScore { lines.append("  • Bone density T-score: \(v)") }
-            if let v = dx.boneDensityZScore { lines.append("  • Bone density Z-score: \(v)") }
-            if let notes = dx.notes, !notes.isEmpty {
-                lines.append("  Notes: " + notes.joined(separator: "; "))
-            }
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
     private func enrichContext(_ base: AIChatContext?) -> AIChatContext? {
-        let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule()
         let walletAddress = wallet.isConnected ? wallet.address : nil
         let encryptionKey = wallet.isConnected ? wallet.encryptionKey : nil
 
-        guard base != nil || memoryCapsule != nil || walletAddress != nil || encryptionKey != nil else {
+        guard base != nil || walletAddress != nil || encryptionKey != nil else {
             return nil
         }
 
         guard let existing = base else {
             return AIChatContext(
-                memory: memoryCapsule,
                 userAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
@@ -580,11 +514,9 @@ final class ChatService: ObservableObject {
             metrics: existing.metrics,
             dateRange: existing.dateRange,
             proactive: existing.proactive,
-            memory: existing.memory ?? memoryCapsule,
             userAddress: existing.userAddress ?? walletAddress,
             encryptionKey: existing.encryptionKey ?? encryptionKey,
-            dataNote: existing.dataNote,
-            labResults: existing.labResults
+            contextBlocks: existing.contextBlocks
         )
     }
 
