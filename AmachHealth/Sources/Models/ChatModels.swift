@@ -13,19 +13,26 @@ enum MessageRole: String, Codable {
     case system
 }
 
+enum MessageFeedback: String, Codable {
+    case helpful
+    case unhelpful
+}
+
 struct ChatMessage: Identifiable, Codable {
     var id: UUID
     let role: MessageRole
     var content: String
     let timestamp: Date
     var metadata: ChatMessageMetadata?  // non-nil for Luma-initiated proactive messages
+    var feedback: MessageFeedback?      // set when user rates a Luma response
 
-    init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = .now, metadata: ChatMessageMetadata? = nil) {
+    init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = .now, metadata: ChatMessageMetadata? = nil, feedback: MessageFeedback? = nil) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.metadata = metadata
+        self.feedback = feedback
     }
 }
 
@@ -69,6 +76,23 @@ struct ChatSession: Identifiable, Codable {
     }
 }
 
+// MARK: - Context Block
+//
+// Pre-formatted plain-text context segment assembled on the iOS side.
+// The backend injects each block verbatim as a system message.
+// Adding a new data source (Whoop, CGM, Oura, Android) = new block on iOS,
+// zero backend changes required.
+//
+// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_dexa"
+//               | "goals" | "memory" | "timeline" | "cgm" | "whoop"
+
+struct ContextBlock: Encodable {
+    /// Semantic tag — used for debugging; backend treats all blocks equally.
+    let type: String
+    /// Pre-formatted text injected verbatim as a system message to Luma.
+    let content: String
+}
+
 // MARK: - API Request: POST /api/ai/chat
 
 struct AIChatRequest: Encodable {
@@ -80,24 +104,18 @@ struct AIChatRequest: Encodable {
     let labData: LabDataContext?
 }
 
-/// Pre-formatted context block (e.g. hr_zones, workouts, anomalies) for Luma.
-struct AIChatContextBlock: Encodable {
-    let type: String
-    let content: String
-}
-
 struct AIChatContext: Encodable {
     let metrics: AIChatMetrics?
     let dateRange: AIChatDateRange?
     // Populated only for Luma-initiated proactive conversations
     let proactive: ProactiveInsightContext?
-    let memory: AIChatMemoryCapsule?
     let userAddress: String?
     let encryptionKey: WalletEncryptionKey?
+    let memory: AIChatMemoryCapsule?
     /// Lab results (bloodwork, DEXA) and recent timeline events for Luma visibility
     let labData: LabDataContext?
     /// Optional pre-formatted blocks (hr_zones, workouts, anomalies) for intent-aware context.
-    let contextBlocks: [AIChatContextBlock]?
+    let contextBlocks: [ContextBlock]?
 
     init(
         metrics: AIChatMetrics? = nil,
@@ -107,7 +125,7 @@ struct AIChatContext: Encodable {
         userAddress: String? = nil,
         encryptionKey: WalletEncryptionKey? = nil,
         labData: LabDataContext? = nil,
-        contextBlocks: [AIChatContextBlock]? = nil
+        contextBlocks: [ContextBlock]? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
@@ -135,16 +153,55 @@ struct AIChatMetrics: Encodable {
 }
 
 struct MetricContext: Encodable {
-    let average: Double?
-    let min: Double?
-    let max: Double?
-    let latest: Double?
-    let trend: String? // "improving" | "stable" | "declining"
+    let average: Double?        // 30-day average (completed days)
+    let min: Double?            // 30-day minimum
+    let max: Double?            // 30-day maximum
+    let latest: Double?         // previous complete day's value (never today's partial)
+    let sevenDayAvg: Double?    // 7-day rolling average (completed days only)
+    let trend: String?          // "improving" | "stable" | "declining"
 }
 
 struct AIChatDateRange: Encodable {
     let start: String
     let end: String
+}
+
+// MARK: - Lab Results Context (bloodwork + DEXA for Luma)
+
+/// Formatted lab results injected into Luma's context when available.
+/// Populated lazily by LabContextService when the user opens Chat.
+struct LabResultsContext: Encodable {
+    let bloodwork: LabBloodworkContext?
+    let dexa: LabDexaContext?
+}
+
+struct LabBloodworkContext: Encodable {
+    let reportDate: String?
+    let laboratory: String?
+    /// Individual biomarkers — name, value, unit, reference range, flag (H/L/etc.)
+    let metrics: [LabMetricEntry]
+    let notes: [String]?
+}
+
+struct LabMetricEntry: Encodable {
+    let name: String
+    let value: Double?
+    let unit: String?
+    let referenceRange: String?
+    /// "H" = high, "L" = low, nil = in range
+    let flag: String?
+    let panel: String?
+}
+
+struct LabDexaContext: Encodable {
+    let scanDate: String?
+    let bodyFatPercent: Double?
+    let leanMassKg: Double?
+    let visceralFatRating: Double?
+    let androidGynoidRatio: Double?
+    let boneDensityTScore: Double?
+    let boneDensityZScore: Double?
+    let notes: [String]?
 }
 
 struct AIChatMemoryCapsule: Encodable {

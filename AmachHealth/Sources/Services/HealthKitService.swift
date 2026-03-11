@@ -80,7 +80,9 @@ final class HealthKitService: ObservableObject {
                 }
             } catch {
                 // Log but continue - some metrics may not have data
+                #if DEBUG
                 print("⚠️ Failed to fetch \(metric.rawValue): \(error.localizedDescription)")
+                #endif
             }
         }
 

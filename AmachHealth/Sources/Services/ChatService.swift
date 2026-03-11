@@ -60,12 +60,12 @@ final class ChatService: ObservableObject {
 
         do {
             // Send last 18 messages as history (9 exchanges, keeps context tight)
-            let history = currentSession.messages
+            let historyForSend = currentSession.messages
                 .dropLast()
                 .suffix(18)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
-            let response = try await api.sendChatMessage(trimmed, history: Array(history), context: finalContext, mode: chatMode)
+            let response = try await api.sendChatMessage(trimmed, history: Array(historyForSend), context: finalContext, mode: chatMode)
 
             let assistantMsg = ChatMessage(role: .assistant, content: response.content)
             currentSession.messages.append(assistantMsg)
@@ -117,8 +117,8 @@ final class ChatService: ObservableObject {
 
         // History excludes the current user turn and the placeholder.
         // Reduce window when lab data is present to avoid overloading the model context.
-        let historyLimit = labData != nil ? 10 : 18
-        let history = currentSession.messages
+        let historyLimit = labDataToUse != nil ? 10 : 18
+        let historyMessages = currentSession.messages
             .dropLast(2)
             .suffix(historyLimit)
             .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
@@ -129,7 +129,7 @@ final class ChatService: ObservableObject {
         do {
             let stream = api.streamLumaChat(
                 trimmed,
-                history: Array(history),
+                history: historyMessages,
                 context: finalContext,
                 screen: screen,
                 metric: metric,
@@ -167,10 +167,12 @@ final class ChatService: ObservableObject {
         chatMode = .quick
         let sessionToArchive = currentSession
 
-        // Archive current to recent sessions
+        // Archive current to recent sessions — keep only the last 3 visible.
+        // Older sessions have already had their facts extracted into
+        // ConversationMemoryStore when they were archived.
         recentSessions.insert(sessionToArchive, at: 0)
-        if recentSessions.count > 30 {
-            recentSessions = Array(recentSessions.prefix(30))
+        if recentSessions.count > 3 {
+            recentSessions = Array(recentSessions.prefix(3))
         }
         saveToDisk()
 
@@ -247,6 +249,25 @@ final class ChatService: ObservableObject {
         }
 
         isSending = false
+    }
+
+    // MARK: - Feedback
+
+    /// Rate a Luma response. Captures the anonymized exchange and sends it to
+    /// the backend for quality monitoring — no health metric values are included,
+    /// only the raw text of the user prompt and Luma's reply.
+    func submitFeedback(_ feedback: MessageFeedback, for messageId: UUID, comment: String? = nil) {
+        guard let idx = currentSession.messages.firstIndex(where: { $0.id == messageId }),
+              currentSession.messages[idx].role == .assistant else { return }
+
+        currentSession.messages[idx].feedback = feedback
+        saveToDisk()
+
+        let screen = LumaContextService.shared.currentScreen
+
+        Task {
+            try? await api.submitChatFeedback(rating: feedback.rawValue, screen: screen, comment: comment)
+        }
     }
 
     // MARK: - Proactive Intelligence Support
@@ -545,9 +566,9 @@ final class ChatService: ObservableObject {
             !sessions.isEmpty
         else { return }
 
-        // First entry is the active session, rest are history
+        // First entry is the active session, rest are history (cap at 3)
         currentSession = sessions[0]
-        recentSessions = Array(sessions.dropFirst())
+        recentSessions = Array(sessions.dropFirst().prefix(3))
     }
 
     // MARK: - Storj Sync
@@ -570,7 +591,9 @@ final class ChatService: ObservableObject {
             }
         } catch {
             // Non-critical — local copy is intact, will retry next cycle
+            #if DEBUG
             print("⚠️ ChatService: Storj sync failed: \(error.localizedDescription)")
+            #endif
         }
     }
 }

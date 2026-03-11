@@ -49,11 +49,22 @@ struct MetricInfo: Identifiable, Hashable {
 
 // Default MetricInfo values for common biomarkers
 extension MetricInfo {
-    static func steps(_ value: Double) -> MetricInfo {
-        MetricInfo(id: "steps", icon: "figure.walk", label: "Steps",
+    /// - Parameters:
+    ///   - sevenDayAvg: 7-day avg of completed days. When provided with dayProgress, enables
+    ///     time-of-day-aware pacing status instead of a raw absolute threshold.
+    ///   - dayProgress: Fraction of the day elapsed (0.0–1.0). Must be provided alongside sevenDayAvg.
+    static func steps(_ value: Double, sevenDayAvg: Double? = nil, dayProgress: Double? = nil) -> MetricInfo {
+        let status: HealthStatusPill.Status = Self.cumulativeStatus(
+            value: value,
+            sevenDayAvg: sevenDayAvg,
+            dayProgress: dayProgress,
+            absoluteOptimal: 8000,
+            absoluteBorderline: 5000
+        )
+        return MetricInfo(id: "steps", icon: "figure.walk", label: "Steps",
                    value: value >= 1000 ? String(format: "%.1fk", value / 1000) : String(Int(value)),
                    rawValue: value, unit: "steps", color: Color.amachPrimaryBright,
-                   status: value >= 8000 ? .optimal : value >= 5000 ? .borderline : .critical,
+                   status: status,
                    source: "Apple Health",
                    normalRangeLow: 8000, normalRangeHigh: 12000,
                    absoluteMin: 0, absoluteMax: 15000)
@@ -90,21 +101,35 @@ extension MetricInfo {
                    absoluteMin: 0, absoluteMax: 12)
     }
 
-    static func calories(_ kcal: Double) -> MetricInfo {
-        MetricInfo(id: "calories", icon: "flame.fill", label: "Active Cal",
+    static func calories(_ kcal: Double, sevenDayAvg: Double? = nil, dayProgress: Double? = nil) -> MetricInfo {
+        let status: HealthStatusPill.Status = kcal == 0 ? .noData : Self.cumulativeStatus(
+            value: kcal,
+            sevenDayAvg: sevenDayAvg,
+            dayProgress: dayProgress,
+            absoluteOptimal: 400,
+            absoluteBorderline: 200
+        )
+        return MetricInfo(id: "calories", icon: "flame.fill", label: "Active Cal",
                    value: String(Int(kcal)), rawValue: kcal, unit: "kcal",
                    color: Color.amachAccent,
-                   status: kcal >= 400 ? .optimal : kcal >= 200 ? .borderline : .noData,
+                   status: status,
                    source: "Apple Health",
                    normalRangeLow: 400, normalRangeHigh: 800,
                    absoluteMin: 0, absoluteMax: 1000)
     }
 
-    static func exercise(_ mins: Double) -> MetricInfo {
-        MetricInfo(id: "exercise", icon: "figure.run", label: "Exercise",
+    static func exercise(_ mins: Double, sevenDayAvg: Double? = nil, dayProgress: Double? = nil) -> MetricInfo {
+        let status: HealthStatusPill.Status = Self.cumulativeStatus(
+            value: mins,
+            sevenDayAvg: sevenDayAvg,
+            dayProgress: dayProgress,
+            absoluteOptimal: 30,
+            absoluteBorderline: 20
+        )
+        return MetricInfo(id: "exercise", icon: "figure.run", label: "Exercise",
                    value: String(Int(mins)), rawValue: mins, unit: "min",
                    color: Color.amachAccent,
-                   status: mins >= 30 ? .optimal : mins >= 20 ? .borderline : .critical,
+                   status: status,
                    source: "Apple Health",
                    normalRangeLow: 30, normalRangeHigh: 60,
                    absoluteMin: 0, absoluteMax: 90)
@@ -139,6 +164,37 @@ extension MetricInfo {
                    source: "Apple Watch",
                    normalRangeLow: 12, normalRangeHigh: 18,
                    absoluteMin: 8, absoluteMax: 30)
+    }
+
+    // MARK: - Time-aware status for cumulative metrics
+
+    /// Status for metrics that accumulate across a day (steps, calories, exercise).
+    /// When a 7-day average and day-progress fraction are available, compares actual
+    /// to the expected pace at this point in the day — so 5,000 steps at noon on a
+    /// day where you normally hit 10,000 shows "Below Trend" rather than "Critical".
+    ///
+    /// Falls back to absolute thresholds when trend data isn't available (e.g. period
+    /// averages shown in MetricDetailView).
+    private static func cumulativeStatus(
+        value: Double,
+        sevenDayAvg: Double?,
+        dayProgress: Double?,
+        absoluteOptimal: Double,
+        absoluteBorderline: Double
+    ) -> HealthStatusPill.Status {
+        // Require at least 10% of the day elapsed to avoid noise at midnight/early morning
+        if let avg = sevenDayAvg, let progress = dayProgress, progress >= 0.10, avg > 0 {
+            let expected = avg * progress
+            if value >= expected * 0.90 { return .optimal }
+            if value >= expected * 0.60 { return .belowTrend }
+            return .critical
+        }
+        // Absolute fallback — used in MetricDetailView period views (full-day averages).
+        // Never use .borderline for cumulative metrics: if you haven't finished the day
+        // it's below trend; if reviewing a period average it's still below trend not "borderline".
+        if value >= absoluteOptimal { return .optimal }
+        if value >= absoluteBorderline { return .belowTrend }
+        return .critical
     }
 }
 
@@ -371,6 +427,8 @@ struct MetricDetailView: View {
                 return ("Your \(metric.label.lowercased()) average is in a healthy range.", Color.Amach.Health.optimal)
             case .borderline:
                 return ("Your \(metric.label.lowercased()) average is slightly outside the typical range. Worth monitoring.", Color.Amach.Health.borderline)
+            case .belowTrend:
+                return ("Your \(metric.label.lowercased()) average is running below your recent trend. Worth keeping an eye on.", Color.Amach.Health.borderline)
             case .critical:
                 return ("Your \(metric.label.lowercased()) average is significantly outside the typical range. Consider discussing with your provider.", Color.Amach.Health.critical)
             case .noData:
