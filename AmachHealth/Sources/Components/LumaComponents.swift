@@ -265,38 +265,54 @@ struct LumaSheetView: View {
     // MARK: Message Area
 
     private var messageArea: some View {
-        ScrollViewReader { proxy in
+        // Empty assistant placeholder (content="") is filtered out so it never
+        // renders as a small solid bubble. LumaTypingBubble handles the "waiting"
+        // state and disappears as soon as the first streaming token arrives.
+        let visibleMessages = chatService.currentSession.messages.filter {
+            $0.role == .user || !$0.content.isEmpty
+        }
+        // Show the typing bubble while sending AND the streamed content hasn't
+        // started yet (empty assistant placeholder is still the last message).
+        let showTyping = chatService.isSending && {
+            let last = chatService.currentSession.messages.last
+            return last?.role != .assistant || (last?.content.isEmpty ?? true)
+        }()
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if chatService.currentSession.messages.isEmpty {
                         lumaEmptyState
+                            .transition(.opacity)
                     } else {
-                        ForEach(chatService.currentSession.messages) { msg in
-                            LumaMessageBubble(message: msg)
-                                .id(msg.id)
-                        }
+                        Group {
+                            ForEach(visibleMessages) { msg in
+                                LumaMessageBubble(message: msg)
+                                    .id(msg.id)
+                            }
 
-                        if chatService.isSending {
-                            LumaTypingBubble()
-                        }
+                            if showTyping {
+                                LumaTypingBubble()
+                                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            }
 
-                        if let err = chatService.error {
-                            lumaErrorBanner(err)
+                            if let err = chatService.error {
+                                lumaErrorBanner(err)
+                            }
                         }
+                        .transition(.opacity)
                     }
 
                     Color.clear.frame(height: 4).id("lumaBottom")
                 }
+                .animation(.easeOut(duration: 0.2), value: chatService.currentSession.messages.isEmpty)
                 .padding(.horizontal, AmachSpacing.md)
                 .padding(.vertical, AmachSpacing.sm)
             }
-            .onChange(of: chatService.currentSession.messages.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo("lumaBottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: chatService.isSending) { _, isSending in
-                if isSending {
+            .onChange(of: chatService.currentSession.messages.count) { old, _ in
+                let delay: UInt64 = old == 0 ? 350_000_000 : 0
+                Task { @MainActor in
+                    if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo("lumaBottom", anchor: .bottom)
                     }

@@ -371,7 +371,7 @@ struct HealthContextBuilder {
         // --- Recent significant events (last 90 days) ---
         let significantTypes: Set<TimelineEventType> = [
             .labResults, .surgeryProcedure, .surgeryCompleted, .procedureCompleted,
-            .lifestyleChange, .dietChange, .exerciseChange
+            .lifestyleChange, .dietChange, .exerciseChange, .custom, .generalNote
         ]
         let recentSignificant = events
             .filter { significantTypes.contains($0.eventType) && $0.timestamp >= ninetyDaysAgo }
@@ -382,8 +382,12 @@ struct HealthContextBuilder {
             dateFmt.dateStyle = .medium
             dateFmt.timeStyle = .none
             for e in recentSignificant.prefix(5) {
-                let label = e.subtitleText ?? e.eventType.displayName
-                lines.append("  • \(dateFmt.string(from: e.timestamp)): \(e.eventType.displayName) — \(label)")
+                let title = e.titleText
+                if let detail = e.subtitleText, !detail.isEmpty, detail != title {
+                    lines.append("  • \(dateFmt.string(from: e.timestamp)): \(title) — \(detail)")
+                } else {
+                    lines.append("  • \(dateFmt.string(from: e.timestamp)): \(title)")
+                }
             }
         }
 

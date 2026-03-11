@@ -153,10 +153,12 @@ final class ChatService: ObservableObject {
 
         let sessionToArchive = currentSession
 
-        // Archive current to recent sessions
+        // Archive current to recent sessions — keep only the last 3 visible.
+        // Older sessions have already had their facts extracted into
+        // ConversationMemoryStore when they were archived.
         recentSessions.insert(sessionToArchive, at: 0)
-        if recentSessions.count > 30 {
-            recentSessions = Array(recentSessions.prefix(30))
+        if recentSessions.count > 3 {
+            recentSessions = Array(recentSessions.prefix(3))
         }
         saveToDisk()
 
@@ -539,9 +541,9 @@ final class ChatService: ObservableObject {
             !sessions.isEmpty
         else { return }
 
-        // First entry is the active session, rest are history
+        // First entry is the active session, rest are history (cap at 3)
         currentSession = sessions[0]
-        recentSessions = Array(sessions.dropFirst())
+        recentSessions = Array(sessions.dropFirst().prefix(3))
     }
 
     // MARK: - Storj Sync
