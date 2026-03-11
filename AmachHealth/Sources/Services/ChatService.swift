@@ -17,6 +17,8 @@ final class ChatService: ObservableObject {
     @Published var recentSessions: [ChatSession] = []
     @Published var isSending = false
     @Published var error: String?
+    /// Quick vs deep mode for Luma. Toggle in ChatView; resets on new session.
+    @Published var chatMode: ChatMode = .quick
 
     private let api = AmachAPIClient.shared
     private let wallet = WalletService.shared
@@ -42,9 +44,11 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let intent = ChatIntentClassifier.classify(trimmed)
+        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let labData = await HealthContextBuilder.buildLabContext()
-        print("🧪 [LabContext] bloodwork: \(labData?.bloodwork != nil), dexa: \(labData?.dexa != nil), events: \(labData?.recentEvents?.count ?? 0)")
-        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext(), labData: labData)
+        let labDataToUse = (intent.includesLabData || chatMode == .deep) ? labData : nil
+        let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
         let userMsg = ChatMessage(role: .user, content: trimmed)
         currentSession.messages.append(userMsg)
@@ -61,7 +65,7 @@ final class ChatService: ObservableObject {
                 .suffix(18)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
-            let response = try await api.sendChatMessage(trimmed, history: Array(history), context: finalContext)
+            let response = try await api.sendChatMessage(trimmed, history: Array(history), context: finalContext, mode: chatMode)
 
             let assistantMsg = ChatMessage(role: .assistant, content: response.content)
             currentSession.messages.append(assistantMsg)
@@ -94,9 +98,11 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        let intent = ChatIntentClassifier.classify(trimmed)
+        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let labData = await HealthContextBuilder.buildLabContext()
-        print("🧪 [LabContext] bloodwork: \(labData?.bloodwork != nil), dexa: \(labData?.dexa != nil), events: \(labData?.recentEvents?.count ?? 0)")
-        let finalContext = enrichContext(context ?? HealthContextBuilder.buildCurrentContext(), labData: labData)
+        let labDataToUse = (intent.includesLabData || chatMode == .deep) ? labData : nil
+        let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
         // 1. Append user message
         currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
@@ -109,10 +115,12 @@ final class ChatService: ObservableObject {
         isSending = true
         error = nil
 
-        // History excludes the current user turn and the placeholder
+        // History excludes the current user turn and the placeholder.
+        // Reduce window when lab data is present to avoid overloading the model context.
+        let historyLimit = labData != nil ? 10 : 18
         let history = currentSession.messages
             .dropLast(2)
-            .suffix(18)
+            .suffix(historyLimit)
             .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
         let screen = LumaContextService.shared.currentScreen
@@ -124,7 +132,8 @@ final class ChatService: ObservableObject {
                 history: Array(history),
                 context: finalContext,
                 screen: screen,
-                metric: metric
+                metric: metric,
+                mode: chatMode
             )
 
             for try await token in stream {
@@ -155,6 +164,7 @@ final class ChatService: ObservableObject {
     func startNewSession() {
         guard !currentSession.messages.isEmpty else { return }
 
+        chatMode = .quick
         let sessionToArchive = currentSession
 
         // Archive current to recent sessions
@@ -480,8 +490,13 @@ final class ChatService: ObservableObject {
         return jsonSubstring.data(using: .utf8)
     }
 
-    private func enrichContext(_ base: AIChatContext?, labData: LabDataContext? = nil) -> AIChatContext? {
-        let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule()
+    private func enrichContext(
+        _ base: AIChatContext?,
+        labData: LabDataContext? = nil,
+        intent: ChatIntent? = nil,
+        mode: ChatMode = .quick
+    ) -> AIChatContext? {
+        let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule(intent: intent, mode: mode)
         let walletAddress = wallet.isConnected ? wallet.address : nil
         let encryptionKey = wallet.isConnected ? wallet.encryptionKey : nil
 
@@ -494,7 +509,8 @@ final class ChatService: ObservableObject {
                 memory: memoryCapsule,
                 userAddress: walletAddress,
                 encryptionKey: encryptionKey,
-                labData: labData
+                labData: labData,
+                contextBlocks: nil
             )
         }
 
@@ -505,7 +521,8 @@ final class ChatService: ObservableObject {
             memory: existing.memory ?? memoryCapsule,
             userAddress: existing.userAddress ?? walletAddress,
             encryptionKey: existing.encryptionKey ?? encryptionKey,
-            labData: existing.labData ?? labData
+            labData: existing.labData ?? labData,
+            contextBlocks: existing.contextBlocks
         )
     }
 

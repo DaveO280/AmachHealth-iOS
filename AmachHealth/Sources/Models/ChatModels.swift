@@ -76,6 +76,14 @@ struct AIChatRequest: Encodable {
     let context: AIChatContext?
     let history: [AIChatHistoryMessage]
     let options: AIChatOptions?
+    // Also sent top-level so the backend can read it without digging into context
+    let labData: LabDataContext?
+}
+
+/// Pre-formatted context block (e.g. hr_zones, workouts, anomalies) for Luma.
+struct AIChatContextBlock: Encodable {
+    let type: String
+    let content: String
 }
 
 struct AIChatContext: Encodable {
@@ -88,6 +96,8 @@ struct AIChatContext: Encodable {
     let encryptionKey: WalletEncryptionKey?
     /// Lab results (bloodwork, DEXA) and recent timeline events for Luma visibility
     let labData: LabDataContext?
+    /// Optional pre-formatted blocks (hr_zones, workouts, anomalies) for intent-aware context.
+    let contextBlocks: [AIChatContextBlock]?
 
     init(
         metrics: AIChatMetrics? = nil,
@@ -96,7 +106,8 @@ struct AIChatContext: Encodable {
         memory: AIChatMemoryCapsule? = nil,
         userAddress: String? = nil,
         encryptionKey: WalletEncryptionKey? = nil,
-        labData: LabDataContext? = nil
+        labData: LabDataContext? = nil,
+        contextBlocks: [AIChatContextBlock]? = nil
     ) {
         self.metrics = metrics
         self.dateRange = dateRange
@@ -105,6 +116,7 @@ struct AIChatContext: Encodable {
         self.userAddress = userAddress
         self.encryptionKey = encryptionKey
         self.labData = labData
+        self.contextBlocks = contextBlocks
     }
 }
 
@@ -229,9 +241,32 @@ final class ConversationMemoryStore: ObservableObject {
         saveToDisk()
     }
 
-    func buildMemoryCapsule() -> AIChatMemoryCapsule? {
+    private static func intentRelevantCategories(_ intent: ChatIntent) -> Set<FactCategory> {
+        switch intent {
+        case .sleep, .recovery: return [.goal, .concern, .condition]
+        case .activity: return [.goal, .condition]
+        case .vitals: return [.condition, .concern]
+        case .labs: return [.condition, .medication, .concern]
+        case .medications: return [.medication, .condition, .preference]
+        case .bodyComp: return [.goal, .condition]
+        case .general: return [] // empty = include all categories
+        }
+    }
+
+    /// Build memory capsule. Quick mode + intent: only facts in intent-relevant categories (capped). Deep: full capsule.
+    func buildMemoryCapsule(intent: ChatIntent? = nil, mode: ChatMode = .quick) -> AIChatMemoryCapsule? {
         let activeFacts = facts.filter { $0.isActive }
         guard !activeFacts.isEmpty || !summaries.isEmpty else { return nil }
+
+        let filteredFacts: [CriticalFact]
+        if mode == .deep || intent == nil {
+            filteredFacts = activeFacts
+        } else {
+            let relevanceCategories = Self.intentRelevantCategories(intent!)
+            var list = activeFacts.filter { relevanceCategories.isEmpty || relevanceCategories.contains($0.category) }
+            if list.count > 15 { list = Array(list.suffix(15)) }
+            filteredFacts = list
+        }
 
         func normalized(_ text: String, maxLen: Int) -> String {
             let collapsed = text.replacingOccurrences(
@@ -245,7 +280,7 @@ final class ConversationMemoryStore: ObservableObject {
         }
 
         func latestValues(for category: FactCategory, limit: Int?) -> [String] {
-            let filtered = activeFacts.filter { $0.category == category }
+            let filtered = filteredFacts.filter { $0.category == category }
                 .sorted { $0.dateIdentified < $1.dateIdentified }
             let sliced = limit != nil ? Array(filtered.suffix(limit!)) : filtered
             return sliced.map { normalized($0.value, maxLen: 120) }
@@ -318,6 +353,8 @@ struct LabResultSummary: Encodable {
     let vitaminD: Double?
     let ferritin: Double?
     let notes: String?
+    /// All remaining metrics from the FHIR report not captured by named fields above
+    let additionalMetrics: [String: Double]?
 }
 
 struct DexaResultSummary: Encodable {

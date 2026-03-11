@@ -91,7 +91,7 @@ struct HealthContextBuilder {
     private static func buildTimelineEventSummaries(formatter: DateFormatter) -> [TimelineEventSummary] {
         let events = TimelineService.shared.events
             .filter { !$0.isAnomaly }  // anomalies are captured elsewhere; focus on user-entered events
-            .prefix(20)                // cap at 20 most recent
+            .prefix(8)                 // cap at 8 most recent to keep prompt size manageable
 
         return events.compactMap { event -> TimelineEventSummary? in
             let summary = event.subtitleText ?? event.titleText
@@ -172,6 +172,10 @@ struct HealthContextBuilder {
 
     private static func labResultSummary(from record: LabRecord, formatter: DateFormatter) -> LabResultSummary {
         let v = record.values
+        let knownKeys: Set<String> = ["glucose", "hba1c", "HbA1c", "totalCholesterol", "cholesterol",
+                                      "ldl", "LDL", "hdl", "HDL", "triglycerides", "tsh", "TSH",
+                                      "vitaminD", "vitamin_d", "ferritin"]
+        let additional = v.filter { !knownKeys.contains($0.key) }
         return LabResultSummary(
             date: formatter.string(from: record.date),
             glucose: v["glucose"],
@@ -183,7 +187,8 @@ struct HealthContextBuilder {
             tsh: v["tsh"] ?? v["TSH"],
             vitaminD: v["vitaminD"] ?? v["vitamin_d"],
             ferritin: v["ferritin"],
-            notes: record.notes
+            notes: record.notes,
+            additionalMetrics: additional.isEmpty ? nil : additional
         )
     }
 
@@ -213,6 +218,23 @@ struct HealthContextBuilder {
         func find(_ keys: String...) -> Double? { keys.compactMap { v[$0] }.first }
 
         let dateStr = report.reportDate ?? formatter.string(from: Date())
+
+        // Named fields cover the most common markers
+        let namedKeys: Set<String> = [
+            "glucose", "fasting glucose", "blood glucose",
+            "hba1c", "hemoglobin a1c", "a1c",
+            "total cholesterol", "cholesterol",
+            "ldl", "ldl cholesterol", "ldl-c",
+            "hdl", "hdl cholesterol", "hdl-c",
+            "triglycerides", "triglyceride",
+            "tsh", "thyroid stimulating hormone",
+            "vitamin d", "25-oh vitamin d", "25-hydroxyvitamin d", "vitamin d, 25-oh",
+            "ferritin"
+        ]
+
+        // Pass through everything else so no metric gets dropped
+        let additional: [String: Double] = v.filter { !namedKeys.contains($0.key) }
+
         return LabResultSummary(
             date: dateStr,
             glucose: find("glucose", "fasting glucose", "blood glucose"),
@@ -224,7 +246,8 @@ struct HealthContextBuilder {
             tsh: find("tsh", "thyroid stimulating hormone"),
             vitaminD: find("vitamin d", "25-oh vitamin d", "25-hydroxyvitamin d", "vitamin d, 25-oh"),
             ferritin: find("ferritin"),
-            notes: report.notes?.joined(separator: "; ")
+            notes: nil,
+            additionalMetrics: additional.isEmpty ? nil : additional
         )
     }
 
@@ -237,7 +260,7 @@ struct HealthContextBuilder {
             boneDensityTScore: report.boneDensityTotal?.tScore,
             visceralFat: report.visceralFatAreaCm2 ?? report.visceralFatRating,
             androidGynoidRatio: report.androidGynoidRatio,
-            notes: report.notes?.joined(separator: "; ")
+            notes: nil  // omit notes — PDF filenames add bulk without clinical value
         )
     }
 
@@ -325,6 +348,114 @@ struct HealthContextBuilder {
                 end: formatter.string(from: now)
             )
         )
+    }
+
+    // MARK: - Intent-aware context (smart routing)
+
+    /// Build context for the given intent and mode. buildCurrentContext() is left untouched.
+    /// Quick: subset of metrics + intent-relevant blocks. Deep: all metrics + all blocks.
+    static func buildContext(for intent: ChatIntent, mode: ChatMode) -> AIChatContext? {
+        let dashboard = DashboardService.shared
+        let formatter = ISO8601DateFormatter()
+        let now = Date()
+        let monthAgo = Calendar.current.date(byAdding: .day, value: -30, to: now)!
+        let dateRange = AIChatDateRange(
+            start: formatter.string(from: monthAgo),
+            end: formatter.string(from: now)
+        )
+
+        if mode == .deep {
+            let full = buildCurrentContext()
+            var blocks: [AIChatContextBlock] = []
+            if let hr = buildHRZonesBlock() { blocks.append(hr) }
+            if let w = buildWorkoutsBlock() { blocks.append(w) }
+            if let a = buildAnomaliesBlock() { blocks.append(a) }
+            return AIChatContext(
+                metrics: full?.metrics,
+                dateRange: dateRange,
+                proactive: nil,
+                memory: nil,
+                userAddress: nil,
+                encryptionKey: nil,
+                labData: nil,
+                contextBlocks: blocks.isEmpty ? nil : blocks
+            )
+        }
+
+        // Quick: intent-based subset
+        let full = buildCurrentContext()
+        let metricsFiltered = full?.metrics.flatMap { filterMetrics($0, to: intent.metricKeys) }
+        var blocks: [AIChatContextBlock] = []
+        if intent.includesHRZones, let hr = buildHRZonesBlock() { blocks.append(hr) }
+        if intent.includesWorkouts, let w = buildWorkoutsBlock() { blocks.append(w) }
+        if intent.includesAnomalies, let a = buildAnomaliesBlock() { blocks.append(a) }
+
+        return AIChatContext(
+            metrics: metricsFiltered ?? full?.metrics,
+            dateRange: dateRange,
+            proactive: nil,
+            memory: nil,
+            userAddress: nil,
+            encryptionKey: nil,
+            labData: nil,
+            contextBlocks: blocks.isEmpty ? nil : blocks
+        )
+    }
+
+    /// Filter metrics to only include the given keys (e.g. sleep, hrv, restingHeartRate for .sleep).
+    private static func filterMetrics(_ m: AIChatMetrics, to keys: Set<String>) -> AIChatMetrics? {
+        AIChatMetrics(
+            steps: keys.contains("steps") ? m.steps : nil,
+            heartRate: keys.contains("heartRate") ? m.heartRate : nil,
+            hrv: keys.contains("hrv") ? m.hrv : nil,
+            sleep: keys.contains("sleep") ? m.sleep : nil,
+            exercise: keys.contains("exercise") ? m.exercise : nil,
+            restingHeartRate: keys.contains("restingHeartRate") ? m.restingHeartRate : nil,
+            vo2Max: keys.contains("vo2Max") ? m.vo2Max : nil,
+            respiratoryRate: keys.contains("respiratoryRate") ? m.respiratoryRate : nil,
+            recoveryScore: keys.contains("recoveryScore") ? m.recoveryScore : nil,
+            sleepDeepHours: keys.contains("sleepDeepHours") ? m.sleepDeepHours : nil,
+            sleepRemHours: keys.contains("sleepRemHours") ? m.sleepRemHours : nil
+        )
+    }
+
+    private static func buildHRZonesBlock() -> AIChatContextBlock? {
+        let dashboard = DashboardService.shared
+        let zones = dashboard.hrZonesTrend[.month] ?? dashboard.todayHRZones
+        guard zones.total > 0 else { return nil }
+        let totalMin = zones.total
+        let lines = [
+            "Heart rate zones (training):",
+            String(format: "  Zone 1 (recovery): %.0f min (%.0f%%)", zones.zone1, zones.fraction(for: 1) * 100),
+            String(format: "  Zone 2 (fat burn): %.0f min (%.0f%%)", zones.zone2, zones.fraction(for: 2) * 100),
+            String(format: "  Zone 3 (aerobic): %.0f min (%.0f%%)", zones.zone3, zones.fraction(for: 3) * 100),
+            String(format: "  Zone 4 (threshold): %.0f min (%.0f%%)", zones.zone4, zones.fraction(for: 4) * 100),
+            String(format: "  Zone 5 (peak): %.0f min (%.0f%%)", zones.zone5, zones.fraction(for: 5) * 100),
+            String(format: "  Total: %.0f min", totalMin)
+        ]
+        return AIChatContextBlock(type: "hr_zones", content: lines.joined(separator: "\n"))
+    }
+
+    private static func buildWorkoutsBlock() -> AIChatContextBlock? {
+        let items = DashboardService.shared.recentWorkoutSummaries
+        guard !items.isEmpty else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let lines = ["Recent workouts (last 7 days):"] + items.prefix(14).map { w in
+            "  \(formatter.string(from: w.date)): \(w.activityType) \(Int(w.durationMinutes)) min"
+        }
+        return AIChatContextBlock(type: "workouts", content: lines.joined(separator: "\n"))
+    }
+
+    private static func buildAnomaliesBlock() -> AIChatContextBlock? {
+        let anomalies = TimelineService.shared.events.filter(\.isAnomaly).prefix(10)
+        guard !anomalies.isEmpty else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let lines = ["Recent auto-detected anomalies:"] + anomalies.map { e in
+            "  \(formatter.string(from: e.timestamp)): \(e.titleText)\(e.subtitleText.map { " — \($0)" } ?? "")"
+        }
+        return AIChatContextBlock(type: "anomalies", content: lines.joined(separator: "\n"))
     }
 
     // MARK: - Trend Computation
