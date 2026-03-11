@@ -265,29 +265,47 @@ struct LumaSheetView: View {
     // MARK: Message Area
 
     private var messageArea: some View {
-        ScrollViewReader { proxy in
+        // Empty assistant placeholder (content="") is filtered out so it never
+        // renders as a small solid bubble. LumaTypingBubble handles the "waiting"
+        // state and disappears as soon as the first streaming token arrives.
+        let visibleMessages = chatService.currentSession.messages.filter {
+            $0.role == .user || !$0.content.isEmpty
+        }
+        // Show the typing bubble while sending AND the streamed content hasn't
+        // started yet (empty assistant placeholder is still the last message).
+        let showTyping = chatService.isSending && {
+            let last = chatService.currentSession.messages.last
+            return last?.role != .assistant || (last?.content.isEmpty ?? true)
+        }()
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
                     if chatService.currentSession.messages.isEmpty {
                         lumaEmptyState
+                            .transition(.opacity)
                     } else {
-                        ForEach(chatService.currentSession.messages) { msg in
-                            LumaMessageBubble(message: msg)
-                                .id(msg.id)
-                        }
+                        Group {
+                            ForEach(visibleMessages) { msg in
+                                LumaMessageBubble(message: msg)
+                                    .id(msg.id)
+                            }
 
-                        if chatService.isSending,
-                           chatService.currentSession.messages.last?.role != .assistant {
-                            LumaTypingBubble()
-                        }
+                            if showTyping {
+                                LumaTypingBubble()
+                                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            }
 
-                        if let err = chatService.error {
-                            lumaErrorBanner(err)
+                            if let err = chatService.error {
+                                lumaErrorBanner(err)
+                            }
                         }
+                        .transition(.opacity)
                     }
 
                     Color.clear.frame(height: 4).id("lumaBottom")
                 }
+                .animation(.easeOut(duration: 0.2), value: chatService.currentSession.messages.isEmpty)
                 .padding(.horizontal, AmachSpacing.md)
                 .padding(.vertical, AmachSpacing.sm)
             }
@@ -541,51 +559,41 @@ struct LumaMessageBubble: View {
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Group {
-                    if isStreaming {
-                        // Streaming placeholder — show animated dots in the bubble
-                        // instead of rendering an empty (solid) text background
-                        LumaTypingIndicator()
-                    } else {
-                        Text(message.content)
-                            .font(AmachType.body)
-                            .foregroundStyle(
-                                isUser ? Color.white : Color.Amach.AI.p200
-                            )
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(
+                Text(message.content)
+                    .font(AmachType.body)
+                    .foregroundStyle(
+                        isUser ? Color.white : Color.Amach.AI.p200
+                    )
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        isUser
+                            ? AnyShapeStyle(Color.amachPrimary)
+                            : AnyShapeStyle(Color.Amach.AI.dark)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AmachRadius.lg)
+                            .stroke(
                                 isUser
-                                    ? AnyShapeStyle(Color.amachPrimary)
-                                    : AnyShapeStyle(Color.Amach.AI.dark)
+                                    ? Color.clear
+                                    : Color.Amach.AI.base.opacity(0.22),
+                                lineWidth: 1
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: AmachRadius.lg)
-                                    .stroke(
-                                        isUser
-                                            ? Color.clear
-                                            : Color.Amach.AI.base.opacity(0.22),
-                                        lineWidth: 1
-                                    )
-                            )
-                            .shadow(
-                                color: isUser ? Color.amachPrimary.opacity(0.25) : Color.Amach.AI.base.opacity(0.15),
-                                radius: 6, y: 2
-                            )
-                    }
-                }
+                    )
+                    .shadow(
+                        color: isUser ? Color.amachPrimary.opacity(0.25) : Color.Amach.AI.base.opacity(0.15),
+                        radius: 6, y: 2
+                    )
 
-                if !isStreaming {
-                    HStack(spacing: AmachSpacing.sm) {
-                        Text(message.timestamp, style: .time)
-                            .font(AmachType.tiny)
-                            .foregroundStyle(Color.amachTextTertiary)
+                HStack(spacing: AmachSpacing.sm) {
+                    Text(message.timestamp, style: .time)
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextTertiary)
 
-                        if showFeedback {
-                            Spacer()
-                            feedbackButtons
-                        }
+                    if showFeedback {
+                        Spacer()
+                        feedbackButtons
                     }
                 }
 

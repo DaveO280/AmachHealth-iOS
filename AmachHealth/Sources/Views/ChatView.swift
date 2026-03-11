@@ -120,33 +120,44 @@ struct ChatView: View {
     // ============================================================
 
     private var messageScrollView: some View {
-        ScrollViewReader { proxy in
+        // Filter out the empty assistant streaming placeholder so it never
+        // appears as a small solid bubble. LumaTypingBubble covers the wait.
+        let visibleMessages = chatService.currentSession.messages.filter {
+            $0.role == .user || !$0.content.isEmpty
+        }
+        let showTyping = chatService.isSending && {
+            let last = chatService.currentSession.messages.last
+            return last?.role != .assistant || (last?.content.isEmpty ?? true)
+        }()
+
+        return ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: AmachSpacing.sm) {
                     if chatService.currentSession.messages.isEmpty {
                         chatEmptyState
+                            .transition(.opacity)
                     } else {
-                        ForEach(chatService.currentSession.messages) { msg in
-                            LumaMessageBubble(message: msg)
-                                .id(msg.id)
-                        }
+                        Group {
+                            ForEach(visibleMessages) { msg in
+                                LumaMessageBubble(message: msg)
+                                    .id(msg.id)
+                            }
 
-                        // Only show the animated typing dots when no streaming placeholder
-                        // exists yet. Once the assistant placeholder is appended the tokens
-                        // fill it in-place, making the dots redundant.
-                        if chatService.isSending,
-                           chatService.currentSession.messages.last?.role != .assistant {
-                            LumaTypingBubble()
-                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        }
+                            if showTyping {
+                                LumaTypingBubble()
+                                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            }
 
-                        if let err = chatService.error {
-                            errorBanner(err)
+                            if let err = chatService.error {
+                                errorBanner(err)
+                            }
                         }
+                        .transition(.opacity)
                     }
 
                     Color.clear.frame(height: 4).id("chatBottom")
                 }
+                .animation(.easeOut(duration: 0.2), value: chatService.currentSession.messages.isEmpty)
                 .padding(.horizontal, AmachSpacing.md)
                 .padding(.vertical, AmachSpacing.md)
             }
