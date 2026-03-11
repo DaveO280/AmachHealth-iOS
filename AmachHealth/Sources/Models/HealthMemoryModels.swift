@@ -94,8 +94,9 @@ struct HealthEvent: Identifiable, Codable {
         formatter.timeStyle = .none
         let dateStr = formatter.string(from: detectedAt)
         let sign = deviationPct >= 0 ? "+" : ""
+        let clampedPct = max(-300, min(300, deviationPct))
         var text = "\(dateStr): \(metricType) \(direction.displayLabel) "
-            + "(\(sign)\(String(format: "%.0f", deviationPct))% from baseline, \(durationDays) days)"
+            + "(\(sign)\(String(format: "%.0f", clampedPct))% from baseline, \(durationDays) days)"
         if let cause = userReportedCause {
             text += "; user reported: \(cause)"
         }
