@@ -150,13 +150,14 @@ struct ChatView: View {
                 .padding(.horizontal, AmachSpacing.md)
                 .padding(.vertical, AmachSpacing.md)
             }
-            .onChange(of: chatService.currentSession.messages.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo("chatBottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: chatService.isSending) { _, isSending in
-                if isSending {
+            .onChange(of: chatService.currentSession.messages.count) { old, _ in
+                // Delay scroll when the first message is sent so the keyboard
+                // dismiss animation has time to complete before we reposition.
+                // Without the delay the scroll fires mid-animation, the view
+                // then grows taller, and the user sees an empty gap below messages.
+                let delay: UInt64 = old == 0 ? 350_000_000 : 0
+                Task { @MainActor in
+                    if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo("chatBottom", anchor: .bottom)
                     }

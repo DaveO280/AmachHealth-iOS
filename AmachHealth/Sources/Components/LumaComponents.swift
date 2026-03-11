@@ -276,7 +276,8 @@ struct LumaSheetView: View {
                                 .id(msg.id)
                         }
 
-                        if chatService.isSending {
+                        if chatService.isSending,
+                           chatService.currentSession.messages.last?.role != .assistant {
                             LumaTypingBubble()
                         }
 
@@ -290,13 +291,10 @@ struct LumaSheetView: View {
                 .padding(.horizontal, AmachSpacing.md)
                 .padding(.vertical, AmachSpacing.sm)
             }
-            .onChange(of: chatService.currentSession.messages.count) { _, _ in
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo("lumaBottom", anchor: .bottom)
-                }
-            }
-            .onChange(of: chatService.isSending) { _, isSending in
-                if isSending {
+            .onChange(of: chatService.currentSession.messages.count) { old, _ in
+                let delay: UInt64 = old == 0 ? 350_000_000 : 0
+                Task { @MainActor in
+                    if delay > 0 { try? await Task.sleep(nanoseconds: delay) }
                     withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo("lumaBottom", anchor: .bottom)
                     }
@@ -543,41 +541,51 @@ struct LumaMessageBubble: View {
             }
 
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .font(AmachType.body)
-                    .foregroundStyle(
-                        isUser ? Color.white : Color.Amach.AI.p200
-                    )
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        isUser
-                            ? AnyShapeStyle(Color.amachPrimary)
-                            : AnyShapeStyle(Color.Amach.AI.dark)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AmachRadius.lg)
-                            .stroke(
-                                isUser
-                                    ? Color.clear
-                                    : Color.Amach.AI.base.opacity(0.22),
-                                lineWidth: 1
+                Group {
+                    if isStreaming {
+                        // Streaming placeholder — show animated dots in the bubble
+                        // instead of rendering an empty (solid) text background
+                        LumaTypingIndicator()
+                    } else {
+                        Text(message.content)
+                            .font(AmachType.body)
+                            .foregroundStyle(
+                                isUser ? Color.white : Color.Amach.AI.p200
                             )
-                    )
-                    .shadow(
-                        color: isUser ? Color.amachPrimary.opacity(0.25) : Color.Amach.AI.base.opacity(0.15),
-                        radius: 6, y: 2
-                    )
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(
+                                isUser
+                                    ? AnyShapeStyle(Color.amachPrimary)
+                                    : AnyShapeStyle(Color.Amach.AI.dark)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: AmachRadius.lg))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: AmachRadius.lg)
+                                    .stroke(
+                                        isUser
+                                            ? Color.clear
+                                            : Color.Amach.AI.base.opacity(0.22),
+                                        lineWidth: 1
+                                    )
+                            )
+                            .shadow(
+                                color: isUser ? Color.amachPrimary.opacity(0.25) : Color.Amach.AI.base.opacity(0.15),
+                                radius: 6, y: 2
+                            )
+                    }
+                }
 
-                HStack(spacing: AmachSpacing.sm) {
-                    Text(message.timestamp, style: .time)
-                        .font(AmachType.tiny)
-                        .foregroundStyle(Color.amachTextTertiary)
+                if !isStreaming {
+                    HStack(spacing: AmachSpacing.sm) {
+                        Text(message.timestamp, style: .time)
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextTertiary)
 
-                    if showFeedback {
-                        Spacer()
-                        feedbackButtons
+                        if showFeedback {
+                            Spacer()
+                            feedbackButtons
+                        }
                     }
                 }
 
