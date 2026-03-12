@@ -316,6 +316,21 @@ struct ChatView: View {
                     .focused($inputFocused)
                     .onSubmit { Task { await sendMessage() } }
 
+                // Quick / Deep mode toggle (Luma AI only — indigo when deep)
+                Button {
+                    chatService.chatMode = chatService.chatMode == .quick ? .deep : .quick
+                    AmachHaptics.buttonPress()
+                } label: {
+                    Image(systemName: "wand.and.sparkles")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(chatService.chatMode == .deep ? Color.Amach.AI.p400 : Color.amachTextTertiary)
+                        .symbolEffect(.bounce, value: chatService.chatMode)
+                        .shadow(color: chatService.chatMode == .deep ? Color.Amach.AI.base.opacity(0.4) : .clear, radius: 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(chatService.chatMode == .deep ? "Deep analysis mode" : "Quick mode")
+                .accessibilityHint("Toggle quick vs deep analysis")
+
                 // Send button — indigo
                 Button {
                     Task { await sendMessage() }
@@ -377,18 +392,7 @@ struct ChatView: View {
         messageText = ""
         inputFocused = false
         AmachHaptics.buttonPress()
-
-        // If lab context is still loading (the .task hasn't finished), wait up to
-        // 4 seconds so the first message always has lab data available.
-        if labContext.isLoading {
-            let deadline = Date().addingTimeInterval(4)
-            while labContext.isLoading && Date() < deadline {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s poll
-            }
-        }
-
-        let context = HealthContextBuilder.buildCurrentContext()
-        await chatService.sendStreaming(text, context: context)
+        await chatService.sendStreaming(text)
         // Haptic on completion is handled inside sendStreaming; no double-fire needed.
     }
 }

@@ -179,7 +179,7 @@ final class LumaProactiveService: ObservableObject {
                 metricType: event.metricType,
                 baselineValue: event.baselineValue,
                 currentValue: event.peakDeviation,
-                deviationPct: event.deviationPct,
+                deviationPct: max(-300, min(300, event.deviationPct)),
                 durationDays: event.durationDays,
                 direction: event.direction.rawValue
             ),
@@ -193,7 +193,8 @@ final class LumaProactiveService: ObservableObject {
     func buildOpeningMessage(for event: HealthEvent) -> String {
         let label = humanReadableLabel(for: event.metricType)
         let sign = event.deviationPct >= 0 ? "+" : ""
-        let pctStr = "\(sign)\(String(format: "%.0f", event.deviationPct))%"
+        let clampedPct = max(-300, min(300, event.deviationPct))
+        let pctStr = "\(sign)\(String(format: "%.0f", clampedPct))%"
         return "proactive_insight: \(label) \(event.direction.displayLabel) \(pctStr) from baseline for \(event.durationDays) days"
     }
 

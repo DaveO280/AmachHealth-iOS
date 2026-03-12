@@ -188,6 +188,14 @@ enum TrendPeriod: String, CaseIterable {
     }
 }
 
+// MARK: - Workout summary (last 7 days for Luma context)
+
+struct WorkoutSummaryItem {
+    let date: Date
+    let activityType: String
+    let durationMinutes: Double
+}
+
 // MARK: - Dashboard Service
 
 @MainActor
@@ -207,6 +215,8 @@ final class DashboardService: ObservableObject {
     @Published var rrTrend: [TrendPeriod: [TrendPoint]] = [:]
     @Published var todayHRZones = HeartRateZoneMinutes()
     @Published var hrZonesTrend: [TrendPeriod: HeartRateZoneMinutes] = [:]
+    /// Last 7 days of workout type/duration for Luma context (hr_zones + workouts blocks).
+    @Published var recentWorkoutSummaries: [WorkoutSummaryItem] = []
     @Published var isLoading = false
     @Published var error: String?
 
@@ -269,6 +279,7 @@ final class DashboardService: ObservableObject {
 
         async let hrZonesFetch = fetchTodayHRZones()
         async let hrZonesAllFetch = fetchHRZonesAllPeriods()
+        async let workoutsFetch = fetchRecentWorkoutSummaries(days: 7)
 
         today = await todayFetch
         stepsTrend = await stepsFetch
@@ -283,6 +294,7 @@ final class DashboardService: ObservableObject {
         vo2Trend = await vo2Fetch
         todayHRZones = await hrZonesFetch
         hrZonesTrend = await hrZonesAllFetch
+        recentWorkoutSummaries = await workoutsFetch
 
         isLoading = false
         lastLoaded = Date()
@@ -597,6 +609,42 @@ final class DashboardService: ObservableObject {
                 }
                 points.sort { $0.date < $1.date }
                 continuation.resume(returning: points)
+            }
+            store.execute(query)
+        }
+    }
+
+    // MARK: - Recent workouts (for Luma context block)
+
+    private func fetchRecentWorkoutSummaries(days: Int) async -> [WorkoutSummaryItem] {
+        let workoutType = HKObjectType.workoutType()
+        let now = Date()
+        let start = Calendar.current.date(byAdding: .day, value: -days, to: now)!
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
+
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: workoutType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
+            ) { _, samples, _ in
+                guard let workouts = samples as? [HKWorkout] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                let items = workouts.prefix(50).map { w in
+                    let duration = w.duration > 0 ? w.duration / 60.0 : 0
+                    let name = w.workoutActivityType.name
+                    return WorkoutSummaryItem(
+                        date: w.startDate,
+                        activityType: name,
+                        durationMinutes: duration
+                    )
+                }
+                continuation.resume(returning: Array(items))
             }
             store.execute(query)
         }

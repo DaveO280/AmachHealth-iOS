@@ -361,18 +361,20 @@ final class AmachAPIClient {
 
     // MARK: - AI Chat (request/response)
 
-    /// Send a message to Luma via /api/ai/chat (non-streaming, quick mode).
+    /// Send a message to Luma via /api/ai/chat (non-streaming).
     /// Use streamLumaChat() for progressive token delivery.
     func sendChatMessage(
         _ message: String,
         history: [AIChatHistoryMessage],
-        context: AIChatContext? = nil
+        context: AIChatContext? = nil,
+        mode: ChatMode = .quick
     ) async throws -> AIChatResponse {
         let request = AIChatRequest(
             message: message,
             context: context,
             history: history,
-            options: AIChatOptions(mode: "quick")
+            options: AIChatOptions(mode: mode.rawValue),
+            labData: context?.labData
         )
         let response: AIChatResponse = try await post(path: "/api/ai/chat", body: request)
         #if DEBUG
@@ -394,7 +396,8 @@ final class AmachAPIClient {
         history: [AIChatHistoryMessage],
         context: AIChatContext? = nil,
         screen: String? = nil,
-        metric: String? = nil
+        metric: String? = nil,
+        mode: ChatMode = .quick
     ) -> AsyncThrowingStream<String, Error> {
         return AsyncThrowingStream { continuation in
             Task {
@@ -404,7 +407,8 @@ final class AmachAPIClient {
                     let response = try await self.sendChatMessage(
                         message,
                         history: history,
-                        context: context
+                        context: context,
+                        mode: mode
                     )
 
                     // Guard: if the AI returned empty content, surface an error

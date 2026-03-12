@@ -51,6 +51,7 @@
 		AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000129 /* AddTimelineEventSheet.swift */; };
 		AA000000000000000000022A /* StorageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012A /* StorageDetailView.swift */; };
 		AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012B /* UploadLabDataSheet.swift */; };
+		AA000000000000000000022C /* ChatIntentClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012C /* ChatIntentClassifier.swift */; };
 		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
 		BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* ConnectWalletSheet.swift */; };
 /* End PBXBuildFile section */
@@ -103,6 +104,7 @@
 		AA0000000000000000000129 /* AddTimelineEventSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AddTimelineEventSheet.swift; path = AmachHealth/Sources/Views/AddTimelineEventSheet.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012A /* StorageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorageDetailView.swift; path = AmachHealth/Sources/Views/StorageDetailView.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012B /* UploadLabDataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadLabDataSheet.swift; path = AmachHealth/Sources/Views/UploadLabDataSheet.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012C /* ChatIntentClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatIntentClassifier.swift; path = AmachHealth/Sources/Services/ChatIntentClassifier.swift; sourceTree = SOURCE_ROOT; };
 		BB0000000000000000000005 /* ConnectWalletSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectWalletSheet.swift; path = AmachHealth/Sources/Views/ConnectWalletSheet.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -225,6 +227,7 @@
 			children = (
 				AA0000000000000000000112 /* AnomalyDetector.swift */,
 				AA0000000000000000000113 /* ChatService.swift */,
+				AA000000000000000000012C /* ChatIntentClassifier.swift */,
 				AA0000000000000000000114 /* DashboardService.swift */,
 				CC0000000000000000000001 /* LabContextService.swift */,
 				AA0000000000000000000122 /* HealthContextBuilder.swift */,
@@ -387,6 +390,7 @@
 				AA0000000000000000000221 /* TrendsView.swift in Sources */,
 				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
 				AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */,
+				AA000000000000000000022C /* ChatIntentClassifier.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
