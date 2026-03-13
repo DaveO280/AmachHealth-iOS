@@ -537,6 +537,47 @@ final class AmachAPIClient {
         return response.profile
     }
 
+    // MARK: - Health Metric Proofs
+
+    /// Ask backend to generate a proof document for a given claim and
+    /// anchor it on-chain via the existing V4 attestation system.
+    func generateHealthMetricProof(
+        claim: HealthMetricClaim,
+        walletAddress: String
+    ) async throws -> HealthMetricProofDocument {
+        let request = GenerateHealthMetricProofRequest(
+            claim: claim,
+            walletAddress: walletAddress
+        )
+
+        let response: HealthMetricProofDocument = try await post(
+            path: "/api/proofs/generate",
+            body: request
+        )
+
+        return response
+    }
+
+    /// Verify a previously generated proof by querying the public
+    /// verification API. This is primarily for 3rd-party flows but
+    /// iOS can also call it to double-check proof validity.
+    func verifyHealthMetricProof(
+        proofHash: String,
+        proverAddress: String
+    ) async throws -> HealthMetricProofVerificationResult {
+        let request = VerifyHealthMetricProofRequest(
+            proofHash: proofHash,
+            prover: proverAddress
+        )
+
+        let response: HealthMetricProofVerificationResult = try await post(
+            path: "/api/proofs/verify",
+            body: request
+        )
+
+        return response
+    }
+
     // MARK: - Private Methods
 
     private func post<T: Encodable, R: Decodable>(
@@ -940,6 +981,19 @@ struct AttestationInfo: Decodable, Identifiable {
 struct ErrorResponse: Decodable {
     let error: String
 }
+
+// MARK: - Proof API Types
+
+struct GenerateHealthMetricProofRequest: Encodable {
+    let claim: HealthMetricClaim
+    let walletAddress: String
+}
+
+struct VerifyHealthMetricProofRequest: Encodable {
+    let proofHash: String
+    let prover: String
+}
+
 
 // MARK: - Payload Types
 

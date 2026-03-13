@@ -13,6 +13,7 @@ struct AmachHealthApp: App {
     @StateObject private var dashboard = DashboardService.shared
     @StateObject private var timeline = TimelineService.shared
     @StateObject private var lumaContext = LumaContextService.shared
+    @StateObject private var proofService = HealthMetricProofService.shared
 
     @Environment(\.scenePhase) private var scenePhase
 
@@ -27,6 +28,7 @@ struct AmachHealthApp: App {
                 .environmentObject(dashboard)
                 .environmentObject(timeline)
                 .environmentObject(lumaContext)
+                .environmentObject(proofService)
                 .preferredColorScheme(.dark)
                 .task {
                     // Initialize Privy SDK (restores session if user was previously authenticated).
