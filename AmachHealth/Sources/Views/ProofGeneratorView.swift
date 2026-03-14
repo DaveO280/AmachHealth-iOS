@@ -5,52 +5,149 @@
 
 import SwiftUI
 
+// MARK: - Proof Option Model
+
+/// Describes a single proof the user can generate.
+/// Add new entries to `ProofGeneratorView.availableProofOptions` to
+/// surface additional proof types without touching the rest of the view.
+struct ProofOption: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: () -> String
+    let icon: String
+    let isAvailable: () -> Bool
+    let generate: () async throws -> Void
+}
+
+// MARK: - View
+
 struct ProofGeneratorView: View {
     @EnvironmentObject private var wallet: WalletService
     @StateObject private var proofService = HealthMetricProofService.shared
 
-    @State private var isGeneratingMetricChange = false
-    @State private var isGeneratingLabProof = false
-    @State private var isGeneratingDexaProof = false
+    @State private var generatingOptionId: String?
     @State private var error: String?
 
     @State private var latestLabSummary: LabResultSummary?
     @State private var latestDexaSummary: DexaResultSummary?
     @State private var isLoadingSummaries = true
 
+    @State private var enabledOptionIds: Set<String> = Self.defaultEnabledIds
+
+    /// Default proof options shown on first launch.
+    static let defaultEnabledIds: Set<String> = ["hrv_change", "lab_result", "body_composition"]
+
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.amachBg.ignoresSafeArea()
+        ZStack {
+            Color.amachBg.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: AmachSpacing.lg) {
-                        header
-                        proofActionsSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: AmachSpacing.lg) {
+                    header
 
-                        if let proof = proofService.lastGeneratedProof {
-                            NavigationLink {
-                                ProofDetailView(proof: proof)
-                            } label: {
-                                recentProofCard(for: proof)
-                            }
-                            .buttonStyle(.plain)
+                    proofActionsSection
+
+                    if let proof = proofService.lastGeneratedProof {
+                        NavigationLink {
+                            ProofDetailView(proof: proof)
+                        } label: {
+                            recentProofCard(for: proof)
                         }
-
-                        if let error {
-                            Text(error)
-                                .font(AmachType.caption)
-                                .foregroundStyle(Color.amachDestructive)
-                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(AmachSpacing.md)
+
+                    if let error {
+                        Text(error)
+                            .font(AmachType.caption)
+                            .foregroundStyle(Color.amachDestructive)
+                    }
+
+                    customizeSection
                 }
+                .padding(AmachSpacing.md)
             }
-            .navigationTitle("Shareable Proofs")
-            .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationTitle("Shareable Proofs")
+        .navigationBarTitleDisplayMode(.inline)
         .task { await loadLabSummaries() }
     }
+
+    // MARK: - Available Proof Options
+
+    /// The full catalogue of proof types. Toggle visibility via `enabledOptionIds`.
+    private var allProofOptions: [ProofOption] {
+        [
+            ProofOption(
+                id: "hrv_change",
+                title: "HRV change (30 days)",
+                subtitle: { "Prove how your recovery has changed over the last month." },
+                icon: "waveform.path.ecg",
+                isAvailable: { wallet.isConnected },
+                generate: {
+                    _ = try await proofService.generateMetricChangeProof(metricKey: "heartRateVariabilitySDNN")
+                }
+            ),
+            ProofOption(
+                id: "rhr_change",
+                title: "Resting heart rate (30 days)",
+                subtitle: { "Prove your resting heart rate trend over the last month." },
+                icon: "heart.fill",
+                isAvailable: { wallet.isConnected },
+                generate: {
+                    _ = try await proofService.generateMetricChangeProof(metricKey: "restingHeartRate")
+                }
+            ),
+            ProofOption(
+                id: "lab_result",
+                title: "Latest bloodwork panel",
+                subtitle: { labSubtitle },
+                icon: "drop.fill",
+                isAvailable: { wallet.isConnected && latestLabSummary != nil },
+                generate: {
+                    guard let lab = latestLabSummary else { return }
+                    _ = try await proofService.generateLabResultProof(from: lab)
+                }
+            ),
+            ProofOption(
+                id: "body_composition",
+                title: "Latest DEXA scan",
+                subtitle: { dexaSubtitle },
+                icon: "figure.arms.open",
+                isAvailable: { wallet.isConnected && latestDexaSummary != nil },
+                generate: {
+                    guard let dexa = latestDexaSummary else { return }
+                    _ = try await proofService.generateBodyCompositionProof(from: dexa)
+                }
+            ),
+            ProofOption(
+                id: "step_count",
+                title: "Step count (30 days)",
+                subtitle: { "Prove your average daily step count over the last month." },
+                icon: "figure.walk",
+                isAvailable: { wallet.isConnected },
+                generate: {
+                    _ = try await proofService.generateMetricChangeProof(metricKey: "stepCount")
+                }
+            ),
+            ProofOption(
+                id: "sleep_duration",
+                title: "Sleep duration (30 days)",
+                subtitle: { "Prove your average sleep duration trend." },
+                icon: "bed.double.fill",
+                isAvailable: { wallet.isConnected },
+                generate: {
+                    _ = try await proofService.generateMetricChangeProof(metricKey: "sleepAnalysis")
+                }
+            ),
+        ]
+    }
+
+    /// Only the options the user has enabled.
+    private var visibleProofOptions: [ProofOption] {
+        allProofOptions.filter { enabledOptionIds.contains($0.id) }
+    }
+
+    // MARK: - Subviews
 
     private var header: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
@@ -71,179 +168,114 @@ struct ProofGeneratorView: View {
                 .foregroundStyle(Color.amachTextPrimary)
 
             VStack(spacing: AmachSpacing.sm) {
-                Button {
-                    Task { await generateMetricChange() }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("HRV change (30 days)")
-                                .font(AmachType.body)
-                                .foregroundStyle(Color.amachTextPrimary)
-                            Text("Prove how your recovery has changed over the last month.")
-                                .font(AmachType.tiny)
-                                .foregroundStyle(Color.amachTextSecondary)
-                        }
-                        Spacer()
-                        if isGeneratingMetricChange {
-                            ProgressView()
-                                .tint(Color.amachPrimaryBright)
-                        } else {
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(Color.amachTextSecondary)
-                        }
-                    }
-                    .padding(AmachSpacing.lg)
-                    .amachCard()
+                ForEach(visibleProofOptions) { option in
+                    proofRow(for: option)
                 }
-                .disabled(isGeneratingMetricChange || !wallet.isConnected)
-
-                Button {
-                    Task { await generateLabProof() }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Latest bloodwork panel")
-                                .font(AmachType.body)
-                                .foregroundStyle(Color.amachTextPrimary)
-                            Text(labSubtitle)
-                                .font(AmachType.tiny)
-                                .foregroundStyle(Color.amachTextSecondary)
-                        }
-                        Spacer()
-                        if isGeneratingLabProof {
-                            ProgressView()
-                                .tint(Color.amachPrimaryBright)
-                        } else {
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(Color.amachTextSecondary)
-                        }
-                    }
-                    .padding(AmachSpacing.lg)
-                    .amachCard()
-                }
-                .disabled(isGeneratingLabProof || latestLabSummary == nil || !wallet.isConnected)
-
-                Button {
-                    Task { await generateDexaProof() }
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Latest DEXA scan")
-                                .font(AmachType.body)
-                                .foregroundStyle(Color.amachTextPrimary)
-                            Text(dexaSubtitle)
-                                .font(AmachType.tiny)
-                                .foregroundStyle(Color.amachTextSecondary)
-                        }
-                        Spacer()
-                        if isGeneratingDexaProof {
-                            ProgressView()
-                                .tint(Color.amachPrimaryBright)
-                        } else {
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(Color.amachTextSecondary)
-                        }
-                    }
-                    .padding(AmachSpacing.lg)
-                    .amachCard()
-                }
-                .disabled(isGeneratingDexaProof || latestDexaSummary == nil || !wallet.isConnected)
             }
         }
     }
 
+    private func proofRow(for option: ProofOption) -> some View {
+        let isGenerating = generatingOptionId == option.id
+        return Button {
+            Task { await generate(option) }
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(option.title)
+                        .font(AmachType.body)
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Text(option.subtitle())
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+                Spacer()
+                if isGenerating {
+                    ProgressView()
+                        .tint(Color.amachPrimaryBright)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+            }
+            .padding(AmachSpacing.lg)
+            .amachCard()
+        }
+        .disabled(isGenerating || !option.isAvailable())
+    }
+
+    private var customizeSection: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.md) {
+            Text("Customize proof types")
+                .font(AmachType.h3)
+                .foregroundStyle(Color.amachTextPrimary)
+
+            Text("Toggle which proofs appear above.")
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextSecondary)
+
+            VStack(spacing: AmachSpacing.sm) {
+                ForEach(allProofOptions) { option in
+                    HStack(spacing: AmachSpacing.md) {
+                        Image(systemName: option.icon)
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color.amachPrimaryBright)
+                            .frame(width: 24)
+
+                        Text(option.title)
+                            .font(AmachType.body)
+                            .foregroundStyle(Color.amachTextPrimary)
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding(
+                            get: { enabledOptionIds.contains(option.id) },
+                            set: { enabled in
+                                if enabled {
+                                    enabledOptionIds.insert(option.id)
+                                } else {
+                                    enabledOptionIds.remove(option.id)
+                                }
+                            }
+                        ))
+                        .labelsHidden()
+                        .tint(Color.amachPrimaryBright)
+                    }
+                    .padding(.vertical, AmachSpacing.xs)
+                }
+            }
+            .padding(AmachSpacing.lg)
+            .amachCard()
+        }
+    }
+
+    // MARK: - Subtitles
+
     private var labSubtitle: String {
-        if isLoadingSummaries {
-            return "Loading latest bloodwork..."
-        }
-        if let lab = latestLabSummary {
-            return "Most recent panel on \(lab.date)"
-        }
+        if isLoadingSummaries { return "Loading latest bloodwork..." }
+        if let lab = latestLabSummary { return "Most recent panel on \(lab.date)" }
         return "No bloodwork records found yet."
     }
 
     private var dexaSubtitle: String {
-        if isLoadingSummaries {
-            return "Loading latest DEXA..."
-        }
-        if let dexa = latestDexaSummary {
-            return "Most recent scan on \(dexa.date)"
-        }
+        if isLoadingSummaries { return "Loading latest DEXA..." }
+        if let dexa = latestDexaSummary { return "Most recent scan on \(dexa.date)" }
         return "No DEXA records found yet."
     }
 
-    private func recentProofCard(for proof: HealthMetricProofDocument) -> some View {
-        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
-            Text("Last generated proof")
-                .font(AmachType.caption)
-                .foregroundStyle(Color.amachTextSecondary)
-            Text(proof.claim.summary)
-                .font(AmachType.body)
-                .foregroundStyle(Color.amachTextPrimary)
-                .lineLimit(3)
-            Text(shortHash(proof.evidence.proofHash))
-                .font(AmachType.dataMono)
-                .foregroundStyle(Color.amachTextSecondary)
-        }
-        .padding(AmachSpacing.lg)
-        .amachCard()
-    }
+    // MARK: - Actions
 
-    private func generateMetricChange() async {
+    private func generate(_ option: ProofOption) async {
         guard wallet.isConnected else {
             error = "Connect your wallet to generate proofs."
             return
         }
-        isGeneratingMetricChange = true
+        generatingOptionId = option.id
         error = nil
-        defer { isGeneratingMetricChange = false }
+        defer { generatingOptionId = nil }
 
         do {
-            _ = try await proofService.generateMetricChangeProof(metricKey: "heartRateVariabilitySDNN")
-            AmachHaptics.success()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    private func generateLabProof() async {
-        guard wallet.isConnected else {
-            error = "Connect your wallet to generate proofs."
-            return
-        }
-        guard let latestLabSummary else {
-            error = "No bloodwork records available."
-            return
-        }
-
-        isGeneratingLabProof = true
-        error = nil
-        defer { isGeneratingLabProof = false }
-
-        do {
-            _ = try await proofService.generateLabResultProof(from: latestLabSummary)
-            AmachHaptics.success()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    private func generateDexaProof() async {
-        guard wallet.isConnected else {
-            error = "Connect your wallet to generate proofs."
-            return
-        }
-        guard let latestDexaSummary else {
-            error = "No DEXA records available."
-            return
-        }
-
-        isGeneratingDexaProof = true
-        error = nil
-        defer { isGeneratingDexaProof = false }
-
-        do {
-            _ = try await proofService.generateBodyCompositionProof(from: latestDexaSummary)
+            try await option.generate()
             AmachHaptics.success()
         } catch {
             self.error = error.localizedDescription
@@ -262,6 +294,23 @@ struct ProofGeneratorView: View {
 
         latestLabSummary = context.bloodwork?.first
         latestDexaSummary = context.dexa?.first
+    }
+
+    private func recentProofCard(for proof: HealthMetricProofDocument) -> some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("Last generated proof")
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachTextSecondary)
+            Text(proof.claim.summary)
+                .font(AmachType.body)
+                .foregroundStyle(Color.amachTextPrimary)
+                .lineLimit(3)
+            Text(shortHash(proof.evidence.proofHash))
+                .font(AmachType.dataMono)
+                .foregroundStyle(Color.amachTextSecondary)
+        }
+        .padding(AmachSpacing.lg)
+        .amachCard()
     }
 
     private func shortHash(_ hash: String) -> String {
