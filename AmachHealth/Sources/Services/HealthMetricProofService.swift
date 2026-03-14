@@ -34,8 +34,8 @@ final class HealthMetricProofService: ObservableObject {
             throw ProofError.invalidDateRange
         }
 
-        // Use DashboardService trends as the canonical source for metric changes.
-        let trend = dashboard.hrvTrend[.month] ?? []
+        // Use the correct DashboardService trend for the requested metric.
+        let trend = trendData(for: metricKey, period: .month)
         guard !trend.isEmpty else {
             throw ProofError.insufficientData
         }
@@ -187,6 +187,34 @@ final class HealthMetricProofService: ObservableObject {
 
         lastGeneratedProof = proof
         return proof
+    }
+    // MARK: - Trend Lookup
+
+    /// Returns the correct trend array from DashboardService for a given metric key.
+    private func trendData(for metricKey: String, period: TrendPeriod) -> [TrendPoint] {
+        switch metricKey {
+        case "heartRateVariabilitySDNN":
+            return dashboard.hrvTrend[period] ?? []
+        case "restingHeartRate":
+            return dashboard.rhrTrend[period] ?? []
+        case "stepCount":
+            return dashboard.stepsTrend[period] ?? []
+        case "sleepAnalysis":
+            return dashboard.sleepTrend[period] ?? []
+        case "activeEnergyBurned":
+            return dashboard.calsTrend[period] ?? []
+        case "appleExerciseTime":
+            return dashboard.exerciseTrend[period] ?? []
+        case "vo2Max":
+            return dashboard.vo2Trend[period] ?? []
+        case "respiratoryRate":
+            return dashboard.rrTrend[period] ?? []
+        case "heartRate":
+            return dashboard.heartRateTrend[period] ?? []
+        default:
+            // Fall back to HRV for unknown keys.
+            return dashboard.hrvTrend[period] ?? []
+        }
     }
 }
 
