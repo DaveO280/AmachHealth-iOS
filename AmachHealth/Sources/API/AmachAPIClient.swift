@@ -545,6 +545,42 @@ final class AmachAPIClient {
         return response.profile
     }
 
+    // MARK: - Health Metric Proofs
+
+    /// Ask the backend to generate a signed, on-chain anchored proof document.
+    func generateHealthMetricProof(
+        claim: HealthMetricClaim,
+        walletAddress: String
+    ) async throws -> HealthMetricProofDocument {
+        struct ProofRequest: Encodable {
+            let claim: HealthMetricClaim
+            let walletAddress: String
+            let platform: String
+        }
+
+        let request = ProofRequest(
+            claim: claim,
+            walletAddress: walletAddress,
+            platform: "ios"
+        )
+
+        return try await post(path: "/api/proofs/generate", body: request)
+    }
+
+    /// Verify a proof document against on-chain attestations.
+    func verifyHealthMetricProof(
+        proof: HealthMetricProofDocument
+    ) async throws -> HealthMetricProofVerificationResult {
+        struct VerifyRequest: Encodable {
+            let proof: HealthMetricProofDocument
+        }
+
+        return try await post(
+            path: "/api/proofs/verify",
+            body: VerifyRequest(proof: proof)
+        )
+    }
+
     // MARK: - Feedback
 
     /// Submit a Luma response rating to /api/feedback.

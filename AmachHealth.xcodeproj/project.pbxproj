@@ -54,6 +54,18 @@
 		AA000000000000000000022C /* ChatIntentClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012C /* ChatIntentClassifier.swift */; };
 		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
 		BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* ConnectWalletSheet.swift */; };
+		DD0000000000000000000011 /* HealthMetricProof.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000001 /* HealthMetricProof.swift */; };
+		DD0000000000000000000012 /* HealthMetricProofService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000002 /* HealthMetricProofService.swift */; };
+		DD0000000000000000000013 /* ProofGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000003 /* ProofGeneratorView.swift */; };
+		DD0000000000000000000014 /* ProofDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000004 /* ProofDetailView.swift */; };
+		DD0000000000000000000021 /* DashboardPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000031 /* DashboardPreviews.swift */; };
+		DD0000000000000000000022 /* MetricDetailPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000032 /* MetricDetailPreviews.swift */; };
+		DD0000000000000000000023 /* AppPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000033 /* AppPreviews.swift */; };
+		DD0000000000000000000024 /* TrendsPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000034 /* TrendsPreviews.swift */; };
+		DD0000000000000000000025 /* HealthSyncPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000035 /* HealthSyncPreviews.swift */; };
+		DD0000000000000000000026 /* ProfilePreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000036 /* ProfilePreviews.swift */; };
+		DD0000000000000000000027 /* ChatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000037 /* ChatPreviews.swift */; };
+		DD0000000000000000000028 /* OnboardingPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000038 /* OnboardingPreviews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -106,6 +118,18 @@
 		AA000000000000000000012B /* UploadLabDataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadLabDataSheet.swift; path = AmachHealth/Sources/Views/UploadLabDataSheet.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012C /* ChatIntentClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatIntentClassifier.swift; path = AmachHealth/Sources/Services/ChatIntentClassifier.swift; sourceTree = SOURCE_ROOT; };
 		BB0000000000000000000005 /* ConnectWalletSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectWalletSheet.swift; path = AmachHealth/Sources/Views/ConnectWalletSheet.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000001 /* HealthMetricProof.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMetricProof.swift; path = AmachHealth/Sources/Models/HealthMetricProof.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000002 /* HealthMetricProofService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMetricProofService.swift; path = AmachHealth/Sources/Services/HealthMetricProofService.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000003 /* ProofGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProofGeneratorView.swift; path = AmachHealth/Sources/Views/ProofGeneratorView.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000004 /* ProofDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProofDetailView.swift; path = AmachHealth/Sources/Views/ProofDetailView.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000031 /* DashboardPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DashboardPreviews.swift; path = AmachHealth/Sources/Previews/DashboardPreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000032 /* MetricDetailPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MetricDetailPreviews.swift; path = AmachHealth/Sources/Previews/MetricDetailPreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000033 /* AppPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppPreviews.swift; path = AmachHealth/Sources/Previews/AppPreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000034 /* TrendsPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TrendsPreviews.swift; path = AmachHealth/Sources/Previews/TrendsPreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000035 /* HealthSyncPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthSyncPreviews.swift; path = AmachHealth/Sources/Previews/HealthSyncPreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000036 /* ProfilePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProfilePreviews.swift; path = AmachHealth/Sources/Previews/ProfilePreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000037 /* ChatPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatPreviews.swift; path = AmachHealth/Sources/Previews/ChatPreviews.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000038 /* OnboardingPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OnboardingPreviews.swift; path = AmachHealth/Sources/Previews/OnboardingPreviews.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,6 +232,7 @@
 				AA000000000000000000010D /* ChatModels.swift */,
 				AA000000000000000000010E /* HealthDataTypes.swift */,
 				AA000000000000000000010F /* HealthMemoryModels.swift */,
+				DD0000000000000000000001 /* HealthMetricProof.swift */,
 				AA0000000000000000000126 /* TimelineModels.swift */,
 			);
 			name = Models;
@@ -217,7 +242,15 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000110 /* AmachPreviews.swift */,
+				DD0000000000000000000033 /* AppPreviews.swift */,
+				DD0000000000000000000037 /* ChatPreviews.swift */,
+				DD0000000000000000000031 /* DashboardPreviews.swift */,
+				DD0000000000000000000035 /* HealthSyncPreviews.swift */,
+				DD0000000000000000000032 /* MetricDetailPreviews.swift */,
+				DD0000000000000000000038 /* OnboardingPreviews.swift */,
 				AA0000000000000000000111 /* PreviewHelpers.swift */,
+				DD0000000000000000000036 /* ProfilePreviews.swift */,
+				DD0000000000000000000034 /* TrendsPreviews.swift */,
 			);
 			name = Previews;
 			sourceTree = "<group>";
@@ -234,6 +267,7 @@
 				AA0000000000000000000115 /* HealthDataSyncService.swift */,
 				AA0000000000000000000116 /* HealthKitService.swift */,
 				AA0000000000000000000117 /* HealthMemoryStore.swift */,
+				DD0000000000000000000002 /* HealthMetricProofService.swift */,
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
 				AA0000000000000000000127 /* TimelineService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
@@ -252,6 +286,8 @@
 				AA000000000000000000011D /* LumaSensitivityView.swift */,
 				AA000000000000000000011E /* MetricDetailView.swift */,
 				AA000000000000000000011F /* OnboardingView.swift */,
+				DD0000000000000000000003 /* ProofGeneratorView.swift */,
+				DD0000000000000000000004 /* ProofDetailView.swift */,
 				AA0000000000000000000120 /* ProfileView.swift */,
 				AA000000000000000000012A /* StorageDetailView.swift */,
 				AA0000000000000000000128 /* TimelineView.swift */,
@@ -391,6 +427,18 @@
 				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
 				AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */,
 				AA000000000000000000022C /* ChatIntentClassifier.swift in Sources */,
+				DD0000000000000000000011 /* HealthMetricProof.swift in Sources */,
+				DD0000000000000000000012 /* HealthMetricProofService.swift in Sources */,
+				DD0000000000000000000013 /* ProofGeneratorView.swift in Sources */,
+				DD0000000000000000000014 /* ProofDetailView.swift in Sources */,
+				DD0000000000000000000021 /* DashboardPreviews.swift in Sources */,
+				DD0000000000000000000022 /* MetricDetailPreviews.swift in Sources */,
+				DD0000000000000000000023 /* AppPreviews.swift in Sources */,
+				DD0000000000000000000024 /* TrendsPreviews.swift in Sources */,
+				DD0000000000000000000025 /* HealthSyncPreviews.swift in Sources */,
+				DD0000000000000000000026 /* ProfilePreviews.swift in Sources */,
+				DD0000000000000000000027 /* ChatPreviews.swift in Sources */,
+				DD0000000000000000000028 /* OnboardingPreviews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
