@@ -535,6 +535,29 @@ struct ProfileView: View {
                         .listRowBackground(Color.amachSurface)
                 }
             }
+            NavigationLink {
+                ProofGeneratorView()
+                    .environmentObject(wallet)
+            } label: {
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: "shield.checkered")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.amachPrimaryBright)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Shareable Proofs")
+                            .font(AmachType.body)
+                            .foregroundStyle(Color.amachTextPrimary)
+                        Text("Prove health claims without sharing raw data")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+                .listRowBackground(Color.amachSurface)
+            }
         } header: {
             sectionHeader("On-Chain Proofs")
         }
