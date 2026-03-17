@@ -431,10 +431,13 @@ struct HealthContextBuilder {
 
     // MARK: - Intent-aware context (smart routing)
 
-    /// Build context for the given intent and mode. buildCurrentContext() is left untouched.
-    /// Quick: subset of metrics + intent-relevant blocks. Deep: all metrics + all blocks.
+    /// Build context for the given intent and mode.
+    /// Starts from buildCurrentContext()'s blocks — data_note, metrics, labs, timeline —
+    /// and layers in intent-specific extras (hr_zones, workouts, anomalies).
+    /// Goals and memory blocks are excluded here since enrichContext() injects them
+    /// via the AIChatMemoryCapsule to avoid duplication.
     static func buildContext(for intent: ChatIntent, mode: ChatMode) -> AIChatContext? {
-        let dashboard = DashboardService.shared
+        let full = buildCurrentContext()
         let formatter = ISO8601DateFormatter()
         let now = Date()
         let monthAgo = Calendar.current.date(byAdding: .day, value: -30, to: now)!
@@ -443,40 +446,42 @@ struct HealthContextBuilder {
             end: formatter.string(from: now)
         )
 
-        if mode == .deep {
-            let full = buildCurrentContext()
-            var blocks: [ContextBlock] = []
-            if let hr = buildHRZonesBlock() { blocks.append(hr) }
-            if let w = buildWorkoutsBlock() { blocks.append(w) }
-            if let a = buildAnomaliesBlock() { blocks.append(a) }
-            return AIChatContext(
-                metrics: full?.metrics,
-                dateRange: dateRange,
-                proactive: nil,
-                memory: nil,
-                userAddress: nil,
-                encryptionKey: nil,
-                labData: nil,
-                contextBlocks: blocks.isEmpty ? nil : blocks
-            )
+        // Start with base blocks, excluding goals/memory (handled by enrichContext)
+        var blocks: [ContextBlock] = (full?.contextBlocks ?? []).filter { block in
+            block.type != "goals" && block.type != "memory"
         }
 
-        // Quick: intent-based subset
-        let full = buildCurrentContext()
-        let metricsFiltered = full?.metrics.flatMap { filterMetrics($0, to: intent.metricKeys) }
-        var blocks: [ContextBlock] = []
-        if intent.includesHRZones, let hr = buildHRZonesBlock() { blocks.append(hr) }
-        if intent.includesWorkouts, let w = buildWorkoutsBlock() { blocks.append(w) }
-        if intent.includesAnomalies, let a = buildAnomaliesBlock() { blocks.append(a) }
+        // In quick mode, prune blocks not relevant to the intent
+        if mode == .quick {
+            if !intent.includesLabData {
+                blocks.removeAll { $0.type == "labs_bloodwork" || $0.type == "labs_dexa" }
+            }
+            if !intent.includesTimelineEvents {
+                blocks.removeAll { $0.type == "timeline" }
+            }
+        }
+
+        // Layer in intent-specific extras
+        if mode == .deep || intent.includesHRZones {
+            if let hr = buildHRZonesBlock() { blocks.append(hr) }
+        }
+        if mode == .deep || intent.includesWorkouts {
+            if let w = buildWorkoutsBlock() { blocks.append(w) }
+        }
+        if mode == .deep || intent.includesAnomalies {
+            if let a = buildAnomaliesBlock() { blocks.append(a) }
+        }
+
+        let metricsToUse: AIChatMetrics?
+        if mode == .deep {
+            metricsToUse = full?.metrics
+        } else {
+            metricsToUse = full?.metrics.flatMap { filterMetrics($0, to: intent.metricKeys) }
+        }
 
         return AIChatContext(
-            metrics: metricsFiltered ?? full?.metrics,
+            metrics: metricsToUse ?? full?.metrics,
             dateRange: dateRange,
-            proactive: nil,
-            memory: nil,
-            userAddress: nil,
-            encryptionKey: nil,
-            labData: nil,
             contextBlocks: blocks.isEmpty ? nil : blocks
         )
     }
