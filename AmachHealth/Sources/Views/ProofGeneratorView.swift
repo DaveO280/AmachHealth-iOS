@@ -2,14 +2,12 @@
 // AmachHealth
 //
 // Entry point for creating health metric proofs from the iOS app.
+// Uses the ProofableMetric registry to auto-discover available metrics.
 
 import SwiftUI
 
-// MARK: - Proof Option Model
+// MARK: - Legacy ProofOption (kept for backward compatibility)
 
-/// Describes a single proof the user can generate.
-/// Add new entries to `ProofGeneratorView.availableProofOptions` to
-/// surface additional proof types without touching the rest of the view.
 struct ProofOption: Identifiable {
     let id: String
     let title: String
@@ -25,17 +23,16 @@ struct ProofGeneratorView: View {
     @EnvironmentObject private var wallet: WalletService
     @StateObject private var proofService = HealthMetricProofService.shared
 
-    @State private var generatingOptionId: String?
+    @State private var selectedCategory: ProofableMetricCategory?
+    @State private var selectedMetric: ProofableMetric?
+    @State private var selectedPeriod: TrendPeriod = .month
+
+    @State private var generatingMetricId: String?
     @State private var error: String?
 
     @State private var latestLabSummary: LabResultSummary?
     @State private var latestDexaSummary: DexaResultSummary?
     @State private var isLoadingSummaries = true
-
-    @State private var enabledOptionIds: Set<String> = Self.defaultEnabledIds
-
-    /// Default proof options shown on first launch.
-    static let defaultEnabledIds: Set<String> = ["hrv_change", "lab_result", "body_composition"]
 
     var body: some View {
         ZStack {
@@ -45,7 +42,19 @@ struct ProofGeneratorView: View {
                 VStack(alignment: .leading, spacing: AmachSpacing.lg) {
                     header
 
-                    proofActionsSection
+                    categoryPicker
+
+                    if !filteredMetrics.isEmpty {
+                        metricList
+                    }
+
+                    if let metric = selectedMetric, !metric.supportedPeriods.isEmpty {
+                        periodPicker(for: metric)
+                    }
+
+                    if selectedMetric != nil {
+                        generateButton
+                    }
 
                     if let proof = proofService.lastGeneratedProof {
                         NavigationLink {
@@ -61,8 +70,6 @@ struct ProofGeneratorView: View {
                             .font(AmachType.caption)
                             .foregroundStyle(Color.amachDestructive)
                     }
-
-                    customizeSection
                 }
                 .padding(AmachSpacing.md)
             }
@@ -72,79 +79,25 @@ struct ProofGeneratorView: View {
         .task { await loadLabSummaries() }
     }
 
-    // MARK: - Available Proof Options
+    // MARK: - Computed Properties
 
-    /// The full catalogue of proof types. Toggle visibility via `enabledOptionIds`.
-    private var allProofOptions: [ProofOption] {
-        [
-            ProofOption(
-                id: "hrv_change",
-                title: "HRV change (30 days)",
-                subtitle: { "Prove how your recovery has changed over the last month." },
-                icon: "waveform.path.ecg",
-                isAvailable: { wallet.isConnected },
-                generate: {
-                    _ = try await proofService.generateMetricChangeProof(metricKey: "heartRateVariabilitySDNN")
-                }
-            ),
-            ProofOption(
-                id: "rhr_change",
-                title: "Resting heart rate (30 days)",
-                subtitle: { "Prove your resting heart rate trend over the last month." },
-                icon: "heart.fill",
-                isAvailable: { wallet.isConnected },
-                generate: {
-                    _ = try await proofService.generateMetricChangeProof(metricKey: "restingHeartRate")
-                }
-            ),
-            ProofOption(
-                id: "lab_result",
-                title: "Latest bloodwork panel",
-                subtitle: { labSubtitle },
-                icon: "drop.fill",
-                isAvailable: { wallet.isConnected && latestLabSummary != nil },
-                generate: {
-                    guard let lab = latestLabSummary else { return }
-                    _ = try await proofService.generateLabResultProof(from: lab)
-                }
-            ),
-            ProofOption(
-                id: "body_composition",
-                title: "Latest DEXA scan",
-                subtitle: { dexaSubtitle },
-                icon: "figure.arms.open",
-                isAvailable: { wallet.isConnected && latestDexaSummary != nil },
-                generate: {
-                    guard let dexa = latestDexaSummary else { return }
-                    _ = try await proofService.generateBodyCompositionProof(from: dexa)
-                }
-            ),
-            ProofOption(
-                id: "step_count",
-                title: "Step count (30 days)",
-                subtitle: { "Prove your average daily step count over the last month." },
-                icon: "figure.walk",
-                isAvailable: { wallet.isConnected },
-                generate: {
-                    _ = try await proofService.generateMetricChangeProof(metricKey: "stepCount")
-                }
-            ),
-            ProofOption(
-                id: "sleep_duration",
-                title: "Sleep duration (30 days)",
-                subtitle: { "Prove your average sleep duration trend." },
-                icon: "bed.double.fill",
-                isAvailable: { wallet.isConnected },
-                generate: {
-                    _ = try await proofService.generateMetricChangeProof(metricKey: "sleepAnalysis")
-                }
-            ),
-        ]
+    private var availableMetrics: [ProofableMetric] {
+        proofService.availableMetrics(
+            labSummary: latestLabSummary,
+            dexaSummary: latestDexaSummary
+        )
     }
 
-    /// Only the options the user has enabled.
-    private var visibleProofOptions: [ProofOption] {
-        allProofOptions.filter { enabledOptionIds.contains($0.id) }
+    /// Categories that have at least one metric with data.
+    private var availableCategories: [ProofableMetricCategory] {
+        let present = Set(availableMetrics.map(\.category))
+        return ProofableMetricCategory.allCases.filter { present.contains($0) }
+    }
+
+    /// Metrics filtered by the selected category (or all if none selected).
+    private var filteredMetrics: [ProofableMetric] {
+        guard let cat = selectedCategory else { return availableMetrics }
+        return availableMetrics.filter { $0.category == cat }
     }
 
     // MARK: - Subviews
@@ -161,121 +114,182 @@ struct ProofGeneratorView: View {
         }
     }
 
-    private var proofActionsSection: some View {
-        VStack(alignment: .leading, spacing: AmachSpacing.md) {
-            Text("Generate a proof")
+    private var categoryPicker: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("Choose a category")
                 .font(AmachType.h3)
                 .foregroundStyle(Color.amachTextPrimary)
 
-            VStack(spacing: AmachSpacing.sm) {
-                ForEach(visibleProofOptions) { option in
-                    proofRow(for: option)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AmachSpacing.sm) {
+                    ForEach(availableCategories, id: \.rawValue) { category in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if selectedCategory == category {
+                                    selectedCategory = nil
+                                } else {
+                                    selectedCategory = category
+                                }
+                                selectedMetric = nil
+                            }
+                        } label: {
+                            Text(category.rawValue)
+                                .font(AmachType.caption)
+                                .foregroundStyle(
+                                    selectedCategory == category
+                                        ? Color.amachBg
+                                        : Color.amachTextPrimary
+                                )
+                                .padding(.horizontal, AmachSpacing.md)
+                                .padding(.vertical, AmachSpacing.sm)
+                                .background(
+                                    selectedCategory == category
+                                        ? Color.amachPrimaryBright
+                                        : Color.amachCardBg
+                                )
+                                .cornerRadius(20)
+                        }
+                    }
                 }
             }
         }
     }
 
-    private func proofRow(for option: ProofOption) -> some View {
-        let isGenerating = generatingOptionId == option.id
+    private var metricList: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.md) {
+            Text("Select a metric")
+                .font(AmachType.h3)
+                .foregroundStyle(Color.amachTextPrimary)
+
+            VStack(spacing: AmachSpacing.sm) {
+                ForEach(filteredMetrics) { metric in
+                    metricRow(for: metric)
+                }
+            }
+        }
+    }
+
+    private func metricRow(for metric: ProofableMetric) -> some View {
+        let isSelected = selectedMetric?.id == metric.id
         return Button {
-            Task { await generate(option) }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedMetric = metric
+                if !metric.supportedPeriods.isEmpty && !metric.supportedPeriods.contains(selectedPeriod) {
+                    selectedPeriod = metric.supportedPeriods[0]
+                }
+            }
         } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(option.title)
+            HStack(spacing: AmachSpacing.md) {
+                Image(systemName: metric.icon)
+                    .font(.system(size: 18))
+                    .foregroundStyle(Color.amachPrimaryBright)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(metric.displayName)
                         .font(AmachType.body)
                         .foregroundStyle(Color.amachTextPrimary)
-                    Text(option.subtitle())
+                    Text(metric.subtitle)
                         .font(AmachType.tiny)
                         .foregroundStyle(Color.amachTextSecondary)
                 }
+
                 Spacer()
-                if isGenerating {
-                    ProgressView()
-                        .tint(Color.amachPrimaryBright)
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.amachPrimaryBright)
                 } else {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "circle")
                         .foregroundStyle(Color.amachTextSecondary)
                 }
             }
             .padding(AmachSpacing.lg)
             .amachCard()
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.amachPrimaryBright : Color.clear, lineWidth: 1.5)
+            )
         }
-        .disabled(isGenerating || !option.isAvailable())
     }
 
-    private var customizeSection: some View {
-        VStack(alignment: .leading, spacing: AmachSpacing.md) {
-            Text("Customize proof types")
+    private func periodPicker(for metric: ProofableMetric) -> some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("Time period")
                 .font(AmachType.h3)
                 .foregroundStyle(Color.amachTextPrimary)
 
-            Text("Toggle which proofs appear above.")
-                .font(AmachType.caption)
-                .foregroundStyle(Color.amachTextSecondary)
-
-            VStack(spacing: AmachSpacing.sm) {
-                ForEach(allProofOptions) { option in
-                    HStack(spacing: AmachSpacing.md) {
-                        Image(systemName: option.icon)
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color.amachPrimaryBright)
-                            .frame(width: 24)
-
-                        Text(option.title)
-                            .font(AmachType.body)
-                            .foregroundStyle(Color.amachTextPrimary)
-
-                        Spacer()
-
-                        Toggle("", isOn: Binding(
-                            get: { enabledOptionIds.contains(option.id) },
-                            set: { enabled in
-                                if enabled {
-                                    enabledOptionIds.insert(option.id)
-                                } else {
-                                    enabledOptionIds.remove(option.id)
-                                }
-                            }
-                        ))
-                        .labelsHidden()
-                        .tint(Color.amachPrimaryBright)
+            HStack(spacing: AmachSpacing.sm) {
+                ForEach(metric.supportedPeriods, id: \.self) { period in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedPeriod = period
+                        }
+                    } label: {
+                        Text(period.rawValue)
+                            .font(AmachType.caption)
+                            .foregroundStyle(
+                                selectedPeriod == period
+                                    ? Color.amachBg
+                                    : Color.amachTextPrimary
+                            )
+                            .padding(.horizontal, AmachSpacing.lg)
+                            .padding(.vertical, AmachSpacing.sm)
+                            .background(
+                                selectedPeriod == period
+                                    ? Color.amachPrimaryBright
+                                    : Color.amachCardBg
+                            )
+                            .cornerRadius(16)
                     }
-                    .padding(.vertical, AmachSpacing.xs)
                 }
             }
-            .padding(AmachSpacing.lg)
-            .amachCard()
         }
     }
 
-    // MARK: - Subtitles
-
-    private var labSubtitle: String {
-        if isLoadingSummaries { return "Loading latest bloodwork..." }
-        if let lab = latestLabSummary { return "Most recent panel on \(lab.date)" }
-        return "No bloodwork records found yet."
-    }
-
-    private var dexaSubtitle: String {
-        if isLoadingSummaries { return "Loading latest DEXA..." }
-        if let dexa = latestDexaSummary { return "Most recent scan on \(dexa.date)" }
-        return "No DEXA records found yet."
+    private var generateButton: some View {
+        let isGenerating = generatingMetricId != nil
+        return Button {
+            guard let metric = selectedMetric else { return }
+            Task { await generate(metric) }
+        } label: {
+            HStack {
+                if isGenerating {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: "checkmark.shield.fill")
+                    Text("Generate Proof")
+                }
+            }
+            .font(AmachType.body)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(AmachSpacing.lg)
+            .background(Color.amachPrimaryBright)
+            .cornerRadius(12)
+        }
+        .disabled(isGenerating || !wallet.isConnected)
     }
 
     // MARK: - Actions
 
-    private func generate(_ option: ProofOption) async {
+    private func generate(_ metric: ProofableMetric) async {
         guard wallet.isConnected else {
             error = "Connect your wallet to generate proofs."
             return
         }
-        generatingOptionId = option.id
+        generatingMetricId = metric.id
         error = nil
-        defer { generatingOptionId = nil }
+        defer { generatingMetricId = nil }
 
         do {
-            try await option.generate()
+            _ = try await proofService.generateProof(
+                for: metric,
+                period: selectedPeriod,
+                labSummary: latestLabSummary,
+                dexaSummary: latestDexaSummary
+            )
             AmachHaptics.success()
         } catch {
             self.error = error.localizedDescription
