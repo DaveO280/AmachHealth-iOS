@@ -568,7 +568,7 @@ struct LabRecord: Identifiable, Codable, Equatable {
 
 // MARK: - Helpers
 
-private extension String {
+extension String {
     var timelineMetricName: String {
         switch self {
         case "heartRateVariabilitySDNN":

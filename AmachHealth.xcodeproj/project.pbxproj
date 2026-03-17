@@ -50,6 +50,10 @@
 		AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000129 /* AddTimelineEventSheet.swift */; };
 		AA000000000000000000022A /* StorageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012A /* StorageDetailView.swift */; };
 		AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012B /* UploadLabDataSheet.swift */; };
+		AA000000000000000000022E /* ProofGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012E /* ProofGeneratorView.swift */; };
+		AA000000000000000000022F /* ProofDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012F /* ProofDetailView.swift */; };
+		AA000000000000000000022C /* HealthMetricProof.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012C /* HealthMetricProof.swift */; };
+		AA000000000000000000022D /* HealthMetricProofService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012D /* HealthMetricProofService.swift */; };
 		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
 		BB0000000000000000000004 /* ConnectWalletSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000005 /* ConnectWalletSheet.swift */; };
 /* End PBXBuildFile section */
@@ -101,6 +105,10 @@
 		AA0000000000000000000129 /* AddTimelineEventSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AddTimelineEventSheet.swift; path = AmachHealth/Sources/Views/AddTimelineEventSheet.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012A /* StorageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorageDetailView.swift; path = AmachHealth/Sources/Views/StorageDetailView.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012B /* UploadLabDataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadLabDataSheet.swift; path = AmachHealth/Sources/Views/UploadLabDataSheet.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012E /* ProofGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProofGeneratorView.swift; path = AmachHealth/Sources/Views/ProofGeneratorView.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012F /* ProofDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProofDetailView.swift; path = AmachHealth/Sources/Views/ProofDetailView.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012C /* HealthMetricProof.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMetricProof.swift; path = AmachHealth/Sources/Models/HealthMetricProof.swift; sourceTree = SOURCE_ROOT; };
+		AA000000000000000000012D /* HealthMetricProofService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMetricProofService.swift; path = AmachHealth/Sources/Services/HealthMetricProofService.swift; sourceTree = SOURCE_ROOT; };
 		BB0000000000000000000005 /* ConnectWalletSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectWalletSheet.swift; path = AmachHealth/Sources/Views/ConnectWalletSheet.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -205,6 +213,7 @@
 				AA000000000000000000010E /* HealthDataTypes.swift */,
 				AA000000000000000000010F /* HealthMemoryModels.swift */,
 				AA0000000000000000000126 /* TimelineModels.swift */,
+				AA000000000000000000012C /* HealthMetricProof.swift */,
 			);
 			name = Models;
 			sourceTree = "<group>";
@@ -230,6 +239,7 @@
 				AA0000000000000000000117 /* HealthMemoryStore.swift */,
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
 				AA0000000000000000000127 /* TimelineService.swift */,
+				AA000000000000000000012D /* HealthMetricProofService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
 			);
 			name = Services;
@@ -251,6 +261,8 @@
 				AA0000000000000000000128 /* TimelineView.swift */,
 				AA0000000000000000000121 /* TrendsView.swift */,
 				AA000000000000000000012B /* UploadLabDataSheet.swift */,
+				AA000000000000000000012E /* ProofGeneratorView.swift */,
+				AA000000000000000000012F /* ProofDetailView.swift */,
 			);
 			name = Views;
 			sourceTree = "<group>";
@@ -382,7 +394,11 @@
 				AA0000000000000000000228 /* TimelineView.swift in Sources */,
 				AA0000000000000000000221 /* TrendsView.swift in Sources */,
 				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
+				AA000000000000000000022C /* HealthMetricProof.swift in Sources */,
+				AA000000000000000000022D /* HealthMetricProofService.swift in Sources */,
 				AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */,
+				AA000000000000000000022E /* ProofGeneratorView.swift in Sources */,
+				AA000000000000000000022F /* ProofDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,7 +545,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -555,7 +571,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
