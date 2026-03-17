@@ -145,7 +145,7 @@ struct ProofGeneratorView: View {
                                 .background(
                                     selectedCategory == category
                                         ? Color.amachPrimaryBright
-                                        : Color.amachCardBg
+                                        : Color.amachSurface
                                 )
                                 .cornerRadius(20)
                         }
@@ -238,7 +238,7 @@ struct ProofGeneratorView: View {
                             .background(
                                 selectedPeriod == period
                                     ? Color.amachPrimaryBright
-                                    : Color.amachCardBg
+                                    : Color.amachSurface
                             )
                             .cornerRadius(16)
                     }
