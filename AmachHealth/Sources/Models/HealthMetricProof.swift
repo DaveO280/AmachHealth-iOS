@@ -82,3 +82,61 @@ struct HealthMetricProofVerificationResult: Codable, Equatable {
     let reason: String?
     let proof: HealthMetricProofDocument?
 }
+
+// MARK: - Proofable Metric Registry Types
+
+/// Category grouping for the proof builder UI.
+enum ProofableMetricCategory: String, CaseIterable {
+    case healthKit = "Apple Health"
+    case labResult = "Lab Results"
+    case bodyComposition = "Body Composition"
+}
+
+/// Descriptor that drives the proof builder UI, trend lookup, and proof generation.
+/// Add one entry to `HealthMetricProofService.registry` to surface a new metric everywhere.
+struct ProofableMetric: Identifiable {
+    let id: String
+    let displayName: String
+    let icon: String
+    let category: ProofableMetricCategory
+    let proofType: HealthMetricProofType
+    let supportedPeriods: [TrendPeriod]
+    let subtitle: String
+    let unit: String?
+
+    /// Fetches trend data from DashboardService for the given period.
+    /// Nil for point-in-time metrics (labs, DEXA).
+    let trendLookup: ((DashboardService, TrendPeriod) -> [TrendPoint])?
+
+    /// Extracts a single value from a LabResultSummary. Nil for non-lab metrics.
+    let labValueExtractor: ((LabResultSummary) -> Double?)?
+
+    /// Extracts a single value from a DexaResultSummary. Nil for non-DEXA metrics.
+    let dexaValueExtractor: ((DexaResultSummary) -> Double?)?
+
+    init(
+        id: String,
+        displayName: String,
+        icon: String,
+        category: ProofableMetricCategory,
+        proofType: HealthMetricProofType,
+        supportedPeriods: [TrendPeriod] = [],
+        subtitle: String,
+        unit: String? = nil,
+        trendLookup: ((DashboardService, TrendPeriod) -> [TrendPoint])? = nil,
+        labValueExtractor: ((LabResultSummary) -> Double?)? = nil,
+        dexaValueExtractor: ((DexaResultSummary) -> Double?)? = nil
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.icon = icon
+        self.category = category
+        self.proofType = proofType
+        self.supportedPeriods = supportedPeriods
+        self.subtitle = subtitle
+        self.unit = unit
+        self.trendLookup = trendLookup
+        self.labValueExtractor = labValueExtractor
+        self.dexaValueExtractor = dexaValueExtractor
+    }
+}
