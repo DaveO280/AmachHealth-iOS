@@ -49,6 +49,10 @@ struct ChatSession: Identifiable, Codable {
     /// Injected into future proactive Venice contexts for longitudinal memory.
     var healthSummary: String?
 
+    /// Rolling summary of older messages in this session, used to condense
+    /// history when the conversation grows beyond the raw-message window.
+    var rollingSummary: String?
+
     var displayTitle: String {
         // Proactive sessions get a descriptive title based on the triggering metric
         if let first = messages.first(where: { $0.metadata?.isLumaInitiated == true }) {
@@ -235,10 +239,11 @@ enum MemoryImportance: String, Codable {
 struct CriticalFact: Codable, Identifiable {
     let id: UUID
     let category: FactCategory
-    let value: String
-    let context: String?
+    var value: String
+    var context: String?
     let dateIdentified: Date
     var isActive: Bool
+    var lastConfirmed: Date?
 }
 
 struct SessionSummary: Codable, Identifiable {
@@ -250,6 +255,13 @@ struct SessionSummary: Codable, Identifiable {
     let messageCount: Int
 }
 
+/// Storj-compatible payload for conversation memory sync.
+/// Used for both local persistence and cross-platform sync via `dataType: "conversation-memory"`.
+struct ConversationMemoryStorjPayload: Codable {
+    var facts: [CriticalFact]
+    var summaries: [SessionSummary]
+}
+
 @MainActor
 final class ConversationMemoryStore: ObservableObject {
     static let shared = ConversationMemoryStore()
@@ -257,27 +269,41 @@ final class ConversationMemoryStore: ObservableObject {
     @Published private(set) var facts: [CriticalFact] = []
     @Published private(set) var summaries: [SessionSummary] = []
 
+    private var storjUri: String?
+
     private let storageURL: URL = {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return docs.appendingPathComponent("amach_conversation_memory.json")
     }()
 
-    private struct PersistedPayload: Codable {
-        var facts: [CriticalFact]
-        var summaries: [SessionSummary]
-    }
-
     private init() {
         loadFromDisk()
     }
 
+    // MARK: - Upsert with Value-Based Deduplication
+
     func upsert(facts newFacts: [CriticalFact], summary: SessionSummary) {
-        var mergedFacts = Dictionary(uniqueKeysWithValues: facts.map { ($0.id, $0) })
-        for fact in newFacts {
-            mergedFacts[fact.id] = fact
+        for newFact in newFacts {
+            let newNorm = Self.normalizeFactValue(newFact.value)
+
+            if let existingIdx = facts.firstIndex(where: {
+                $0.category == newFact.category
+                && $0.isActive
+                && Self.factsOverlap(Self.normalizeFactValue($0.value), newNorm)
+            }) {
+                // Existing fact covers this — update in-place
+                facts[existingIdx].lastConfirmed = Date()
+                if newFact.value.count > facts[existingIdx].value.count {
+                    facts[existingIdx].value = newFact.value
+                }
+                if let ctx = newFact.context, !ctx.isEmpty {
+                    facts[existingIdx].context = ctx
+                }
+            } else {
+                facts.append(newFact)
+            }
         }
-        facts = Array(mergedFacts.values)
 
         if let idx = summaries.firstIndex(where: { $0.id == summary.id }) {
             summaries[idx] = summary
@@ -285,18 +311,70 @@ final class ConversationMemoryStore: ObservableObject {
             summaries.append(summary)
         }
 
-        facts.sort { $0.dateIdentified < $1.dateIdentified }
-        if facts.count > 200 {
-            facts = Array(facts.suffix(200))
-        }
-
-        summaries.sort { $0.date < $1.date }
-        if summaries.count > 40 {
-            summaries = Array(summaries.suffix(40))
-        }
-
+        applyRetentionCaps()
         saveToDisk()
     }
+
+    // MARK: - Storj Sync
+
+    func syncToStorj() async {
+        let wallet = WalletService.shared
+        guard wallet.isConnected, let key = wallet.encryptionKey else { return }
+        guard !facts.isEmpty || !summaries.isEmpty else { return }
+
+        do {
+            let uri = try await AmachAPIClient.shared.storeConversationMemory(
+                facts: facts,
+                summaries: summaries,
+                walletAddress: key.walletAddress,
+                encryptionKey: key
+            )
+            storjUri = uri
+            #if DEBUG
+            print("🧠 ConversationMemoryStore: synced to Storj (\(facts.count) facts, \(summaries.count) summaries)")
+            #endif
+        } catch {
+            #if DEBUG
+            print("⚠️ ConversationMemoryStore: Storj sync failed: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    /// Pull the latest conversation memory from Storj and merge with local data.
+    /// Call after Privy auth completes to hydrate memory from a previous device or the web app.
+    func pullFromStorj() async {
+        let wallet = WalletService.shared
+        guard wallet.isConnected, let key = wallet.encryptionKey else { return }
+
+        do {
+            let api = AmachAPIClient.shared
+            let items = try await api.listHealthData(
+                walletAddress: key.walletAddress,
+                encryptionKey: key,
+                dataType: "conversation-memory"
+            )
+
+            guard let latest = items.max(by: { $0.uploadedAt < $1.uploadedAt }) else { return }
+
+            let remote = try await api.retrieveStoredData(
+                storjUri: latest.uri,
+                walletAddress: key.walletAddress,
+                encryptionKey: key,
+                as: ConversationMemoryStorjPayload.self
+            )
+
+            mergeRemoteMemory(remote)
+            #if DEBUG
+            print("🧠 ConversationMemoryStore: pulled from Storj, merged to \(facts.count) facts, \(summaries.count) summaries")
+            #endif
+        } catch {
+            #if DEBUG
+            print("⚠️ ConversationMemoryStore: Storj pull failed: \(error.localizedDescription)")
+            #endif
+        }
+    }
+
+    // MARK: - Memory Capsule Builder
 
     private static func intentRelevantCategories(_ intent: ChatIntent) -> Set<FactCategory> {
         switch intent {
@@ -306,7 +384,7 @@ final class ConversationMemoryStore: ObservableObject {
         case .labs: return [.condition, .medication, .concern]
         case .medications: return [.medication, .condition, .preference]
         case .bodyComp: return [.goal, .condition]
-        case .general: return [] // empty = include all categories
+        case .general: return []
         }
     }
 
@@ -325,7 +403,7 @@ final class ConversationMemoryStore: ObservableObject {
             filteredFacts = list
         }
 
-        func normalized(_ text: String, maxLen: Int) -> String {
+        func truncated(_ text: String, maxLen: Int) -> String {
             let collapsed = text.replacingOccurrences(
                 of: "\\s+",
                 with: " ",
@@ -337,24 +415,21 @@ final class ConversationMemoryStore: ObservableObject {
         }
 
         func latestValues(for category: FactCategory, limit: Int?) -> [String] {
-            let filtered = filteredFacts.filter { $0.category == category }
-                .sorted { $0.dateIdentified < $1.dateIdentified }
-            let sliced = limit != nil ? Array(filtered.suffix(limit!)) : filtered
-            return sliced.map { normalized($0.value, maxLen: 120) }
+            let sorted = filteredFacts.filter { $0.category == category }
+                .sorted { effectiveDate($0) < effectiveDate($1) }
+            let sliced = limit != nil ? Array(sorted.suffix(limit!)) : sorted
+            return sliced.map { truncated($0.value, maxLen: 120) }
         }
 
         let activeGoals = latestValues(for: .goal, limit: 6)
         let activeConcerns = latestValues(for: .concern, limit: 6)
-        // Bound medications/conditions for payload size: keep latest 20 each
         let medications = latestValues(for: .medication, limit: 20)
         let conditions = latestValues(for: .condition, limit: 20)
 
         let recentSummaries = summaries
             .sorted { $0.date < $1.date }
             .suffix(3)
-            .map { summary in
-                normalized(summary.summary, maxLen: 150)
-            }
+            .map { truncated($0.summary, maxLen: 150) }
 
         if activeGoals.isEmpty,
            activeConcerns.isEmpty,
@@ -373,8 +448,81 @@ final class ConversationMemoryStore: ObservableObject {
         )
     }
 
+    // MARK: - Dedup Helpers
+
+    static func normalizeFactValue(_ value: String) -> String {
+        value.lowercased()
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Two normalized values overlap if one equals or is a substring of the other.
+    private static func factsOverlap(_ a: String, _ b: String) -> Bool {
+        a == b || a.contains(b) || b.contains(a)
+    }
+
+    /// Effective recency: lastConfirmed if set, otherwise dateIdentified.
+    private func effectiveDate(_ fact: CriticalFact) -> Date {
+        fact.lastConfirmed ?? fact.dateIdentified
+    }
+
+    // MARK: - Merge (Storj pull)
+
+    private func mergeRemoteMemory(_ remote: ConversationMemoryStorjPayload) {
+        // Merge facts: dedup by normalized value within category, keep newer
+        var localByKey = Dictionary(
+            uniqueKeysWithValues: facts.map { (Self.factMergeKey($0), $0) }
+        )
+
+        for remoteFact in remote.facts {
+            let key = Self.factMergeKey(remoteFact)
+            if let existing = localByKey[key] {
+                let existingDate = existing.lastConfirmed ?? existing.dateIdentified
+                let remoteDate = remoteFact.lastConfirmed ?? remoteFact.dateIdentified
+                if remoteDate > existingDate {
+                    localByKey[key] = remoteFact
+                }
+            } else {
+                localByKey[key] = remoteFact
+            }
+        }
+        facts = Array(localByKey.values)
+
+        // Merge summaries: union by ID
+        var localSummariesById = Dictionary(
+            uniqueKeysWithValues: summaries.map { ($0.id, $0) }
+        )
+        for remoteSummary in remote.summaries {
+            if localSummariesById[remoteSummary.id] == nil {
+                localSummariesById[remoteSummary.id] = remoteSummary
+            }
+        }
+        summaries = Array(localSummariesById.values)
+
+        applyRetentionCaps()
+        saveToDisk()
+    }
+
+    private static func factMergeKey(_ fact: CriticalFact) -> String {
+        "\(fact.category.rawValue):\(normalizeFactValue(fact.value))"
+    }
+
+    // MARK: - Persistence
+
+    private func applyRetentionCaps() {
+        facts.sort { $0.dateIdentified < $1.dateIdentified }
+        if facts.count > 200 {
+            facts = Array(facts.suffix(200))
+        }
+
+        summaries.sort { $0.date < $1.date }
+        if summaries.count > 40 {
+            summaries = Array(summaries.suffix(40))
+        }
+    }
+
     private func saveToDisk() {
-        let payload = PersistedPayload(facts: facts, summaries: summaries)
+        let payload = ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
         guard let data = try? JSONEncoder().encode(payload) else { return }
         try? data.write(to: storageURL, options: .atomic)
     }
@@ -382,7 +530,7 @@ final class ConversationMemoryStore: ObservableObject {
     private func loadFromDisk() {
         guard
             let data = try? Data(contentsOf: storageURL),
-            let payload = try? JSONDecoder().decode(PersistedPayload.self, from: data)
+            let payload = try? JSONDecoder().decode(ConversationMemoryStorjPayload.self, from: data)
         else { return }
 
         facts = payload.facts

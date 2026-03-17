@@ -443,6 +443,37 @@ final class AmachAPIClient {
         }
     }
 
+    /// Save distilled conversation memory (facts + summaries) to Storj.
+    /// Lightweight payload — typically under 50KB vs 100KB+ for raw chat sessions.
+    func storeConversationMemory(
+        facts: [CriticalFact],
+        summaries: [SessionSummary],
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> String {
+        let payload = ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
+        let request = StorjRequest(
+            action: "storage/store",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            data: AnyCodable(payload),
+            dataType: "conversation-memory",
+            options: StorjStoreOptions(
+                metadata: [
+                    "factCount": String(facts.count),
+                    "summaryCount": String(summaries.count),
+                    "platform": "ios"
+                ]
+            )
+        )
+
+        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Failed to store conversation memory")
+        }
+        return result.storjUri
+    }
+
     /// Save a chat session to Storj (encrypted)
     func storeChatSession(
         _ session: ChatSession,

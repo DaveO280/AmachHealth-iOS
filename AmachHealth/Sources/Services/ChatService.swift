@@ -59,10 +59,10 @@ final class ChatService: ObservableObject {
         error = nil
 
         do {
-            // Send last 18 messages as history (9 exchanges, keeps context tight)
+            let limit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
             let historyForSend = currentSession.messages
                 .dropLast()
-                .suffix(18)
+                .suffix(limit)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
             let response = try await api.sendChatMessage(trimmed, history: Array(historyForSend), context: finalContext, mode: chatMode)
@@ -72,10 +72,7 @@ final class ChatService: ObservableObject {
             currentSession.updatedAt = .now
             saveToDisk()
 
-            // Every 10 messages, batch-save to Storj and clean local copy
-            if currentSession.messages.count % 10 == 0 {
-                Task { await syncToStorj() }
-            }
+            updateRollingSummaryIfNeeded()
         } catch {
             self.error = error.localizedDescription
         }
@@ -115,12 +112,10 @@ final class ChatService: ObservableObject {
         isSending = true
         error = nil
 
-        // History excludes the current user turn and the placeholder.
-        // Reduce window when lab data is present to avoid overloading the model context.
-        let historyLimit = labDataToUse != nil ? 10 : 18
+        let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
         let historyMessages = currentSession.messages
             .dropLast(2)
-            .suffix(historyLimit)
+            .suffix(dynamicLimit)
             .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
         let screen = LumaContextService.shared.currentScreen
@@ -144,9 +139,7 @@ final class ChatService: ObservableObject {
             saveToDisk()
             AmachHaptics.lumaResponse()
 
-            if currentSession.messages.count % 10 == 0 {
-                Task { await syncToStorj() }
-            }
+            updateRollingSummaryIfNeeded()
         } catch {
             // If nothing was streamed, remove the empty placeholder so the
             // UI doesn't show a blank Luma bubble
@@ -176,10 +169,10 @@ final class ChatService: ObservableObject {
         }
         saveToDisk()
 
-        // Summarize health content and sync to Storj in background
+        // Summarize health content, extract memory, and sync to Storj in background
         Task {
             await summarizeAndArchive(sessionToArchive)
-            await syncToStorj(session: sessionToArchive)
+            await syncSessionToStorj(sessionToArchive)
         }
 
         currentSession = ChatSession()
@@ -422,6 +415,8 @@ final class ChatService: ObservableObject {
             guard let sessionSummary = summary else { return }
 
             ConversationMemoryStore.shared.upsert(facts: facts, summary: sessionSummary)
+
+            await ConversationMemoryStore.shared.syncToStorj()
         } catch {
             // Non-critical — chat still works without long-term memory
         }
@@ -511,6 +506,84 @@ final class ChatService: ObservableObject {
         return jsonSubstring.data(using: .utf8)
     }
 
+    // MARK: - Rolling Summary (Progressive Summarization)
+
+    /// Summarize older messages so the history window stays compact.
+    /// Triggered after long conversations — the summary rides along as a context block.
+    private func updateRollingSummaryIfNeeded() {
+        let messageCount = currentSession.messages.count
+        guard messageCount >= 20 else { return }
+        guard currentSession.rollingSummary == nil || messageCount % 10 == 0 else { return }
+
+        Task {
+            let messagesToSummarize = Array(currentSession.messages.dropLast(8))
+            var text = messagesToSummarize.map { msg in
+                let role = msg.role == .user ? "User" : "Assistant"
+                return "\(role): \(msg.content)"
+            }.joined(separator: "\n\n")
+
+            let maxChars = 6000
+            if text.count > maxChars {
+                text = String(text.suffix(maxChars))
+            }
+
+            let prompt = """
+            Summarize this earlier part of a health conversation in 3-5 sentences. \
+            Preserve: specific numbers/metrics discussed, decisions made, questions answered, \
+            and any action items. Skip greetings and small talk.
+
+            Conversation:
+            \(text)
+            """
+
+            do {
+                let response = try await api.sendChatMessage(prompt, history: [])
+                let summary = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !summary.isEmpty else { return }
+                currentSession.rollingSummary = summary
+                saveToDisk()
+            } catch {
+                // Non-critical — raw messages still work as fallback
+            }
+        }
+    }
+
+    // MARK: - Token Budget
+
+    /// Estimate tokens for the assembled context to dynamically size the history window.
+    private func historyLimit(for context: AIChatContext?, hasLabData: Bool) -> Int {
+        let contextTokens = Self.estimateContextTokens(context)
+
+        // If a rolling summary covers older messages, we need fewer raw messages
+        let hasRollingSummary = currentSession.rollingSummary != nil
+
+        let budget = 8000
+        let historyBudget = max(budget - contextTokens, 1000)
+        let avgMessageTokens = 60
+        var limit = min(max(historyBudget / avgMessageTokens, 6), 18)
+
+        if hasLabData { limit = min(limit, 10) }
+        if hasRollingSummary { limit = min(limit, 8) }
+
+        return limit
+    }
+
+    private static func estimateContextTokens(_ context: AIChatContext?) -> Int {
+        guard let ctx = context else { return 0 }
+        var tokens = 0
+        if let blocks = ctx.contextBlocks {
+            tokens += blocks.reduce(0) { $0 + ($1.content.count + 3) / 4 }
+        }
+        if let mem = ctx.memory {
+            let memText = (mem.activeGoals + mem.activeConcerns + mem.medications
+                           + mem.conditions + mem.recentSessionNotes).joined(separator: " ")
+            tokens += (memText.count + 3) / 4
+        }
+        return tokens
+    }
+
+    // MARK: - Context Enrichment
+
     private func enrichContext(
         _ base: AIChatContext?,
         labData: LabDataContext? = nil,
@@ -525,13 +598,16 @@ final class ChatService: ObservableObject {
             return nil
         }
 
-        guard let existing = base else {
-            return AIChatContext(
-                memory: memoryCapsule,
-                userAddress: walletAddress,
-                encryptionKey: encryptionKey,
-                labData: labData,
-                contextBlocks: nil
+        let existing = base ?? AIChatContext()
+
+        // Inject rolling summary as a context block so the model knows
+        // what was discussed earlier without sending all raw messages
+        var blocks = existing.contextBlocks ?? []
+        if let rollingSummary = currentSession.rollingSummary {
+            blocks.insert(
+                ContextBlock(type: "session_context",
+                             content: "Earlier in this conversation: \(rollingSummary)"),
+                at: 0
             )
         }
 
@@ -543,7 +619,7 @@ final class ChatService: ObservableObject {
             userAddress: existing.userAddress ?? walletAddress,
             encryptionKey: existing.encryptionKey ?? encryptionKey,
             labData: existing.labData ?? labData,
-            contextBlocks: existing.contextBlocks
+            contextBlocks: blocks.isEmpty ? nil : blocks
         )
     }
 
@@ -572,27 +648,28 @@ final class ChatService: ObservableObject {
     }
 
     // MARK: - Storj Sync
+    //
+    // Raw session sync is now archive-only (not every 10 messages).
+    // The distilled ConversationMemoryStore syncs after fact extraction,
+    // which is the high-value, low-size data that matters cross-platform.
 
-    private func syncToStorj(session: ChatSession? = nil) async {
-        let target = session ?? currentSession
-        guard !target.messages.isEmpty else { return }
+    private func syncSessionToStorj(_ session: ChatSession) async {
+        guard !session.messages.isEmpty else { return }
         guard wallet.isConnected, let key = wallet.encryptionKey else { return }
 
         do {
             let uri = try await api.storeChatSession(
-                target,
+                session,
                 walletAddress: key.walletAddress,
                 encryptionKey: key
             )
-            // Update storjUri on current session if we synced the current one
-            if target.id == currentSession.id {
+            if session.id == currentSession.id {
                 currentSession.storjUri = uri
                 saveToDisk()
             }
         } catch {
-            // Non-critical — local copy is intact, will retry next cycle
             #if DEBUG
-            print("⚠️ ChatService: Storj sync failed: \(error.localizedDescription)")
+            print("⚠️ ChatService: Storj session sync failed: \(error.localizedDescription)")
             #endif
         }
     }
