@@ -20,6 +20,12 @@ final class ChatService: ObservableObject {
     /// Quick vs deep mode for Luma. Toggle in ChatView; resets on new session.
     @Published var chatMode: ChatMode = .quick
 
+    /// Tracks the in-flight send task so the user can cancel it.
+    private var sendingTask: Task<Void, Never>?
+
+    /// The text of the last message that failed, available for retry.
+    @Published var lastFailedMessage: String?
+
     private let api = AmachAPIClient.shared
     private let wallet = WalletService.shared
 
@@ -31,6 +37,35 @@ final class ChatService: ObservableObject {
 
     private init() {
         loadFromDisk()
+    }
+
+    // MARK: - Cancel
+
+    /// Cancels the in-flight Luma request. Safe to call from any context.
+    func cancelCurrentRequest() {
+        sendingTask?.cancel()
+        sendingTask = nil
+        isSending = false
+        // Remove the empty assistant placeholder if nothing was written yet
+        if let last = currentSession.messages.last,
+           last.role == .assistant,
+           last.content.isEmpty {
+            currentSession.messages.removeLast()
+        }
+        error = nil   // cancel is intentional — no error banner
+    }
+
+    /// Re-sends the last failed message. Removes it from history first so it
+    /// isn't duplicated, then calls startStreaming as normal.
+    func retryLastMessage() {
+        guard let text = lastFailedMessage else { return }
+        // Remove the dangling user message left by the failed attempt
+        if let last = currentSession.messages.last, last.role == .user, last.content == text {
+            currentSession.messages.removeLast()
+        }
+        lastFailedMessage = nil
+        error = nil
+        startStreaming(text)
     }
 
     // MARK: - Send Message
@@ -91,6 +126,14 @@ final class ChatService: ObservableObject {
     //   composing the answer in the moment, not retrieving it from
     //   a database. The difference in feel is significant.
 
+    /// Wraps sendStreaming in a cancellable Task and stores it for later cancellation.
+    func startStreaming(_ text: String, context: AIChatContext? = nil) {
+        sendingTask?.cancel()
+        sendingTask = Task {
+            await sendStreaming(text, context: context)
+        }
+    }
+
     func sendStreaming(_ text: String, context: AIChatContext? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -98,6 +141,8 @@ final class ChatService: ObservableObject {
         let intent = ChatIntentClassifier.classify(trimmed)
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let labData = await HealthContextBuilder.buildLabContext()
+        // If user cancelled while we were loading lab context, bail out cleanly.
+        guard !Task.isCancelled else { return }
         let labDataToUse = (intent.includesLabData || chatMode == .deep) ? labData : nil
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
@@ -136,6 +181,7 @@ final class ChatService: ObservableObject {
                 currentSession.updatedAt = .now
             }
 
+            lastFailedMessage = nil
             saveToDisk()
             AmachHaptics.lumaResponse()
 
@@ -146,10 +192,20 @@ final class ChatService: ObservableObject {
             if currentSession.messages[assistantIdx].content.isEmpty {
                 currentSession.messages.remove(at: assistantIdx)
             }
-            self.error = error.localizedDescription
+            // Show a user-friendly message for cancellation vs real errors
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                self.error = nil   // cancel is intentional — no error banner
+            } else if (error as? URLError)?.code == .timedOut {
+                self.lastFailedMessage = trimmed
+                self.error = "Request timed out. Check your connection and try again."
+            } else {
+                self.lastFailedMessage = trimmed
+                self.error = error.localizedDescription
+            }
         }
 
         isSending = false
+        sendingTask = nil
     }
 
     // MARK: - Session Management
@@ -158,6 +214,8 @@ final class ChatService: ObservableObject {
         guard !currentSession.messages.isEmpty else { return }
 
         chatMode = .quick
+        lastFailedMessage = nil
+        error = nil
         let sessionToArchive = currentSession
 
         // Archive current to recent sessions — keep only the last 3 visible.
