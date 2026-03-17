@@ -22,6 +22,9 @@ struct ChatView: View {
 
     @State private var messageText = ""
     @State private var showingHistory = false
+    #if DEBUG
+    @State private var showMemoryDebug = false
+    #endif
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -38,6 +41,17 @@ struct ChatView: View {
                     messageScrollView
                     inputBar
                 }
+                #if DEBUG
+                if showMemoryDebug {
+                    LumaMemoryDebugOverlay(onClose: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showMemoryDebug = false
+                        }
+                    })
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding()
+                }
+                #endif
             }
             .navigationBarHidden(true)
             .onAppear { lumaContext.update(screen: "Chat") }
@@ -108,6 +122,20 @@ struct ChatView: View {
                         .frame(width: 36, height: 36)
                 }
                 .accessibilityLabel("Start new conversation")
+
+                #if DEBUG
+                Button {
+                    withAnimation(AmachAnimation.spring) {
+                        showMemoryDebug.toggle()
+                    }
+                } label: {
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.amachTextSecondary)
+                        .frame(width: 36, height: 36)
+                }
+                .accessibilityLabel("Toggle Luma memory debug overlay")
+                #endif
             }
         }
         .padding(.horizontal, AmachSpacing.md)
@@ -122,9 +150,10 @@ struct ChatView: View {
     private var messageScrollView: some View {
         // Filter out the empty assistant streaming placeholder so it never
         // appears as a small solid bubble. LumaTypingBubble covers the wait.
-        let visibleMessages = chatService.currentSession.messages.filter {
+        let allMessages = chatService.currentSession.messages.filter {
             $0.role == .user || !$0.content.isEmpty
         }
+        let visibleMessages = Array(allMessages.suffix(5))
         let showTyping = chatService.isSending && {
             let last = chatService.currentSession.messages.last
             return last?.role != .assistant || (last?.content.isEmpty ?? true)
@@ -216,7 +245,7 @@ struct ChatView: View {
                 ForEach(quickSuggestions, id: \.self) { suggestion in
                     Button {
                         messageText = suggestion
-                        Task { await sendMessage() }
+                        sendMessage()
                     } label: {
                         HStack {
                             Text(suggestion)
@@ -264,18 +293,37 @@ struct ChatView: View {
     // ============================================================
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: AmachSpacing.sm) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(Color.amachDestructive)
-                .font(AmachType.caption)
-            Text(message)
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachTextSecondary)
-                .lineLimit(2)
-            Spacer()
-            Button("Dismiss") { chatService.error = nil }
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachPrimaryBright)
+        VStack(alignment: .leading, spacing: AmachSpacing.xs) {
+            HStack(spacing: AmachSpacing.sm) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(Color.amachDestructive)
+                    .font(AmachType.caption)
+                Text(message)
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .lineLimit(2)
+                Spacer()
+                Button("Dismiss") { chatService.error = nil }
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+
+            if chatService.lastFailedMessage != nil {
+                Button {
+                    AmachHaptics.buttonPress()
+                    chatService.retryLastMessage()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Try Again")
+                            .font(AmachType.tiny)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(Color.Amach.AI.p400)
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(12)
         .background(Color.amachDestructive.opacity(0.08))
@@ -314,7 +362,7 @@ struct ChatView: View {
                             )
                     )
                     .focused($inputFocused)
-                    .onSubmit { Task { await sendMessage() } }
+                    .onSubmit { sendMessage() }
 
                 // Quick / Deep mode toggle (Luma AI only — indigo when deep)
                 Button {
@@ -331,38 +379,58 @@ struct ChatView: View {
                 .accessibilityLabel(chatService.chatMode == .deep ? "Deep analysis mode" : "Quick mode")
                 .accessibilityHint("Toggle quick vs deep analysis")
 
-                // Send button — indigo
-                Button {
-                    Task { await sendMessage() }
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                canSend
-                                    ? LinearGradient(
-                                        colors: [Color.Amach.AI.base, Color(hex: "4338CA")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                    : LinearGradient(
-                                        colors: [Color.amachSurface, Color.amachSurface],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                            )
-                            .frame(width: 42, height: 42)
-                            .shadow(
-                                color: canSend ? Color.Amach.AI.base.opacity(0.4) : .clear,
-                                radius: 8
-                            )
-                        Image(systemName: chatService.isSending ? "ellipsis" : "arrow.up")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(canSend ? .white : Color.amachTextSecondary)
+                // Send / Cancel button — indigo when sending, cancel (×) when in-flight
+                if chatService.isSending {
+                    Button {
+                        chatService.cancelCurrentRequest()
+                        AmachHaptics.buttonPress()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color.amachDestructive.opacity(0.15))
+                                .frame(width: 42, height: 42)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Color.amachDestructive)
+                        }
                     }
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Cancel request")
+                } else {
+                    Button {
+                        sendMessage()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    canSend
+                                        ? LinearGradient(
+                                            colors: [Color.Amach.AI.base, Color(hex: "4338CA")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                        : LinearGradient(
+                                            colors: [Color.amachSurface, Color.amachSurface],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                )
+                                .frame(width: 42, height: 42)
+                                .shadow(
+                                    color: canSend ? Color.Amach.AI.base.opacity(0.4) : .clear,
+                                    radius: 8
+                                )
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(canSend ? .white : Color.amachTextSecondary)
+                        }
+                    }
+                    .disabled(!canSend)
+                    .transition(.scale.combined(with: .opacity))
+                    .accessibilityLabel("Send to Luma")
                 }
-                .disabled(!canSend)
-                .accessibilityLabel(chatService.isSending ? "Sending" : "Send to Luma")
             }
+            .animation(.easeInOut(duration: 0.15), value: chatService.isSending)
             .padding(.horizontal, AmachSpacing.md)
             .padding(.vertical, AmachSpacing.sm + 2)
             .background(Color.amachBg)
@@ -386,13 +454,13 @@ struct ChatView: View {
         ]
     }
 
-    private func sendMessage() async {
+    private func sendMessage() {
         guard canSend else { return }
         let text = messageText
         messageText = ""
         inputFocused = false
         AmachHaptics.buttonPress()
-        await chatService.sendStreaming(text)
+        chatService.startStreaming(text)
         // Haptic on completion is handled inside sendStreaming; no double-fire needed.
     }
 }
@@ -493,3 +561,84 @@ struct ChatHistoryView: View {
         .environmentObject(HealthKitService.shared)
         .preferredColorScheme(.dark)
 }
+
+#if DEBUG
+struct LumaMemoryDebugOverlay: View {
+    @ObservedObject private var memoryStore = ConversationMemoryStore.shared
+    @ObservedObject private var chatService = ChatService.shared
+
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            HStack {
+                Text("Luma Memory Debug")
+                    .font(AmachType.h3)
+                    .foregroundStyle(Color.amachTextPrimary)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+            }
+
+            Text("Facts: \(memoryStore.facts.count) · Summaries: \(memoryStore.summaries.count)")
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextSecondary)
+
+            if let capsule = memoryStore.buildMemoryCapsule() {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Capsule")
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextPrimary)
+                    if !capsule.activeGoals.isEmpty {
+                        Text("Goals: " + capsule.activeGoals.joined(separator: "; "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    if !capsule.activeConcerns.isEmpty {
+                        Text("Concerns: " + capsule.activeConcerns.joined(separator: "; "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    if !capsule.medications.isEmpty {
+                        Text("Medications: " + capsule.medications.joined(separator: "; "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    if !capsule.conditions.isEmpty {
+                        Text("Conditions: " + capsule.conditions.joined(separator: "; "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    if !capsule.recentSessionNotes.isEmpty {
+                        Text("Recent notes: " + capsule.recentSessionNotes.joined(separator: " | "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                }
+                .padding(.top, AmachSpacing.xs)
+            }
+
+            if let summary = chatService.currentSession.rollingSummary {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Rolling Summary")
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Text(summary)
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextSecondary)
+                        .lineLimit(6)
+                }
+                .padding(.top, AmachSpacing.sm)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(AmachSpacing.md)
+        .background(Color.amachSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AmachRadius.card))
+        .shadow(color: .black.opacity(0.25), radius: 18, x: 0, y: 10)
+    }
+}
+#endif
