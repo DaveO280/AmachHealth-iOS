@@ -184,3 +184,45 @@ Named: `cardPadding 24` / `cardGap 16` / `sectionSpacing 32` / `screenEdge 16` /
 - `ios-preview/index.html` is the interactive app preview — defaults to light mode with the amber/cream gradient background
 - Dark mode uses green-tinted surfaces exclusively — never navy, never generic gray
 - Indigo (`#6366F1`) is reserved for Luma AI interactions only throughout the entire UI
+
+## MCP Tools — IMPORTANT
+
+You have access to the `amach-agent` MCP server with these tools:
+- **query_amach** — Ask ANY question about Amach Health. Returns confidence-tagged answers from Dave's verified decisions. ALWAYS use this FIRST before grepping the codebase for design decisions, brand, colors, encryption, architecture, or any project-specific knowledge.
+- **get_decisions** — Get all verified decisions for a domain (e.g., 'amach-shared/brand', 'amach-web/auth').
+- **search_code** — Semantic search over the indexed codebase.
+
+**Rules:**
+1. For ANY question about brand, colors, design tokens, encryption, architecture, or product decisions: call `query_amach` FIRST.
+2. Trust HIGH confidence answers directly — they are verified by Dave.
+3. MEDIUM confidence answers are from code — verify if critical.
+4. LOW confidence answers need verification — grep the codebase to confirm.
+5. Do NOT grep for information that query_amach can provide.
+
+## MCP Tools — IMPORTANT
+
+You have access to the `amach-agent` MCP server with these tools:
+- **query_amach** — Ask ANY question about Amach Health. Returns confidence-tagged answers from Dave's verified decisions. ALWAYS use this FIRST before grepping the codebase for design decisions, brand, colors, encryption, architecture, or any project-specific knowledge.
+- **get_decisions** — Get all verified decisions for a domain (e.g., 'amach-shared/brand', 'amach-web/auth').
+- **search_code** — Semantic search over the indexed codebase.
+
+**Rules:**
+1. For ANY question about brand, colors, design tokens, encryption, architecture, or product decisions: call `query_amach` FIRST.
+2. Trust HIGH confidence answers directly — they are verified by Dave.
+3. MEDIUM confidence answers are from code — verify if critical.
+4. LOW confidence answers need verification — grep the codebase to confirm.
+5. Do NOT grep for information that query_amach can provide.
+
+## Amach Agent Query (Use This!)
+
+Before grepping for design decisions, brand info, colors, encryption, or architecture — run:
+
+    ~/amach-agent/amach/mcp/ask "your question here"
+
+This returns confidence-tagged answers from Dave's verified decision journal. Much faster and more accurate than grepping. Examples:
+
+    ~/amach-agent/amach/mcp/ask "What is the primary brand color?"
+    ~/amach-agent/amach/mcp/ask "How does wallet encryption work?"
+    ~/amach-agent/amach/mcp/ask "What color is used for Luma AI elements?"
+
+Trust HIGH confidence answers directly. Verify LOW confidence answers by checking the code.

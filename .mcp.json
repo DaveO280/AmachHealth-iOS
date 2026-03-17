@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "amach-agent": {
+      "command": "/Users/dave/amach-agent/amach/mcp/run.sh",
+      "args": [],
+      "cwd": "/Users/dave/amach-agent",
+      "env": {}
+    }
+  }
+}
