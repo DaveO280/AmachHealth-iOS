@@ -80,10 +80,12 @@ final class ChatService: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let intent = ChatIntentClassifier.classify(trimmed)
-        let needsLabs = intent.includesLabData || chatMode == .deep
-        // Load labs before building context blocks so Luma always gets
-        // labs_bloodwork / labs_dexa in `contextBlocks` for this turn.
+        // Labs are expensive even with caching. Only include lab data for
+        // explicit lab/body-composition intents, or when in deep mode.
+        let needsLabs = chatMode == .deep || intent == .labs || intent == .bodyComp
         let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
+        // Build context blocks after lab context is warmed so Luma always
+        // gets labs_bloodwork / labs_dexa in `contextBlocks` for this turn.
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
@@ -141,11 +143,12 @@ final class ChatService: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let intent = ChatIntentClassifier.classify(trimmed)
-        let needsLabs = intent.includesLabData || chatMode == .deep
+        // Labs are expensive even with caching. Only include lab data for
+        // explicit lab/body-composition intents, or when in deep mode.
+        let needsLabs = chatMode == .deep || intent == .labs || intent == .bodyComp
         let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
         // If user cancelled while we were loading lab context, bail out cleanly.
         guard !Task.isCancelled else { return }
-        // Build context blocks after lab context is warmed.
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
