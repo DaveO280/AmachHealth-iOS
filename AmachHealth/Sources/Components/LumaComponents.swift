@@ -268,9 +268,10 @@ struct LumaSheetView: View {
         // Empty assistant placeholder (content="") is filtered out so it never
         // renders as a small solid bubble. LumaTypingBubble handles the "waiting"
         // state and disappears as soon as the first streaming token arrives.
-        let visibleMessages = chatService.currentSession.messages.filter {
+        let allMessages = chatService.currentSession.messages.filter {
             $0.role == .user || !$0.content.isEmpty
         }
+        let visibleMessages = Array(allMessages.suffix(5))
         // Show the typing bubble while sending AND the streamed content hasn't
         // started yet (empty assistant placeholder is still the last message).
         let showTyping = chatService.isSending && {
