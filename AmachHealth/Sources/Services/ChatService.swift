@@ -146,13 +146,9 @@ final class ChatService: ObservableObject {
         // Labs are expensive even with caching. Only include lab data for
         // explicit lab/body-composition intents, or when in deep mode.
         let needsLabs = chatMode == .deep || intent == .labs || intent == .bodyComp
-        let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
-        // If user cancelled while we were loading lab context, bail out cleanly.
-        guard !Task.isCancelled else { return }
-        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
-        let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
-
-        // 1. Append user message
+        
+        // 1. Append user message + assistant placeholder immediately so the UI
+        // renders without waiting on any network/decryption work.
         currentSession.messages.append(ChatMessage(role: .user, content: trimmed))
         currentSession.updatedAt = .now
 
@@ -162,6 +158,22 @@ final class ChatService: ObservableObject {
 
         isSending = true
         error = nil
+
+        // Warm lab context (if needed) before building context blocks.
+        let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
+        // If user cancelled while we were loading lab context, bail out cleanly.
+        guard !Task.isCancelled else {
+            if currentSession.messages.indices.contains(assistantIdx),
+               currentSession.messages[assistantIdx].content.isEmpty {
+                currentSession.messages.remove(at: assistantIdx)
+            }
+            isSending = false
+            sendingTask = nil
+            return
+        }
+
+        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
+        let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
         let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
         let historyMessages = currentSession.messages

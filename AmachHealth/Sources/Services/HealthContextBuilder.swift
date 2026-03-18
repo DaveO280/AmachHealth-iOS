@@ -64,7 +64,9 @@ struct HealthContextBuilder {
         formatter: DateFormatter
     ) -> LabResultSummary? {
         guard let ctx else { return nil }
-        guard !ctx.metrics.isEmpty else { return nil }
+        let hasAnyMetricValue = ctx.metrics.contains { $0.value != nil }
+        let hasAnyNotes = ctx.notes?.contains(where: { !$0.isEmpty }) == true
+        guard hasAnyMetricValue || hasAnyNotes else { return nil }
 
         // Normalize metric names for keyword matching.
         func norm(_ s: String) -> String {
@@ -145,6 +147,15 @@ struct HealthContextBuilder {
         formatter: DateFormatter
     ) -> DexaResultSummary? {
         guard let ctx else { return nil }
+        let hasAnyValue =
+            ctx.bodyFatPercent != nil ||
+            ctx.leanMassKg != nil ||
+            ctx.boneDensityTScore != nil ||
+            ctx.boneDensityZScore != nil ||
+            ctx.visceralFatRating != nil ||
+            ctx.androidGynoidRatio != nil
+        let hasAnyNotes = ctx.notes?.contains(where: { !$0.isEmpty }) == true
+        guard hasAnyValue || hasAnyNotes else { return nil }
 
         func notesString(_ notes: [String]?) -> String? {
             guard let notes else { return nil }
@@ -460,10 +471,25 @@ struct HealthContextBuilder {
         // 3. labs_bloodwork + labs_dexa — separate blocks for targeted queries
         if let labs = LabContextService.shared.context {
             if let bw = labs.bloodwork {
-                blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
+                let hasAnyValue =
+                    bw.metrics.contains(where: { $0.value != nil }) ||
+                    (bw.notes?.contains(where: { !$0.isEmpty }) == true)
+                if hasAnyValue {
+                    blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
+                }
             }
             if let dx = labs.dexa {
-                blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
+                let hasAnyValue =
+                    dx.bodyFatPercent != nil ||
+                    dx.leanMassKg != nil ||
+                    dx.visceralFatRating != nil ||
+                    dx.androidGynoidRatio != nil ||
+                    dx.boneDensityTScore != nil ||
+                    dx.boneDensityZScore != nil ||
+                    (dx.notes?.contains(where: { !$0.isEmpty }) == true)
+                if hasAnyValue {
+                    blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
+                }
             }
         }
 
