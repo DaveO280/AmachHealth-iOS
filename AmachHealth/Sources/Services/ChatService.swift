@@ -80,9 +80,11 @@ final class ChatService: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let intent = ChatIntentClassifier.classify(trimmed)
+        let needsLabs = intent.includesLabData || chatMode == .deep
+        // Load labs before building context blocks so Luma always gets
+        // labs_bloodwork / labs_dexa in `contextBlocks` for this turn.
+        let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
-        let labData = await HealthContextBuilder.buildLabContext()
-        let labDataToUse = (intent.includesLabData || chatMode == .deep) ? labData : nil
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
         let userMsg = ChatMessage(role: .user, content: trimmed)
@@ -139,11 +141,12 @@ final class ChatService: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let intent = ChatIntentClassifier.classify(trimmed)
-        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
-        let labData = await HealthContextBuilder.buildLabContext()
+        let needsLabs = intent.includesLabData || chatMode == .deep
+        let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
         // If user cancelled while we were loading lab context, bail out cleanly.
         guard !Task.isCancelled else { return }
-        let labDataToUse = (intent.includesLabData || chatMode == .deep) ? labData : nil
+        // Build context blocks after lab context is warmed.
+        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
         // 1. Append user message

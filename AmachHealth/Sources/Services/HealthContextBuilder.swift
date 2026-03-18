@@ -40,62 +40,129 @@ struct HealthContextBuilder {
             return LabDataContext(bloodwork: nil, dexa: nil, recentEvents: recentEvents)
         }
 
-        let api = AmachAPIClient.shared
+        // Warm cache (TTL-backed) once per session / when stale.
+        await LabContextService.shared.load(wallet: wallet)
 
-        // Use ensureEncryptionKey so an expired key is refreshed automatically
-        guard let encryptionKey = try? await wallet.ensureEncryptionKey() else {
-            if recentEvents.isEmpty { return nil }
-            return LabDataContext(bloodwork: nil, dexa: nil, recentEvents: recentEvents)
-        }
+        let cached = LabContextService.shared.context
+        let bloodworkSummary = cached.map { labResultSummary(from: $0.bloodwork, formatter: formatter) }
+            .flatMap { $0 }
+        let dexaSummary = cached.map { dexaResultSummary(from: $0.dexa, formatter: formatter) }
+            .flatMap { $0 }
 
-        let walletAddress = encryptionKey.walletAddress
-
-        // listLabRecords handles all stored data types: "bloodwork", "dexa",
-        // "bloodwork-report-fhir", "dexa-report-fhir", plus a catch-all fallback.
-        guard let allLabItems = try? await api.listLabRecords(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey
-        ) else {
-            if recentEvents.isEmpty { return nil }
-            return LabDataContext(bloodwork: nil, dexa: nil, recentEvents: recentEvents)
-        }
-
-        print("🧪 [LabContext] listLabRecords returned \(allLabItems.count) items: \(allLabItems.map { $0.dataType })")
-
-        let bloodworkItems = allLabItems.filter {
-            $0.dataType == "bloodwork" || $0.dataType == "bloodwork-report-fhir"
-        }
-        let dexaItems = allLabItems.filter {
-            $0.dataType == "dexa" || $0.dataType == "dexa-report-fhir"
-        }
-
-        async let bloodworkResult = fetchLatestBloodwork(
-            items: bloodworkItems,
-            api: api,
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            formatter: formatter
-        )
-        async let dexaResult = fetchLatestDexa(
-            items: dexaItems,
-            api: api,
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            formatter: formatter
-        )
-
-        let (bloodwork, dexa) = await (bloodworkResult, dexaResult)
-
-        let bloodworkList = bloodwork.map { [$0] }
-        let dexaList = dexa.map { [$0] }
-
-        let hasData = bloodworkList != nil || dexaList != nil || !recentEvents.isEmpty
+        let hasData = bloodworkSummary != nil || dexaSummary != nil || !recentEvents.isEmpty
         guard hasData else { return nil }
 
         return LabDataContext(
-            bloodwork: bloodworkList,
-            dexa: dexaList,
+            bloodwork: bloodworkSummary.map { [$0] },
+            dexa: dexaSummary.map { [$0] },
             recentEvents: recentEvents.isEmpty ? nil : recentEvents
+        )
+    }
+
+    private static func labResultSummary(
+        from ctx: LabBloodworkContext?,
+        formatter: DateFormatter
+    ) -> LabResultSummary? {
+        guard let ctx else { return nil }
+        guard !ctx.metrics.isEmpty else { return nil }
+
+        // Normalize metric names for keyword matching.
+        func norm(_ s: String) -> String {
+            s.lowercased()
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var usedMetricNames = Set<String>()
+        func matchValue(_ keywords: [String]) -> Double? {
+            for m in ctx.metrics {
+                guard let v = m.value else { continue }
+                let name = norm(m.name)
+                for kw in keywords {
+                    let nkw = norm(kw)
+                    if name == nkw || name.contains(nkw) {
+                        usedMetricNames.insert(name)
+                        return v
+                    }
+                }
+            }
+            return nil
+        }
+
+        func notesString(_ notes: [String]?) -> String? {
+            guard let notes else { return nil }
+            let joined = notes.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: "; ")
+            return joined.isEmpty ? nil : joined
+        }
+
+        // Named fields (keep ordering stable by matching in metric-list order)
+        let glucose = matchValue(["glucose", "fasting glucose", "blood glucose"])
+        let hba1c = matchValue(["hba1c", "hemoglobin a1c", "a1c"])
+        let totalCholesterol = matchValue(["total cholesterol", "cholesterol"])
+        let ldl = matchValue(["ldl-c", "ldl cholesterol", "ldl"])
+        let hdl = matchValue(["hdl-c", "hdl cholesterol", "hdl"])
+        let triglycerides = matchValue(["triglycerides", "triglyceride", "triglycerides"])
+        let tsh = matchValue(["tsh", "thyroid stimulating hormone"])
+        let vitaminD = matchValue(["vitamin d", "25-oh vitamin d", "25-hydroxyvitamin d", "vitamin_d"])
+        let ferritin = matchValue(["ferritin"])
+
+        // Additional metrics: everything numeric we didn't map into named fields.
+        var additional: [String: Double] = [:]
+        for m in ctx.metrics {
+            guard let v = m.value else { continue }
+            let name = norm(m.name)
+            guard !usedMetricNames.contains(name) else { continue }
+            additional[name] = v
+        }
+        let limitedAdditional = additional
+            .sorted { $0.key < $1.key }
+            .prefix(8)
+            .reduce(into: [String: Double]()) { $0[$1.key] = $1.value }
+        let additionalMetrics = limitedAdditional.isEmpty ? nil : limitedAdditional
+
+        let dateStr = ctx.reportDate ?? formatter.string(from: Date())
+
+        return LabResultSummary(
+            date: dateStr,
+            glucose: glucose,
+            hba1c: hba1c,
+            totalCholesterol: totalCholesterol,
+            ldl: ldl,
+            hdl: hdl,
+            triglycerides: triglycerides,
+            tsh: tsh,
+            vitaminD: vitaminD,
+            ferritin: ferritin,
+            notes: notesString(ctx.notes),
+            additionalMetrics: additionalMetrics
+        )
+    }
+
+    private static func dexaResultSummary(
+        from ctx: LabDexaContext?,
+        formatter: DateFormatter
+    ) -> DexaResultSummary? {
+        guard let ctx else { return nil }
+
+        func notesString(_ notes: [String]?) -> String? {
+            guard let notes else { return nil }
+            let joined = notes.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: "; ")
+            return joined.isEmpty ? nil : joined
+        }
+
+        return DexaResultSummary(
+            date: ctx.scanDate ?? formatter.string(from: Date()),
+            bodyFatPercent: ctx.bodyFatPercent,
+            leanMassKg: ctx.leanMassKg,
+            boneDensityTScore: ctx.boneDensityTScore,
+            visceralFat: ctx.visceralFatRating,
+            androidGynoidRatio: ctx.androidGynoidRatio,
+            boneDensityZScore: ctx.boneDensityZScore,
+            notes: notesString(ctx.notes)
         )
     }
 
