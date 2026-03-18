@@ -20,18 +20,22 @@ final class LabContextService: ObservableObject {
     @Published private(set) var context: LabResultsContext? = nil
     @Published private(set) var isLoading = false
 
-    private var hasAttempted = false
+    /// Highest `uploadedAt` watermark we used when constructing the cached `context`.
+    /// If Storj reports no newer lab uploads than this watermark, we skip full
+    /// retrieval/decoding and reuse the existing in-memory context.
+    private var lastLabUploadedAt: TimeInterval?
     private let api = AmachAPIClient.shared
 
     private init() {}
 
     // MARK: - Public API
 
-    /// Load lab results for Luma context. Safe to call multiple times — only
-    /// fetches once per app session. Pass force: true to bypass the cache.
+    /// Load lab results for Luma context.
+    /// Safe to call multiple times; if Storj listing shows no newer labs than
+    /// our last watermark, we reuse the existing in-memory `context`.
+    /// Pass `force: true` to bypass the watermark check and fully refresh.
     func load(wallet: WalletService, force: Bool = false) async {
         guard !isLoading else { return }
-        guard force || !hasAttempted else { return }
         guard wallet.isConnected else {
             #if DEBUG
             print("🧪 LabContextService: wallet not connected — skipping lab fetch")
@@ -40,8 +44,9 @@ final class LabContextService: ObservableObject {
         }
 
         isLoading = true
-        hasAttempted = true
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+        }
 
         do {
             let key = try await wallet.ensureEncryptionKey()
@@ -64,6 +69,22 @@ final class LabContextService: ObservableObject {
             print("🧪 LabContextService: bloodwork candidate = \(latestBloodwork?.uri ?? "none"), dexa = \(latestDexa?.uri ?? "none")")
             #endif
 
+            // If we already have cached context and Storj reports no newer lab
+            // uploads than our last watermark, reuse the cache.
+            let candidateUploadedAt = [latestBloodwork?.uploadedAt, latestDexa?.uploadedAt]
+                .compactMap { $0 }
+                .max()
+            if !force,
+               context != nil,
+               let watermark = lastLabUploadedAt {
+                if candidateUploadedAt == nil {
+                    return
+                }
+                if candidateUploadedAt! <= watermark {
+                    return
+                }
+            }
+
             async let bloodworkCtx = fetchBloodwork(item: latestBloodwork, key: key)
             async let dexaCtx      = fetchDexa(item: latestDexa, key: key)
 
@@ -76,6 +97,7 @@ final class LabContextService: ObservableObject {
             // Only set context if we actually got something
             if bw != nil || dx != nil {
                 context = LabResultsContext(bloodwork: bw, dexa: dx)
+                lastLabUploadedAt = candidateUploadedAt
                 #if DEBUG
                 print("🧪 LabContextService: context set ✅")
                 #endif
