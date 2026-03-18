@@ -933,7 +933,8 @@ struct ResolvedProfileMetadata: Decodable {
 }
 
 struct RemoteBloodworkReport: Decodable {
-    let type: String
+    // Backend payload sometimes omits `type`; Luma lab extraction does not rely on it.
+    let type: String?
     let source: String?
     let reportDate: String?
     let laboratory: String?
@@ -954,7 +955,8 @@ struct RemoteBloodworkMetric: Decodable, Identifiable {
 }
 
 struct RemoteDexaReport: Decodable {
-    let type: String
+    // Backend payload sometimes omits `type`; Luma lab extraction does not rely on it.
+    let type: String?
     let source: String?
     let scanDate: String?
     let totalBodyFatPercent: Double?
