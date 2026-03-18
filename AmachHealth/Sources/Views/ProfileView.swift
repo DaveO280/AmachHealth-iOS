@@ -46,7 +46,6 @@ struct ProfileView: View {
                     connectedSourcesSection
                     dataQualitySection
                     attestationsSection
-                    proofsSection
                     lumaSection
                     privacySection
                     aboutSection
@@ -343,49 +342,6 @@ struct ProfileView: View {
         }
     }
 
-    // MARK: - Shareable Proofs
-
-    private var proofsSection: some View {
-        Section {
-            NavigationLink {
-                ProofGeneratorView()
-            } label: {
-                HStack(spacing: AmachSpacing.md) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.amachPrimary.opacity(0.12))
-                            .frame(width: 32, height: 32)
-                        Image(systemName: "seal.checkmark.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color.amachPrimaryBright)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Generate health proofs")
-                            .font(AmachType.caption)
-                            .foregroundStyle(Color.amachTextPrimary)
-                        Text("Create signed, on-chain anchored claims from your health data.")
-                            .font(AmachType.tiny)
-                            .foregroundStyle(Color.amachTextSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(Color.amachTextSecondary)
-                }
-            }
-            .listRowBackground(Color.amachSurface)
-        } header: {
-            sectionHeader("Shareable Proofs")
-        } footer: {
-            Text("Proofs reveal only the claim, never raw Apple Health, bloodwork, or DEXA data.")
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachTextSecondary)
-                .lineSpacing(2)
-        }
-    }
-
     private func sourceRow(
         icon: String,
         iconColor: Color,
@@ -597,9 +553,6 @@ struct ProfileView: View {
                             .foregroundStyle(Color.amachTextSecondary)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.amachTextSecondary)
                 }
                 .listRowBackground(Color.amachSurface)
             }
