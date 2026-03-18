@@ -21,7 +21,9 @@ final class AmachAPIClient {
         self.baseURL = URL(string: baseURLString)!
 
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 120   // Venice AI can take 60-90s with health context
+        // Venice AI can take a while with dense health context; keep this higher
+        // than the default so we don't fail user-facing chat streaming early.
+        config.timeoutIntervalForRequest = 180
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
     }
@@ -657,6 +659,7 @@ final class AmachAPIClient {
         print("📡 [API] POST \(url.absoluteString) (\(request.httpBody?.count ?? 0) bytes)")
         #endif
 
+        let startTime = Date()
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -665,6 +668,7 @@ final class AmachAPIClient {
 
         #if DEBUG
         print("📡 [API] ← \(httpResponse.statusCode) (\(data.count) bytes)")
+        print("📡 [API] duration: \(Int(Date().timeIntervalSince(startTime) * 1000))ms")
         #endif
 
         guard (200...299).contains(httpResponse.statusCode) else {

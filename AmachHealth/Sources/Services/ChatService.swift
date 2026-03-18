@@ -184,6 +184,8 @@ final class ChatService: ObservableObject {
         let screen = LumaContextService.shared.currentScreen
         let metric = LumaContextService.shared.currentMetric
 
+        var didRetryAfterTimeout = false
+
         do {
             let stream = api.streamLumaChat(
                 trimmed,
@@ -214,8 +216,57 @@ final class ChatService: ObservableObject {
             if Task.isCancelled || (error as? URLError)?.code == .cancelled {
                 self.error = nil   // cancel is intentional — no error banner
             } else if (error as? URLError)?.code == .timedOut {
+                #if DEBUG
+                print("⚠️ Luma request timed out; retrying once with reduced lab payload.")
+                #endif
+                if !didRetryAfterTimeout, needsLabs, labDataToUse != nil {
+                    didRetryAfterTimeout = true
+
+                    // Clear placeholder (if it exists) and try again with labData removed.
+                    // Keep the same history window so prompt size doesn't increase.
+                    if currentSession.messages.indices.contains(assistantIdx) {
+                        currentSession.messages[assistantIdx].content = ""
+                    } else {
+                        // Placeholder got removed above; recreate it so UI stays stable.
+                        currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
+                    }
+
+                    let reducedContext = enrichContext(baseContext, labData: nil, intent: intent, mode: chatMode)
+                    let reducedHistoryMessages = currentSession.messages
+                        .dropLast(2)
+                        .suffix(dynamicLimit)
+                        .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
+
+                    do {
+                        let stream = api.streamLumaChat(
+                            trimmed,
+                            history: reducedHistoryMessages,
+                            context: reducedContext,
+                            screen: screen,
+                            metric: metric,
+                            mode: chatMode
+                        )
+                        for try await token in stream {
+                            // Note: assistantIdx may be stale if we recreated placeholder above.
+                            // In practice this happens only if the placeholder was removed.
+                            if let idx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) {
+                                currentSession.messages[idx].content += token
+                            }
+                            currentSession.updatedAt = .now
+                        }
+                        lastFailedMessage = nil
+                        saveToDisk()
+                        updateRollingSummaryIfNeeded()
+                        isSending = false
+                        sendingTask = nil
+                        return
+                    } catch {
+                        // Fall through to user-facing timeout error below.
+                    }
+                }
+
                 self.lastFailedMessage = trimmed
-                self.error = "Request timed out. Check your connection and try again."
+                self.error = "Request timed out. Please try again."
             } else {
                 self.lastFailedMessage = trimmed
                 self.error = error.localizedDescription
