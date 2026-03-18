@@ -185,6 +185,7 @@ final class ChatService: ObservableObject {
         let metric = LumaContextService.shared.currentMetric
 
         var didRetryAfterTimeout = false
+        var didRetryAfterEmptyContent = false
 
         do {
             let stream = api.streamLumaChat(
@@ -215,6 +216,59 @@ final class ChatService: ObservableObject {
             // Show a user-friendly message for cancellation vs real errors
             if Task.isCancelled || (error as? URLError)?.code == .cancelled {
                 self.error = nil   // cancel is intentional — no error banner
+            } else if
+                !didRetryAfterEmptyContent,
+                let apiErr = error as? APIError,
+                case .requestFailed(let message) = apiErr,
+                message.contains("Luma returned an empty response"),
+                // Only retry if we actually had a lab payload to drop.
+                needsLabs, labDataToUse != nil
+            {
+                didRetryAfterEmptyContent = true
+
+                // Recreate placeholder so the UI has something to update.
+                if currentSession.messages.indices.contains(assistantIdx) {
+                    currentSession.messages[assistantIdx].content = ""
+                } else {
+                    currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
+                }
+                let assistantRetryIdx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) ?? assistantIdx
+
+                let reducedContext = enrichContext(baseContext, labData: nil, intent: intent, mode: chatMode)
+                let reducedDynamicLimit = historyLimit(for: reducedContext, hasLabData: false)
+                let reducedHistoryMessages = currentSession.messages
+                    .dropLast(2)
+                    .suffix(reducedDynamicLimit)
+                    .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
+
+                #if DEBUG
+                print("⚠️ Luma returned empty content; retrying once with labData removed.")
+                #endif
+
+                do {
+                    let stream = api.streamLumaChat(
+                        trimmed,
+                        history: reducedHistoryMessages,
+                        context: reducedContext,
+                        screen: screen,
+                        metric: metric,
+                        mode: chatMode
+                    )
+
+                    for try await token in stream {
+                        currentSession.messages[assistantRetryIdx].content += token
+                        currentSession.updatedAt = .now
+                    }
+
+                    lastFailedMessage = nil
+                    saveToDisk()
+                    updateRollingSummaryIfNeeded()
+                    isSending = false
+                    sendingTask = nil
+                    return
+                } catch {
+                    // Fall through to user-facing message below.
+                }
             } else if (error as? URLError)?.code == .timedOut {
                 #if DEBUG
                 print("⚠️ Luma request timed out; retrying once with reduced lab payload.")
