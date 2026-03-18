@@ -567,6 +567,7 @@ struct DexaResultSummary: Encodable {
     let bodyFatPercent: Double?
     let leanMassKg: Double?
     let boneDensityTScore: Double?
+    let boneDensityZScore: Double?
     let visceralFat: Double?
     let androidGynoidRatio: Double?
     let notes: String?

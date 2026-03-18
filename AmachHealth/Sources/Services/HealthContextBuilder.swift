@@ -159,9 +159,9 @@ struct HealthContextBuilder {
             bodyFatPercent: ctx.bodyFatPercent,
             leanMassKg: ctx.leanMassKg,
             boneDensityTScore: ctx.boneDensityTScore,
+            boneDensityZScore: ctx.boneDensityZScore,
             visceralFat: ctx.visceralFatRating,
             androidGynoidRatio: ctx.androidGynoidRatio,
-            boneDensityZScore: ctx.boneDensityZScore,
             notes: notesString(ctx.notes)
         )
     }
@@ -278,6 +278,7 @@ struct HealthContextBuilder {
             bodyFatPercent: v["bodyFatPercent"] ?? v["body_fat"],
             leanMassKg: v["leanMass"] ?? v["leanMassKg"],
             boneDensityTScore: v["boneDensityTScore"] ?? v["tScore"],
+            boneDensityZScore: v["boneDensityZScore"] ?? v["zScore"],
             visceralFat: v["visceralFat"],
             androidGynoidRatio: v["androidGynoidRatio"],
             notes: record.notes
@@ -337,6 +338,7 @@ struct HealthContextBuilder {
             bodyFatPercent: report.totalBodyFatPercent,
             leanMassKg: report.totalLeanMassKg,
             boneDensityTScore: report.boneDensityTotal?.tScore,
+            boneDensityZScore: report.boneDensityTotal?.zScore,
             visceralFat: report.visceralFatAreaCm2 ?? report.visceralFatRating,
             androidGynoidRatio: report.androidGynoidRatio,
             notes: nil  // omit notes — PDF filenames add bulk without clinical value
