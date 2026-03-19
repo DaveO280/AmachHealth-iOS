@@ -218,11 +218,12 @@ final class ChatService: ObservableObject {
                 self.error = nil   // cancel is intentional — no error banner
             } else if
                 !didRetryAfterEmptyContent,
-                let apiErr = error as? APIError,
-                case .requestFailed(let message) = apiErr,
-                message.contains("Luma returned an empty response"),
-                // Only retry if we actually had a lab payload to drop.
-                needsLabs, labDataToUse != nil
+                // The streaming wrapper throws an APIError when Luma returns
+                // an empty response. Be defensive about error type casting.
+                (error.localizedDescription + " " + String(describing: error))
+                    .contains("Luma returned an empty response"),
+                // Only retry if there's a reasonable chance dropping labData helps.
+                needsLabs || finalContext?.labData != nil
             {
                 didRetryAfterEmptyContent = true
 
