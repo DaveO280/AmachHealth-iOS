@@ -471,25 +471,15 @@ struct HealthContextBuilder {
         // 3. labs_bloodwork + labs_dexa — separate blocks for targeted queries
         if let labs = LabContextService.shared.context {
             if let bw = labs.bloodwork {
-                let hasAnyValue =
-                    bw.metrics.contains(where: { $0.value != nil }) ||
-                    (bw.notes?.contains(where: { !$0.isEmpty }) == true)
-                if hasAnyValue {
-                    blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
-                }
+                // Always include the block if we decoded a bloodwork object.
+                // Even if specific metric values are nil, the backend can still
+                // use the lab structure/metadata and avoids "empty response"
+                // failures.
+                blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
             }
             if let dx = labs.dexa {
-                let hasAnyValue =
-                    dx.bodyFatPercent != nil ||
-                    dx.leanMassKg != nil ||
-                    dx.visceralFatRating != nil ||
-                    dx.androidGynoidRatio != nil ||
-                    dx.boneDensityTScore != nil ||
-                    dx.boneDensityZScore != nil ||
-                    (dx.notes?.contains(where: { !$0.isEmpty }) == true)
-                if hasAnyValue {
-                    blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
-                }
+                // Same rationale as bloodwork: include even if values are nil.
+                blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
             }
         }
 
