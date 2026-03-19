@@ -175,6 +175,18 @@ final class ChatService: ObservableObject {
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
+        #if DEBUG
+        let blockTypes = finalContext?.contextBlocks?.map { $0.type }.joined(separator: ", ") ?? "nil"
+        let bwCount = labDataToUse?.bloodwork?.count ?? 0
+        let dxCount = labDataToUse?.dexa?.count ?? 0
+        let recentCount = labDataToUse?.recentEvents?.count ?? 0
+        print("""
+        🧩 [Luma] intent=\(intent) mode=\(chatMode) includesLabData=\(intent.includesLabData)
+        🧩 [Luma] contextBlocks=\(blockTypes)
+        🧩 [Luma] labData=bw:\(bwCount) dexa:\(dxCount) recentEvents:\(recentCount)
+        """)
+        #endif
+
         let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
         let historyMessages = currentSession.messages
             .dropLast(2)
