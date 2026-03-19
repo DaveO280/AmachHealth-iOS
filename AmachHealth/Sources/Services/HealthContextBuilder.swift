@@ -147,15 +147,6 @@ struct HealthContextBuilder {
         formatter: DateFormatter
     ) -> DexaResultSummary? {
         guard let ctx else { return nil }
-        let hasAnyValue =
-            ctx.bodyFatPercent != nil ||
-            ctx.leanMassKg != nil ||
-            ctx.boneDensityTScore != nil ||
-            ctx.boneDensityZScore != nil ||
-            ctx.visceralFatRating != nil ||
-            ctx.androidGynoidRatio != nil
-        let hasAnyNotes = ctx.notes?.contains(where: { !$0.isEmpty }) == true
-        guard hasAnyValue || hasAnyNotes else { return nil }
 
         func notesString(_ notes: [String]?) -> String? {
             guard let notes else { return nil }
