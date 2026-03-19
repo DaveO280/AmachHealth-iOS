@@ -381,6 +381,14 @@ final class AmachAPIClient {
         let response: AIChatResponse = try await post(path: "/api/ai/chat", body: request)
         #if DEBUG
         print("🤖 [Luma] Response: \(response.content.prefix(120))… (\(response.content.count) chars)")
+        if response.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            if let reqBody = try? encoder.encode(request),
+               let reqStr = String(data: reqBody, encoding: .utf8) {
+                print("🔍 [Luma] EMPTY RESPONSE — dumping request payload:\n\(reqStr.prefix(3000))")
+            }
+        }
         #endif
         return response
     }

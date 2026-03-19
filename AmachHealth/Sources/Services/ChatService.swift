@@ -180,10 +180,15 @@ final class ChatService: ObservableObject {
         let bwCount = labDataToUse?.bloodwork?.count ?? 0
         let dxCount = labDataToUse?.dexa?.count ?? 0
         let recentCount = labDataToUse?.recentEvents?.count ?? 0
+        let hasMem = finalContext?.memory != nil
+        let memGoals = finalContext?.memory?.activeGoals.count ?? 0
+        let memNotes = finalContext?.memory?.recentSessionNotes.count ?? 0
         print("""
         🧩 [Luma] intent=\(intent) mode=\(chatMode) includesLabData=\(intent.includesLabData)
         🧩 [Luma] contextBlocks=\(blockTypes)
         🧩 [Luma] labData=bw:\(bwCount) dexa:\(dxCount) recentEvents:\(recentCount)
+        🧩 [Luma] memory=\(hasMem) goals:\(memGoals) notes:\(memNotes)
+        🧩 [Luma] history=\(historyMessages.count) msgs, rollingSummary=\(currentSession.rollingSummary != nil)
         """)
         #endif
 
