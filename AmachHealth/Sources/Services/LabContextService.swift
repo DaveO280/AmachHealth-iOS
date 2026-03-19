@@ -120,11 +120,13 @@ final class LabContextService: ObservableObject {
         guard let item else { return nil }
         do {
             if item.dataType == "bloodwork-report-fhir" {
-                let report = try await api.retrieveStoredData(
+                // Use report/retrieve — the backend normalizes the stored FHIR
+                // blob into the RemoteBloodworkReport shape. storage/retrieve
+                // returns the raw blob whose keys don't match our struct.
+                let report = try await api.retrieveBloodworkReport(
                     storjUri: item.uri,
                     walletAddress: key.walletAddress,
-                    encryptionKey: key,
-                    as: RemoteBloodworkReport.self
+                    encryptionKey: key
                 )
                 let ctx = convertBloodworkReport(report)
                 #if DEBUG
@@ -156,11 +158,13 @@ final class LabContextService: ObservableObject {
         guard let item else { return nil }
         do {
             if item.dataType == "dexa-report-fhir" {
-                let report = try await api.retrieveStoredData(
+                // Use report/retrieve — the backend normalizes the stored FHIR
+                // blob into the RemoteDexaReport shape. storage/retrieve
+                // returns the raw blob whose keys don't match our struct.
+                let report = try await api.retrieveDexaReport(
                     storjUri: item.uri,
                     walletAddress: key.walletAddress,
-                    encryptionKey: key,
-                    as: RemoteDexaReport.self
+                    encryptionKey: key
                 )
                 #if DEBUG
                 print("🧪 LabContextService: FHIR dexa → bodyFat=\(report.totalBodyFatPercent as Any)")
