@@ -175,6 +175,12 @@ final class ChatService: ObservableObject {
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
 
+        let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
+        let historyMessages = currentSession.messages
+            .dropLast(2)
+            .suffix(dynamicLimit)
+            .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
+
         #if DEBUG
         let blockTypes = finalContext?.contextBlocks?.map { $0.type }.joined(separator: ", ") ?? "nil"
         let bwCount = labDataToUse?.bloodwork?.count ?? 0
@@ -191,12 +197,6 @@ final class ChatService: ObservableObject {
         🧩 [Luma] history=\(historyMessages.count) msgs, rollingSummary=\(currentSession.rollingSummary != nil)
         """)
         #endif
-
-        let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
-        let historyMessages = currentSession.messages
-            .dropLast(2)
-            .suffix(dynamicLimit)
-            .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
         let screen = LumaContextService.shared.currentScreen
         let metric = LumaContextService.shared.currentMetric
