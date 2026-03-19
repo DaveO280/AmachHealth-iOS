@@ -230,12 +230,8 @@ final class ChatService: ObservableObject {
                 self.error = nil   // cancel is intentional — no error banner
             } else if
                 !didRetryAfterEmptyContent,
-                // The streaming wrapper throws an APIError when Luma returns
-                // an empty response. Be defensive about error type casting.
                 (error.localizedDescription + " " + String(describing: error))
-                    .contains("Luma returned an empty response"),
-                // Only retry if there's a reasonable chance dropping labData helps.
-                needsLabs || finalContext?.labData != nil
+                    .contains("Luma returned an empty response")
             {
                 didRetryAfterEmptyContent = true
 
@@ -247,22 +243,15 @@ final class ChatService: ObservableObject {
                 }
                 let assistantRetryIdx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) ?? assistantIdx
 
-                let reducedContext = enrichContext(baseContext, labData: nil, intent: intent, mode: chatMode)
-                let reducedDynamicLimit = historyLimit(for: reducedContext, hasLabData: false)
-                let reducedHistoryMessages = currentSession.messages
-                    .dropLast(2)
-                    .suffix(reducedDynamicLimit)
-                    .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
-
                 #if DEBUG
-                print("⚠️ Luma returned empty content; retrying once with labData removed.")
+                print("⚠️ Luma returned empty content; retrying once.")
                 #endif
 
                 do {
                     let stream = api.streamLumaChat(
                         trimmed,
-                        history: reducedHistoryMessages,
-                        context: reducedContext,
+                        history: historyMessages,
+                        context: finalContext,
                         screen: screen,
                         metric: metric,
                         mode: chatMode
