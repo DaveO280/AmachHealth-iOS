@@ -225,14 +225,25 @@ final class ChatService: ObservableObject {
 
             updateRollingSummaryIfNeeded()
         } catch {
-            // If nothing was streamed, remove the empty placeholder so the
-            // UI doesn't show a blank Luma bubble
-            if currentSession.messages[assistantIdx].content.isEmpty {
-                currentSession.messages.remove(at: assistantIdx)
+            // Clean up this turn's messages so orphaned user messages
+            // don't accumulate and corrupt the history for future sends.
+            func cleanupFailedTurn() {
+                // Remove empty assistant placeholder
+                if currentSession.messages.indices.contains(assistantIdx),
+                   currentSession.messages[assistantIdx].role == .assistant,
+                   currentSession.messages[assistantIdx].content.isEmpty {
+                    currentSession.messages.remove(at: assistantIdx)
+                }
+                // Remove the user message we appended at the start of this turn
+                if let lastUserIdx = currentSession.messages.lastIndex(where: { $0.role == .user && $0.content == trimmed }) {
+                    currentSession.messages.remove(at: lastUserIdx)
+                }
+                saveToDisk()
             }
-            // Show a user-friendly message for cancellation vs real errors
+
             if Task.isCancelled || (error as? URLError)?.code == .cancelled {
-                self.error = nil   // cancel is intentional — no error banner
+                cleanupFailedTurn()
+                self.error = nil
             } else if
                 !didRetryAfterEmptyContent,
                 (error.localizedDescription + " " + String(describing: error))
@@ -240,17 +251,18 @@ final class ChatService: ObservableObject {
             {
                 didRetryAfterEmptyContent = true
 
-                // Recreate placeholder so the UI has something to update.
-                if currentSession.messages.indices.contains(assistantIdx) {
+                #if DEBUG
+                print("⚠️ Luma returned empty content; retrying once.")
+                #endif
+
+                // Reset the assistant placeholder for the retry
+                if currentSession.messages.indices.contains(assistantIdx),
+                   currentSession.messages[assistantIdx].role == .assistant {
                     currentSession.messages[assistantIdx].content = ""
                 } else {
                     currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
                 }
-                let assistantRetryIdx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) ?? assistantIdx
-
-                #if DEBUG
-                print("⚠️ Luma returned empty content; retrying once.")
-                #endif
+                let retryIdx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) ?? assistantIdx
 
                 do {
                     let stream = api.streamLumaChat(
@@ -263,7 +275,7 @@ final class ChatService: ObservableObject {
                     )
 
                     for try await token in stream {
-                        currentSession.messages[assistantRetryIdx].content += token
+                        currentSession.messages[retryIdx].content += token
                         currentSession.updatedAt = .now
                     }
 
@@ -274,61 +286,21 @@ final class ChatService: ObservableObject {
                     sendingTask = nil
                     return
                 } catch {
-                    // Fall through to user-facing message below.
-                }
-            } else if (error as? URLError)?.code == .timedOut {
-                #if DEBUG
-                print("⚠️ Luma request timed out; retrying once with reduced lab payload.")
-                #endif
-                if !didRetryAfterTimeout, needsLabs, labDataToUse != nil {
-                    didRetryAfterTimeout = true
-
-                    // Clear placeholder (if it exists) and try again with labData removed.
-                    // Keep the same history window so prompt size doesn't increase.
-                    if currentSession.messages.indices.contains(assistantIdx) {
-                        currentSession.messages[assistantIdx].content = ""
-                    } else {
-                        // Placeholder got removed above; recreate it so UI stays stable.
-                        currentSession.messages.append(ChatMessage(role: .assistant, content: ""))
-                    }
-
-                    let reducedContext = enrichContext(baseContext, labData: nil, intent: intent, mode: chatMode)
-                    let reducedHistoryMessages = currentSession.messages
-                        .dropLast(2)
-                        .suffix(dynamicLimit)
-                        .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
-
-                    do {
-                        let stream = api.streamLumaChat(
-                            trimmed,
-                            history: reducedHistoryMessages,
-                            context: reducedContext,
-                            screen: screen,
-                            metric: metric,
-                            mode: chatMode
-                        )
-                        for try await token in stream {
-                            // Note: assistantIdx may be stale if we recreated placeholder above.
-                            // In practice this happens only if the placeholder was removed.
-                            if let idx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) {
-                                currentSession.messages[idx].content += token
-                            }
-                            currentSession.updatedAt = .now
-                        }
-                        lastFailedMessage = nil
-                        saveToDisk()
-                        updateRollingSummaryIfNeeded()
-                        isSending = false
-                        sendingTask = nil
-                        return
-                    } catch {
-                        // Fall through to user-facing timeout error below.
-                    }
+                    // Retry also failed — clean up and show error
+                    cleanupFailedTurn()
                 }
 
                 self.lastFailedMessage = trimmed
+                self.error = "Luma couldn't respond. Please try again."
+            } else if (error as? URLError)?.code == .timedOut {
+                #if DEBUG
+                print("⚠️ Luma request timed out.")
+                #endif
+                cleanupFailedTurn()
+                self.lastFailedMessage = trimmed
                 self.error = "Request timed out. Please try again."
             } else {
+                cleanupFailedTurn()
                 self.lastFailedMessage = trimmed
                 self.error = error.localizedDescription
             }
