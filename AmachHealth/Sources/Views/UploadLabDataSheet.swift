@@ -181,6 +181,7 @@ struct UploadLabDataSheet: View {
                 encryptionKey: encryptionKey
             )
             await onSaved()
+            LabContextService.shared.invalidate()
             AmachHaptics.success()
             dismiss()
         } catch {
