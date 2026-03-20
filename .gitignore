@@ -21,6 +21,11 @@ build/
 # Default Xcode template file (not part of the app)
 **/Item.swift
 
+# Test infrastructure — never commit credentials or runtime artifacts
+Tests/TestCredentials.json
+Tests/Logs/
+Tests/Screenshots/
+
 # macOS
 .DS_Store
 .AppleDouble
