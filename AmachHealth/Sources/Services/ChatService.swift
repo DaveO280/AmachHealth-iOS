@@ -26,8 +26,10 @@ final class ChatService: ObservableObject {
     /// The text of the last message that failed, available for retry.
     @Published var lastFailedMessage: String?
 
-    private let api = AmachAPIClient.shared
-    private let wallet = WalletService.shared
+    // Allow protocol types so tests can inject mocks.
+    // Production code always uses the shared singletons via private init().
+    private let api: any AmachAPIClientProtocol
+    private let wallet: any WalletServiceProtocol
 
     private var localStorageURL: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -36,8 +38,20 @@ final class ChatService: ObservableObject {
     }
 
     private init() {
+        self.api = AmachAPIClient.shared
+        self.wallet = WalletService.shared
         loadFromDisk()
     }
+
+    // MARK: - Test-only initializer (DEBUG builds only)
+    // Injects mock dependencies; never called from production code.
+    #if DEBUG
+    init(injectedAPI: any AmachAPIClientProtocol, injectedWallet: any WalletServiceProtocol) {
+        self.api = injectedAPI
+        self.wallet = injectedWallet
+        // Skip loadFromDisk() for isolated test instances
+    }
+    #endif
 
     // MARK: - Cancel
 
@@ -799,6 +813,13 @@ final class ChatService: ObservableObject {
     // Raw session sync is now archive-only (not every 10 messages).
     // The distilled ConversationMemoryStore syncs after fact extraction,
     // which is the high-value, low-size data that matters cross-platform.
+
+    /// Test-accessible wrapper. Exposes syncSessionToStorj for ChatServiceIntegrationTests.
+    #if DEBUG
+    func syncCurrentSessionToStorj() async {
+        await syncSessionToStorj(currentSession)
+    }
+    #endif
 
     private func syncSessionToStorj(_ session: ChatSession) async {
         guard !session.messages.isEmpty else { return }

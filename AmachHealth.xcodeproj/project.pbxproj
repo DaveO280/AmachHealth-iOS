@@ -66,6 +66,9 @@
 		DD0000000000000000000026 /* ProfilePreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000036 /* ProfilePreviews.swift */; };
 		DD0000000000000000000027 /* ChatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000037 /* ChatPreviews.swift */; };
 		DD0000000000000000000028 /* OnboardingPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD0000000000000000000038 /* OnboardingPreviews.swift */; };
+		EE0000000000000000000011 /* AmachAPIClientProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000001 /* AmachAPIClientProtocol.swift */; };
+		EE0000000000000000000012 /* WalletServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000002 /* WalletServiceProtocol.swift */; };
+		EE0000000000000000000013 /* ChatService+Testing.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000003 /* ChatService+Testing.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +76,9 @@
 		AA0000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = AmachHealth/Resources/Info.plist; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000003 /* AmachHealth.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = AmachHealth.entitlements; path = AmachHealth/Resources/AmachHealth.entitlements; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000101 /* AmachAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachAPIClient.swift; path = AmachHealth/Sources/API/AmachAPIClient.swift; sourceTree = SOURCE_ROOT; };
+		EE0000000000000000000001 /* AmachAPIClientProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachAPIClientProtocol.swift; path = AmachHealth/Sources/API/AmachAPIClientProtocol.swift; sourceTree = SOURCE_ROOT; };
+		EE0000000000000000000002 /* WalletServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletServiceProtocol.swift; path = AmachHealth/Sources/Services/WalletServiceProtocol.swift; sourceTree = SOURCE_ROOT; };
+		EE0000000000000000000003 /* ChatService+Testing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ChatService+Testing.swift"; path = "AmachHealth/Sources/Services/ChatService+Testing.swift"; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000102 /* AmachHealthApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachHealthApp.swift; path = AmachHealth/Sources/App/AmachHealthApp.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000103 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppState.swift; path = AmachHealth/Sources/App/AppState.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000104 /* BrandComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrandComponents.swift; path = AmachHealth/Sources/Components/BrandComponents.swift; sourceTree = SOURCE_ROOT; };
@@ -188,6 +194,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000101 /* AmachAPIClient.swift */,
+				EE0000000000000000000001 /* AmachAPIClientProtocol.swift */,
 			);
 			name = API;
 			sourceTree = "<group>";
@@ -260,6 +267,7 @@
 			children = (
 				AA0000000000000000000112 /* AnomalyDetector.swift */,
 				AA0000000000000000000113 /* ChatService.swift */,
+				EE0000000000000000000003 /* ChatService+Testing.swift */,
 				AA000000000000000000012C /* ChatIntentClassifier.swift */,
 				AA0000000000000000000114 /* DashboardService.swift */,
 				CC0000000000000000000001 /* LabContextService.swift */,
@@ -271,6 +279,7 @@
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
 				AA0000000000000000000127 /* TimelineService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
+				EE0000000000000000000002 /* WalletServiceProtocol.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -383,6 +392,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000201 /* AmachAPIClient.swift in Sources */,
+				EE0000000000000000000011 /* AmachAPIClientProtocol.swift in Sources */,
+				EE0000000000000000000012 /* WalletServiceProtocol.swift in Sources */,
+				EE0000000000000000000013 /* ChatService+Testing.swift in Sources */,
 				AA0000000000000000000202 /* AmachHealthApp.swift in Sources */,
 				AA0000000000000000000203 /* AppState.swift in Sources */,
 				AA0000000000000000000204 /* BrandComponents.swift in Sources */,
