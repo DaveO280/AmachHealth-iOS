@@ -375,8 +375,7 @@ final class AmachAPIClient {
             message: message,
             context: context,
             history: history,
-            options: AIChatOptions(mode: mode.rawValue),
-            labData: context?.labData
+            options: AIChatOptions(mode: mode.rawValue)
         )
         let response: AIChatResponse = try await post(path: "/api/ai/chat", body: request)
         #if DEBUG

@@ -104,22 +104,26 @@ struct AIChatRequest: Encodable {
     let context: AIChatContext?
     let history: [AIChatHistoryMessage]
     let options: AIChatOptions?
-    // Also sent top-level so the backend can read it without digging into context
-    let labData: LabDataContext?
 }
 
 struct AIChatContext: Encodable {
+    /// Used internally by HealthContextBuilder to format the metrics contextBlock.
+    /// Not sent to the backend — contextBlocks carries the formatted text.
     let metrics: AIChatMetrics?
     let dateRange: AIChatDateRange?
-    // Populated only for Luma-initiated proactive conversations
     let proactive: ProactiveInsightContext?
     let userAddress: String?
-    let encryptionKey: WalletEncryptionKey?
     let memory: AIChatMemoryCapsule?
-    /// Lab results (bloodwork, DEXA) and recent timeline events for Luma visibility
+    /// Used internally; labs flow to the backend via contextBlocks only.
     let labData: LabDataContext?
-    /// Optional pre-formatted blocks (hr_zones, workouts, anomalies) for intent-aware context.
     let contextBlocks: [ContextBlock]?
+
+    // Backend only reads contextBlocks, dateRange, and memory.
+    // metrics, labData, and encryptionKey are internal-only and excluded
+    // from the wire format to reduce payload size.
+    private enum CodingKeys: String, CodingKey {
+        case dateRange, proactive, userAddress, memory, contextBlocks
+    }
 
     init(
         metrics: AIChatMetrics? = nil,
@@ -127,7 +131,6 @@ struct AIChatContext: Encodable {
         proactive: ProactiveInsightContext? = nil,
         memory: AIChatMemoryCapsule? = nil,
         userAddress: String? = nil,
-        encryptionKey: WalletEncryptionKey? = nil,
         labData: LabDataContext? = nil,
         contextBlocks: [ContextBlock]? = nil
     ) {
@@ -136,7 +139,6 @@ struct AIChatContext: Encodable {
         self.proactive = proactive
         self.memory = memory
         self.userAddress = userAddress
-        self.encryptionKey = encryptionKey
         self.labData = labData
         self.contextBlocks = contextBlocks
     }

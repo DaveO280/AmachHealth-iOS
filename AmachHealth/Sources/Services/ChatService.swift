@@ -743,16 +743,13 @@ final class ChatService: ObservableObject {
     ) -> AIChatContext? {
         let memoryCapsule = ConversationMemoryStore.shared.buildMemoryCapsule(intent: intent, mode: mode)
         let walletAddress = wallet.isConnected ? wallet.address : nil
-        let encryptionKey = wallet.isConnected ? wallet.encryptionKey : nil
 
-        guard base != nil || memoryCapsule != nil || walletAddress != nil || encryptionKey != nil else {
+        guard base != nil || memoryCapsule != nil || walletAddress != nil else {
             return nil
         }
 
         let existing = base ?? AIChatContext()
 
-        // Inject rolling summary as a context block so the model knows
-        // what was discussed earlier without sending all raw messages
         var blocks = existing.contextBlocks ?? []
         if let rollingSummary = currentSession.rollingSummary {
             blocks.insert(
@@ -768,7 +765,6 @@ final class ChatService: ObservableObject {
             proactive: existing.proactive,
             memory: existing.memory ?? memoryCapsule,
             userAddress: existing.userAddress ?? walletAddress,
-            encryptionKey: existing.encryptionKey ?? encryptionKey,
             labData: existing.labData ?? labData,
             contextBlocks: blocks.isEmpty ? nil : blocks
         )
