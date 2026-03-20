@@ -62,5 +62,30 @@ protocol AmachAPIClientProtocol {
     ) async throws -> ResolvedProfile?
 }
 
+// Default parameter values for protocol methods.
+// Swift protocols don't support default values directly, so we provide
+// them via an extension to match AmachAPIClient's concrete defaults.
+extension AmachAPIClientProtocol {
+    func sendChatMessage(
+        _ message: String,
+        history: [AIChatHistoryMessage],
+        context: AIChatContext? = nil,
+        mode: ChatMode = .quick
+    ) async throws -> AIChatResponse {
+        try await sendChatMessage(message, history: history, context: context, mode: mode)
+    }
+
+    func streamLumaChat(
+        _ message: String,
+        history: [AIChatHistoryMessage],
+        context: AIChatContext? = nil,
+        screen: String? = nil,
+        metric: String? = nil,
+        mode: ChatMode = .quick
+    ) -> AsyncThrowingStream<String, Error> {
+        streamLumaChat(message, history: history, context: context, screen: screen, metric: metric, mode: mode)
+    }
+}
+
 // MARK: - AmachAPIClient conformance (retroactive)
 extension AmachAPIClient: AmachAPIClientProtocol {}
