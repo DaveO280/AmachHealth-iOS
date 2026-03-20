@@ -225,37 +225,28 @@ final class ChatService: ObservableObject {
 
             updateRollingSummaryIfNeeded()
         } catch {
-            // Clean up this turn's messages so orphaned user messages
-            // don't accumulate and corrupt the history for future sends.
-            func cleanupFailedTurn() {
-                // Remove empty assistant placeholder
+            let isEmptyResponse = (error.localizedDescription + " " + String(describing: error))
+                .contains("Luma returned an empty response")
+
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                // Cancelled — clean up silently
                 if currentSession.messages.indices.contains(assistantIdx),
-                   currentSession.messages[assistantIdx].role == .assistant,
                    currentSession.messages[assistantIdx].content.isEmpty {
                     currentSession.messages.remove(at: assistantIdx)
                 }
-                // Remove the user message we appended at the start of this turn
-                if let lastUserIdx = currentSession.messages.lastIndex(where: { $0.role == .user && $0.content == trimmed }) {
-                    currentSession.messages.remove(at: lastUserIdx)
+                if let idx = currentSession.messages.lastIndex(where: { $0.role == .user && $0.content == trimmed }) {
+                    currentSession.messages.remove(at: idx)
                 }
                 saveToDisk()
-            }
-
-            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
-                cleanupFailedTurn()
                 self.error = nil
-            } else if
-                !didRetryAfterEmptyContent,
-                (error.localizedDescription + " " + String(describing: error))
-                    .contains("Luma returned an empty response")
-            {
+            } else if isEmptyResponse, !didRetryAfterEmptyContent {
                 didRetryAfterEmptyContent = true
 
                 #if DEBUG
                 print("⚠️ Luma returned empty content; retrying once.")
                 #endif
 
-                // Reset the assistant placeholder for the retry
+                // Reset assistant placeholder for retry
                 if currentSession.messages.indices.contains(assistantIdx),
                    currentSession.messages[assistantIdx].role == .assistant {
                     currentSession.messages[assistantIdx].content = ""
@@ -273,12 +264,10 @@ final class ChatService: ObservableObject {
                         metric: metric,
                         mode: chatMode
                     )
-
                     for try await token in stream {
                         currentSession.messages[retryIdx].content += token
                         currentSession.updatedAt = .now
                     }
-
                     lastFailedMessage = nil
                     saveToDisk()
                     updateRollingSummaryIfNeeded()
@@ -286,23 +275,29 @@ final class ChatService: ObservableObject {
                     sendingTask = nil
                     return
                 } catch {
-                    // Retry also failed — clean up and show error
-                    cleanupFailedTurn()
+                    // Retry also failed — fall through to fallback below
                 }
 
-                self.lastFailedMessage = trimmed
-                self.error = "Luma couldn't respond. Please try again."
-            } else if (error as? URLError)?.code == .timedOut {
-                #if DEBUG
-                print("⚠️ Luma request timed out.")
-                #endif
-                cleanupFailedTurn()
-                self.lastFailedMessage = trimmed
-                self.error = "Request timed out. Please try again."
+                // Both attempts returned empty: show a helpful fallback
+                // instead of a blank bubble or removing the turn entirely.
+                let fallback = "I don't have enough context to answer that right now. " +
+                    "Could you give me a bit more detail?"
+                if currentSession.messages.indices.contains(retryIdx) {
+                    currentSession.messages[retryIdx].content = fallback
+                }
+                lastFailedMessage = nil
+                saveToDisk()
             } else {
-                cleanupFailedTurn()
+                // Timeout or other error — show fallback instead of removing
+                if currentSession.messages.indices.contains(assistantIdx),
+                   currentSession.messages[assistantIdx].content.isEmpty {
+                    let fallback = (error as? URLError)?.code == .timedOut
+                        ? "Sorry, I took too long to respond. Could you try asking again?"
+                        : "Something went wrong on my end. Please try again."
+                    currentSession.messages[assistantIdx].content = fallback
+                }
+                saveToDisk()
                 self.lastFailedMessage = trimmed
-                self.error = error.localizedDescription
             }
         }
 
@@ -329,10 +324,11 @@ final class ChatService: ObservableObject {
         }
         saveToDisk()
 
-        // Summarize health content, extract memory, and sync to Storj in background
-        Task {
-            await summarizeAndArchive(sessionToArchive)
-            await syncSessionToStorj(sessionToArchive)
+        // Summarize health content, extract memory, and sync to Storj.
+        // Use Task.detached so this survives view dismissal / session reset.
+        Task.detached { [weak self] in
+            await self?.summarizeAndArchive(sessionToArchive)
+            await self?.syncSessionToStorj(sessionToArchive)
         }
 
         currentSession = ChatSession()
@@ -446,7 +442,7 @@ final class ChatService: ObservableObject {
     /// Summarize a session's health content via Venice and store the result.
     /// Called when archiving a session — the summary feeds future proactive contexts.
     func summarizeAndArchive(_ session: ChatSession) async {
-        guard session.messages.count >= 4 else { return }  // skip very short sessions
+        guard session.messages.count >= 2 else { return }  // need at least one exchange
         guard session.healthSummary == nil else { return }  // already summarized
 
         let summaryPrompt =
@@ -584,18 +580,13 @@ final class ChatService: ObservableObject {
 
     private func shouldExtractMemory(from session: ChatSession) -> Bool {
         let userMessages = session.messages.filter { $0.role == .user }
-        guard userMessages.count >= 2 else { return false }
+        guard !userMessages.isEmpty else { return false }
 
+        // Any substantive user input is worth extracting — the LLM decides
+        // what's actually memory-worthy.  Only skip very short throwaway
+        // sessions (single "hi"/"thanks" with no real content).
         let totalLength = userMessages.reduce(0) { $0 + $1.content.count }
-        guard totalLength >= 100 else { return false }
-
-        let joined = userMessages.map { $0.content.lowercased() }.joined(separator: " ")
-        let healthKeywords = [
-            "sleep", "hrv", "heart", "blood pressure", "cholesterol",
-            "glucose", "diabetes", "zone 2", "workout", "steps",
-            "medication", "supplement", "fatigue", "anxiety", "stress"
-        ]
-        return healthKeywords.contains { joined.contains($0) }
+        return totalLength >= 20
     }
 
     private func parseFacts(from response: String) -> [CriticalFact] {
