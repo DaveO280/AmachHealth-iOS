@@ -275,7 +275,7 @@ final class WalletService: ObservableObject {
             from: from,
             to: to,
             data: data,
-            chainId: .hexadecimal(chainHex)
+            chainId: .hexadecimalNumber(chainHex)
         )
         let txHash = try await wallet.provider.request(
             .ethSendTransaction(transaction: transaction)

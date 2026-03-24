@@ -215,7 +215,6 @@ final class ChatService: ObservableObject {
         let screen = LumaContextService.shared.currentScreen
         let metric = LumaContextService.shared.currentMetric
 
-        var didRetryAfterTimeout = false
         var didRetryAfterEmptyContent = false
 
         do {

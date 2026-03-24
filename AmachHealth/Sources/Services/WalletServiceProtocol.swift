@@ -7,6 +7,7 @@
 import Foundation
 
 /// The minimal surface ChatService and ZKSyncAttestationService read from WalletService.
+@MainActor
 protocol WalletServiceProtocol: AnyObject {
     var isConnected: Bool { get }
     var address: String? { get }
