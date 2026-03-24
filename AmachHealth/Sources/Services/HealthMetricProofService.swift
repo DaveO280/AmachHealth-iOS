@@ -239,13 +239,69 @@ final class HealthMetricProofService: ObservableObject {
             claim = try buildBodyCompositionClaim(metric: metric, dexaSummary: dexa)
         }
 
-        let proof = try await api.generateHealthMetricProof(
+        var proof = try await api.generateHealthMetricProof(
             claim: claim,
             walletAddress: encryptionKey.walletAddress
         )
 
+        // Anchor on-chain: submit the proofHash as a contentHash attestation
+        // via the user's Privy wallet — same pattern as the web app.
+        proof = try await anchorOnChain(proof: proof, claim: claim, period: period)
+
         lastGeneratedProof = proof
         return proof
+    }
+
+    /// Submit a createAttestation tx with the proof's contentHash.
+    /// Returns an updated proof document with the real txHash.
+    private func anchorOnChain(
+        proof: HealthMetricProofDocument,
+        claim: HealthMetricClaim,
+        period: TrendPeriod?
+    ) async throws -> HealthMetricProofDocument {
+        let dataType: UInt8 = switch claim.type {
+        case .bodyComposition: 0   // DEXA
+        case .labResult:       1   // Bloodwork
+        case .metricChange, .metricRange, .exerciseSummary, .dataCompleteness: 2  // Apple Health
+        }
+
+        let now = Date()
+        let days = period?.days ?? 30
+        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: now) ?? now
+
+        let input = ZKSyncAttestationService.AttestationInput(
+            contentHash: proof.evidence.proofHash,
+            dataType: dataType,
+            startDate: startDate,
+            endDate: now,
+            completenessScore: 100,
+            recordCount: 1,
+            coreComplete: true
+        )
+
+        let result = try await ZKSyncAttestationService.shared.createAttestation(input)
+
+        // Return a new proof document with the real tx hash filled in
+        return HealthMetricProofDocument(
+            proofId: proof.proofId,
+            claim: proof.claim,
+            prover: HealthMetricProver(
+                walletAddress: proof.prover.walletAddress,
+                chainId: proof.prover.chainId,
+                attestationUid: nil,
+                attestationTxHash: result.txHash,
+                contractAddress: proof.prover.contractAddress
+            ),
+            evidence: HealthMetricEvidence(
+                dataContentHash: proof.evidence.dataContentHash,
+                proofHash: proof.evidence.proofHash,
+                attestationTxHash: result.txHash,
+                storjUri: proof.evidence.storjUri,
+                dataType: proof.evidence.dataType
+            ),
+            metadata: proof.metadata,
+            signature: proof.signature
+        )
     }
 
     // MARK: - Legacy Public API (backward compatibility)

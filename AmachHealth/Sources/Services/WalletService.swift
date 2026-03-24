@@ -254,6 +254,38 @@ final class WalletService: ObservableObject {
         #endif
     }
 
+    /// Send a contract transaction via the embedded wallet (eth_sendTransaction).
+    /// The `data` parameter is the ABI-encoded calldata (0x-prefixed hex).
+    /// Returns the transaction hash.
+    func sendTransaction(to: String, data: String, chainId: Int) async throws -> String {
+        guard isConnected, let from = address else {
+            throw WalletError.notConnected
+        }
+
+        #if canImport(PrivySDK)
+        guard let privy = privy else { throw WalletError.notConfigured }
+
+        guard case .authenticated(let user) = await privy.getAuthState(),
+              let wallet = user.embeddedEthereumWallets.first else {
+            throw WalletError.notConnected
+        }
+
+        let chainHex = "0x" + String(chainId, radix: 16)
+        let transaction = EthereumRpcRequest.UnsignedEthTransaction(
+            from: from,
+            to: to,
+            data: data,
+            chainId: .hexadecimal(chainHex)
+        )
+        let txHash = try await wallet.provider.request(
+            .ethSendTransaction(transaction: transaction)
+        )
+        return txHash
+        #else
+        throw WalletError.notImplemented
+        #endif
+    }
+
     // ──────────────────────────────────────────────────────────
     // MARK: - Encryption Key Derivation
     // ──────────────────────────────────────────────────────────
