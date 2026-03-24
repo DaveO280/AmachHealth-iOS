@@ -246,7 +246,12 @@ final class HealthMetricProofService: ObservableObject {
 
         // Anchor on-chain: submit the proofHash as a contentHash attestation
         // via the user's Privy wallet — same pattern as the web app.
-        proof = try await anchorOnChain(proof: proof, claim: claim, period: period)
+        do {
+            proof = try await anchorOnChain(proof: proof, claim: claim, period: period)
+            print("⛓️ [Proof] On-chain anchoring succeeded — txHash=\(proof.prover.attestationTxHash ?? "nil")")
+        } catch {
+            print("⛓️ [Proof] On-chain anchoring failed: \(error.localizedDescription) — proof still valid off-chain")
+        }
 
         lastGeneratedProof = proof
         return proof

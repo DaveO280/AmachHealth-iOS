@@ -56,19 +56,32 @@ final class ZKSyncAttestationService: ObservableObject {
     func createAttestation(_ input: AttestationInput) async throws -> AttestationResult {
         let wallet = WalletService.shared
         guard wallet.isConnected, let address = wallet.address else {
+            print("⛓️ [Attestation] Wallet not connected — skipping on-chain anchoring")
             throw AttestationError.walletNotConnected
         }
+
+        print("⛓️ [Attestation] Starting on-chain attestation for \(address)")
+        print("⛓️ [Attestation] contentHash=\(input.contentHash.prefix(18))… dataType=\(input.dataType)")
 
         isSubmitting = true
         defer { isSubmitting = false }
 
-        // Verify user has a profile on-chain before sending the tx
-        let hasProfile = try await callHasProfile(address: address)
+        let hasProfile: Bool
+        do {
+            hasProfile = try await callHasProfile(address: address)
+            print("⛓️ [Attestation] hasProfile=\(hasProfile)")
+        } catch {
+            print("⛓️ [Attestation] hasProfile check failed: \(error.localizedDescription)")
+            throw error
+        }
+
         guard hasProfile else {
+            print("⛓️ [Attestation] No on-chain profile — cannot attest")
             throw AttestationError.noProfile
         }
 
         let calldata = encodeCreateAttestation(input)
+        print("⛓️ [Attestation] Submitting tx to \(contractAddress) (\(calldata.count) chars calldata)")
 
         #if canImport(PrivySDK)
         let txHash = try await sendTransaction(
@@ -76,8 +89,10 @@ final class ZKSyncAttestationService: ObservableObject {
             to: contractAddress,
             data: calldata
         )
+        print("⛓️ [Attestation] ✅ tx submitted: \(txHash)")
         return AttestationResult(txHash: txHash)
         #else
+        print("⛓️ [Attestation] PrivySDK not available")
         throw AttestationError.privyNotAvailable
         #endif
     }
