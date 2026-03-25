@@ -15,6 +15,7 @@ struct ProofDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: AmachSpacing.lg) {
                     headerCard
+                    methodCard
                     proverCard
                     evidenceCard
                     metadataCard
@@ -63,6 +64,36 @@ struct ProofDetailView: View {
                     row("Attestation Tx", shortHash(tx))
                 }
                 row("Chain ID", String(proof.prover.chainId))
+            }
+        }
+        .padding(AmachSpacing.lg)
+        .amachCard()
+    }
+
+    private var methodCard: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("Method")
+                .font(AmachType.h3)
+                .foregroundStyle(Color.amachTextPrimary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                row("Claim type", proof.claim.type.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+
+                if let aggregation = proof.claim.details?["aggregationType"] {
+                    row("Aggregation", prettyMethodLabel(aggregation))
+                }
+                if let comparisonMode = proof.claim.details?["comparisonMode"] {
+                    row("Comparison", prettyMethodLabel(comparisonMode))
+                }
+                if let baselineWeek = proof.claim.details?["baselineWeekStart"] {
+                    row("Baseline week", baselineWeek)
+                }
+                if let latestWeek = proof.claim.details?["latestWeekStart"] {
+                    row("Latest week", latestWeek)
+                }
+                if let points = proof.claim.details?["weeklyPointsUsed"] {
+                    row("Weeks used", points)
+                }
             }
         }
         .padding(AmachSpacing.lg)
@@ -141,5 +172,22 @@ struct ProofDetailView: View {
     private func shortHash(_ value: String) -> String {
         guard value.count > 16 else { return value }
         return "\(value.prefix(10))...\(value.suffix(6))"
+    }
+
+    private func prettyMethodLabel(_ raw: String) -> String {
+        switch raw {
+        case "weekly_average":
+            return "Weekly Average"
+        case "daily_delta":
+            return "Daily Delta"
+        case "first_vs_latest":
+            return "First vs Latest Week"
+        case "latest_vs_previous":
+            return "Latest vs Previous Week"
+        case "recent4_vs_prior4":
+            return "Last 4 vs Prior 4 Weeks"
+        default:
+            return raw.replacingOccurrences(of: "_", with: " ").capitalized
+        }
     }
 }

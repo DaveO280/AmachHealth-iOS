@@ -17,6 +17,9 @@ final class HealthMetricProofService: ObservableObject {
     private let dashboard = DashboardService.shared
     private let wallet = WalletService.shared
     private let api = AmachAPIClient.shared
+    private var cachedStorjDailySummaries: [String: DailySummary]?
+    private var cachedStorjWalletAddress: String?
+    private var cachedStorjLoadedAt: Date?
 
     @Published private(set) var lastGeneratedProof: HealthMetricProofDocument?
 
@@ -208,6 +211,7 @@ final class HealthMetricProofService: ObservableObject {
     func generateProof(
         for metric: ProofableMetric,
         period: TrendPeriod = .month,
+        comparison: ProofComparisonOptions = .default,
         labSummary: LabResultSummary? = nil,
         dexaSummary: DexaResultSummary? = nil
     ) async throws -> HealthMetricProofDocument {
@@ -219,7 +223,13 @@ final class HealthMetricProofService: ObservableObject {
 
         switch metric.proofType {
         case .metricChange:
-            claim = try buildMetricChangeClaim(metric: metric, period: period)
+            claim = try await buildMetricChangeClaim(
+                metric: metric,
+                period: period,
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey,
+                comparison: comparison
+            )
 
         case .metricRange:
             claim = try buildMetricRangeClaim(metric: metric, period: period)
@@ -416,6 +426,26 @@ final class HealthMetricProofService: ObservableObject {
 
     private func buildMetricChangeClaim(
         metric: ProofableMetric,
+        period: TrendPeriod,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        comparison: ProofComparisonOptions
+    ) async throws -> HealthMetricClaim {
+        if metric.category == .healthKit,
+           let storjClaim = try? await buildStorjWeeklyAverageClaim(
+            metric: metric,
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            comparison: comparison
+           ) {
+            return storjClaim
+        }
+
+        return try buildLocalMetricChangeClaim(metric: metric, period: period)
+    }
+
+    private func buildLocalMetricChangeClaim(
+        metric: ProofableMetric,
         period: TrendPeriod
     ) throws -> HealthMetricClaim {
         let days = period.days
@@ -465,11 +495,220 @@ final class HealthMetricProofService: ObservableObject {
             metricKey: metric.id,
             period: .init(start: iso.string(from: startDate), end: iso.string(from: now)),
             details: [
+                "aggregationType": "daily_delta",
                 "startValue": String(first.value),
                 "endValue": String(last.value),
                 "delta": String(delta)
             ]
         )
+    }
+
+    private func buildStorjWeeklyAverageClaim(
+        metric: ProofableMetric,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        comparison: ProofComparisonOptions
+    ) async throws -> HealthMetricClaim {
+        let summariesByDay = try await loadStorjDailySummaries(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey
+        )
+
+        var dailyPoints: [(date: Date, value: Double)] = []
+        let dateFormatter = DateFormatter()
+        dateFormatter.calendar = Calendar(identifier: .gregorian)
+        dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        for (dateKey, summary) in summariesByDay {
+            guard let date = dateFormatter.date(from: dateKey),
+                  let value = metricValue(for: metric.id, from: summary) else {
+                continue
+            }
+            dailyPoints.append((date: date, value: value))
+        }
+
+        guard !dailyPoints.isEmpty else { throw ProofError.insufficientData }
+
+        let weekly = computeWeeklyAverages(from: dailyPoints)
+        let selectedPair = selectWeeklyComparison(weekly, mode: comparison.weeklyMode)
+        guard let baseline = selectedPair?.baseline,
+              let latest = selectedPair?.latest else {
+            throw ProofError.insufficientData
+        }
+
+        let delta = latest.average - baseline.average
+        let pctChange = baseline.average != 0 ? ((latest.average - baseline.average) / baseline.average) * 100 : nil
+
+        let fmt = NumberFormatter()
+        fmt.maximumFractionDigits = 1
+        fmt.minimumFractionDigits = 0
+
+        let baselineStr = fmt.string(from: NSNumber(value: baseline.average)) ?? String(format: "%.1f", baseline.average)
+        let latestStr = fmt.string(from: NSNumber(value: latest.average)) ?? String(format: "%.1f", latest.average)
+        let deltaText: String
+        if let rendered = fmt.string(from: NSNumber(value: abs(delta))) {
+            deltaText = delta >= 0 ? "+\(rendered)" : "-\(rendered)"
+        } else {
+            deltaText = String(format: "%.1f", delta)
+        }
+
+        let pctText: String
+        if let pct = pctChange, let rendered = fmt.string(from: NSNumber(value: abs(pct))) {
+            pctText = " (\(delta >= 0 ? "+" : "-")\(rendered)%)"
+        } else {
+            pctText = ""
+        }
+
+        let unitSuffix = metric.unit.map { " \($0)" } ?? ""
+        let summary = "\(metric.displayName) weekly average moved from \(baselineStr)\(unitSuffix) to \(latestStr)\(unitSuffix), change \(deltaText)\(unitSuffix)\(pctText)"
+
+        let iso = ISO8601DateFormatter()
+        return HealthMetricClaim(
+            type: .metricChange,
+            summary: summary,
+            metricKey: metric.id,
+            period: .init(start: iso.string(from: baseline.weekStart), end: iso.string(from: latest.weekEnd)),
+            details: [
+                "aggregationType": "weekly_average",
+                "comparisonMode": comparison.weeklyMode.rawValue,
+                "baselineWeekStart": iso.string(from: baseline.weekStart),
+                "latestWeekStart": iso.string(from: latest.weekStart),
+                "baselineAverage": String(baseline.average),
+                "latestAverage": String(latest.average),
+                "baselineDayCount": String(baseline.dayCount),
+                "latestDayCount": String(latest.dayCount),
+                "weeklyPointsUsed": String(weekly.count),
+                "delta": String(delta)
+            ]
+        )
+    }
+
+    private func selectWeeklyComparison(
+        _ weekly: [WeeklyAggregate],
+        mode: WeeklyComparisonMode
+    ) -> (baseline: WeeklyAggregate, latest: WeeklyAggregate)? {
+        switch mode {
+        case .firstVsLatest:
+            guard let first = weekly.first, let latest = weekly.last, weekly.count >= 2 else { return nil }
+            return (first, latest)
+        case .latestVsPrevious:
+            guard weekly.count >= 2 else { return nil }
+            return (weekly[weekly.count - 2], weekly[weekly.count - 1])
+        case .recent4VsPrior4:
+            guard weekly.count >= 8 else { return nil }
+            let prior = Array(weekly[(weekly.count - 8)..<(weekly.count - 4)])
+            let recent = Array(weekly[(weekly.count - 4)..<weekly.count])
+            guard let priorAgg = aggregateWeeklyWindow(prior),
+                  let recentAgg = aggregateWeeklyWindow(recent) else {
+                return nil
+            }
+            return (priorAgg, recentAgg)
+        }
+    }
+
+    private func aggregateWeeklyWindow(_ weeks: [WeeklyAggregate]) -> WeeklyAggregate? {
+        guard let first = weeks.first, let last = weeks.last, !weeks.isEmpty else { return nil }
+        let dayCount = weeks.reduce(0) { $0 + $1.dayCount }
+        guard dayCount > 0 else { return nil }
+        let weightedSum = weeks.reduce(0.0) { $0 + ($1.average * Double($1.dayCount)) }
+        let average = weightedSum / Double(dayCount)
+        return WeeklyAggregate(
+            weekStart: first.weekStart,
+            weekEnd: last.weekEnd,
+            average: average,
+            dayCount: dayCount
+        )
+    }
+
+    private func loadStorjDailySummaries(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> [String: DailySummary] {
+        let now = Date()
+        if cachedStorjWalletAddress == walletAddress,
+           let cached = cachedStorjDailySummaries,
+           let loadedAt = cachedStorjLoadedAt,
+           now.timeIntervalSince(loadedAt) < 300 {
+            return cached
+        }
+
+        let items = try await api.listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "apple-health-full-export"
+        )
+        .sorted { $0.uploadedAt < $1.uploadedAt }
+
+        var merged: [String: DailySummary] = [:]
+        for item in items {
+            do {
+                let payload = try await api.retrieveHealthData(
+                    storjUri: item.uri,
+                    walletAddress: walletAddress,
+                    encryptionKey: encryptionKey
+                )
+                for (day, summary) in payload.dailySummaries {
+                    merged[day] = summary
+                }
+            } catch {
+                continue
+            }
+        }
+
+        if merged.isEmpty {
+            throw ProofError.insufficientData
+        }
+
+        cachedStorjWalletAddress = walletAddress
+        cachedStorjDailySummaries = merged
+        cachedStorjLoadedAt = now
+        return merged
+    }
+
+    private func metricValue(for metricID: String, from summary: DailySummary) -> Double? {
+        if metricID == "sleepAnalysis", let minutes = summary.sleep?.total {
+            return Double(minutes) / 60.0
+        }
+
+        let canonicalMetric = canonicalMetricKey(metricID)
+        guard let matched = summary.metrics.first(where: { canonicalMetricKey($0.key) == canonicalMetric })?.value else {
+            return nil
+        }
+        return matched.total ?? matched.avg
+    }
+
+    private func canonicalMetricKey(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "HKQuantityTypeIdentifier", with: "")
+            .replacingOccurrences(of: "HKCategoryTypeIdentifier", with: "")
+            .replacingOccurrences(of: "HKWorkoutTypeIdentifier", with: "workout")
+            .lowercased()
+    }
+
+    private func computeWeeklyAverages(from dailyPoints: [(date: Date, value: Double)]) -> [WeeklyAggregate] {
+        var grouped: [Date: [Double]] = [:]
+        let calendar = Calendar(identifier: .gregorian)
+
+        for point in dailyPoints {
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: point.date)
+            guard let weekStart = calendar.date(from: components) else { continue }
+            grouped[weekStart, default: []].append(point.value)
+        }
+
+        return grouped
+            .compactMap { weekStart, values in
+                guard values.count >= 4 else { return nil }
+                let average = values.reduce(0, +) / Double(values.count)
+                let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
+                return WeeklyAggregate(
+                    weekStart: weekStart,
+                    weekEnd: weekEnd,
+                    average: average,
+                    dayCount: values.count
+                )
+            }
+            .sorted { $0.weekStart < $1.weekStart }
     }
 
     private func buildMetricRangeClaim(
@@ -685,4 +924,11 @@ enum ProofError: LocalizedError {
             return "Not enough data to generate this proof"
         }
     }
+}
+
+private struct WeeklyAggregate {
+    let weekStart: Date
+    let weekEnd: Date
+    let average: Double
+    let dayCount: Int
 }

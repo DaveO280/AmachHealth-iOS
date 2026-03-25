@@ -26,6 +26,7 @@ struct ProofGeneratorView: View {
     @State private var selectedCategory: ProofableMetricCategory?
     @State private var selectedMetric: ProofableMetric?
     @State private var selectedPeriod: TrendPeriod = .month
+    @State private var selectedWeeklyComparison: WeeklyComparisonMode = .firstVsLatest
 
     @State private var generatingMetricId: String?
     @State private var error: String?
@@ -50,6 +51,10 @@ struct ProofGeneratorView: View {
 
                     if let metric = selectedMetric, !metric.supportedPeriods.isEmpty {
                         periodPicker(for: metric)
+                    }
+
+                    if let metric = selectedMetric, shouldShowWeeklyComparison(for: metric) {
+                        weeklyComparisonPicker
                     }
 
                     if selectedMetric != nil {
@@ -272,6 +277,36 @@ struct ProofGeneratorView: View {
         .disabled(isGenerating || !wallet.isConnected)
     }
 
+    private var weeklyComparisonPicker: some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Text("Weekly comparison")
+                .font(AmachType.h3)
+                .foregroundStyle(Color.amachTextPrimary)
+
+            Menu {
+                ForEach(WeeklyComparisonMode.allCases, id: \.self) { mode in
+                    Button(mode.title) {
+                        selectedWeeklyComparison = mode
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(selectedWeeklyComparison.title)
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+                .padding(.horizontal, AmachSpacing.md)
+                .padding(.vertical, AmachSpacing.sm)
+                .background(Color.amachSurface)
+                .cornerRadius(10)
+            }
+        }
+    }
+
     // MARK: - Actions
 
     private func generate(_ metric: ProofableMetric) async {
@@ -287,6 +322,7 @@ struct ProofGeneratorView: View {
             _ = try await proofService.generateProof(
                 for: metric,
                 period: selectedPeriod,
+                comparison: ProofComparisonOptions(weeklyMode: selectedWeeklyComparison),
                 labSummary: latestLabSummary,
                 dexaSummary: latestDexaSummary
             )
@@ -330,5 +366,9 @@ struct ProofGeneratorView: View {
     private func shortHash(_ hash: String) -> String {
         guard hash.count > 16 else { return hash }
         return "\(hash.prefix(10))...\(hash.suffix(6))"
+    }
+
+    private func shouldShowWeeklyComparison(for metric: ProofableMetric) -> Bool {
+        metric.category == .healthKit && metric.proofType == .metricChange
     }
 }
