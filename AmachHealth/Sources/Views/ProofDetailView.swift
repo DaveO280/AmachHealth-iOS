@@ -107,6 +107,32 @@ struct ProofDetailView: View {
                     row("Points used", points)
                 }
             }
+
+            if let baselineDebug = proof.claim.details?["debugBaselineBuckets"] {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Debug baseline buckets")
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                    Text(baselineDebug)
+                        .font(AmachType.dataMono)
+                        .foregroundStyle(Color.amachTextPrimary)
+                        .textSelection(.enabled)
+                }
+                .padding(.top, AmachSpacing.sm)
+            }
+
+            if let comparisonDebug = proof.claim.details?["debugComparisonBuckets"] {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Debug comparison buckets")
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                    Text(comparisonDebug)
+                        .font(AmachType.dataMono)
+                        .foregroundStyle(Color.amachTextPrimary)
+                        .textSelection(.enabled)
+                }
+                .padding(.top, AmachSpacing.sm)
+            }
         }
         .padding(AmachSpacing.lg)
         .amachCard()

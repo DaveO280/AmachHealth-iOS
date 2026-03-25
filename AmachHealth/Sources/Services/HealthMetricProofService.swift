@@ -545,9 +545,11 @@ final class HealthMetricProofService: ObservableObject {
             granularity: comparison.granularity
         )
         let selected = Self.selectComparisonWindows(from: series, comparison: comparison)
-        guard let baseline = selected?.baseline, let latest = selected?.latest else {
+        guard let selected else {
             throw ProofError.insufficientData
         }
+        let baseline = selected.baseline
+        let latest = selected.latest
 
         let delta = latest.average - baseline.average
         let pctChange = baseline.average != 0 ? ((latest.average - baseline.average) / baseline.average) * 100 : nil
@@ -584,35 +586,45 @@ final class HealthMetricProofService: ObservableObject {
         🧪 [Proof] delta=\(delta) mode=\("user_selected_windows") granularity=\(comparison.granularity.rawValue)
         """)
         #endif
+        var details: [String: String] = [
+            "aggregationType": "\(comparison.granularity.rawValue)_average",
+            "comparisonMode": "user_selected_windows",
+            "comparisonGranularity": comparison.granularity.rawValue,
+            "baselineRangeStart": comparison.baselineStartISO ?? iso.string(from: baseline.bucketStart),
+            "baselineRangeEnd": comparison.baselineEndISO ?? iso.string(from: baseline.bucketEnd),
+            "comparisonRangeStart": comparison.comparisonStartISO ?? iso.string(from: latest.bucketStart),
+            "comparisonRangeEnd": comparison.comparisonEndISO ?? iso.string(from: latest.bucketEnd),
+            "baselineBucketStart": iso.string(from: baseline.bucketStart),
+            "comparisonBucketStart": iso.string(from: latest.bucketStart),
+            "baselineAverage": String(baseline.average),
+            "comparisonAverage": String(latest.average),
+            "baselineDayCount": String(baseline.dayCount),
+            "comparisonDayCount": String(latest.dayCount),
+            "pointsUsed": String(series.count),
+            "delta": String(delta)
+        ]
+
+        #if DEBUG
+        if let baselineDebugJSON = encodeBucketDebugJSON(selected.baselineWindow),
+           let comparisonDebugJSON = encodeBucketDebugJSON(selected.comparisonWindow) {
+            details["debugBaselineBuckets"] = baselineDebugJSON
+            details["debugComparisonBuckets"] = comparisonDebugJSON
+        }
+        #endif
+
         return HealthMetricClaim(
             type: .metricChange,
             summary: summary,
             metricKey: metric.id,
             period: .init(start: iso.string(from: baseline.bucketStart), end: iso.string(from: latest.bucketEnd)),
-            details: [
-                "aggregationType": "\(comparison.granularity.rawValue)_average",
-                "comparisonMode": "user_selected_windows",
-                "comparisonGranularity": comparison.granularity.rawValue,
-                "baselineRangeStart": comparison.baselineStartISO ?? iso.string(from: baseline.bucketStart),
-                "baselineRangeEnd": comparison.baselineEndISO ?? iso.string(from: baseline.bucketEnd),
-                "comparisonRangeStart": comparison.comparisonStartISO ?? iso.string(from: latest.bucketStart),
-                "comparisonRangeEnd": comparison.comparisonEndISO ?? iso.string(from: latest.bucketEnd),
-                "baselineBucketStart": iso.string(from: baseline.bucketStart),
-                "comparisonBucketStart": iso.string(from: latest.bucketStart),
-                "baselineAverage": String(baseline.average),
-                "comparisonAverage": String(latest.average),
-                "baselineDayCount": String(baseline.dayCount),
-                "comparisonDayCount": String(latest.dayCount),
-                "pointsUsed": String(series.count),
-                "delta": String(delta)
-            ]
+            details: details
         )
     }
 
     private static func selectComparisonWindows(
         from series: [TimeBucketAggregate],
         comparison: ProofComparisonOptions
-    ) -> (baseline: TimeBucketAggregate, latest: TimeBucketAggregate)? {
+    ) -> ComparisonWindowSelection? {
         let iso = ISO8601DateFormatter()
 
         if comparison.hasExplicitWindows,
@@ -626,14 +638,24 @@ final class HealthMetricProofService: ObservableObject {
                   let latest = Self.aggregateBuckets(comparisonWindow) else {
                 return nil
             }
-            return (baseline, latest)
+            return ComparisonWindowSelection(
+                baseline: baseline,
+                latest: latest,
+                baselineWindow: baselineWindow,
+                comparisonWindow: comparisonWindow
+            )
         }
 
         // Backward-compatible fallback
         guard series.count >= 2, let first = series.first, let last = series.last else {
             return nil
         }
-        return (first, last)
+        return ComparisonWindowSelection(
+            baseline: first,
+            latest: last,
+            baselineWindow: [first],
+            comparisonWindow: [last]
+        )
     }
 
     private static func aggregateBuckets(_ buckets: [TimeBucketAggregate]) -> TimeBucketAggregate? {
@@ -650,12 +672,38 @@ final class HealthMetricProofService: ObservableObject {
         )
     }
 
+    private func encodeBucketDebugJSON(_ buckets: [TimeBucketAggregate]) -> String? {
+        struct DebugBucket: Encodable {
+            let start: String
+            let end: String
+            let average: Double
+            let dayCount: Int
+        }
+        let iso = ISO8601DateFormatter()
+        let compact = Array(buckets.prefix(24)).map {
+            DebugBucket(
+                start: iso.string(from: $0.bucketStart),
+                end: iso.string(from: $0.bucketEnd),
+                average: $0.average,
+                dayCount: $0.dayCount
+            )
+        }
+        guard let data = try? JSONEncoder().encode(compact),
+              let json = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        return json
+    }
+
     #if DEBUG
     static func testSelectComparisonWindows(
         from series: [TimeBucketAggregate],
         comparison: ProofComparisonOptions
     ) -> (baseline: TimeBucketAggregate, latest: TimeBucketAggregate)? {
-        selectComparisonWindows(from: series, comparison: comparison)
+        guard let selected = selectComparisonWindows(from: series, comparison: comparison) else {
+            return nil
+        }
+        return (selected.baseline, selected.latest)
     }
     #endif
 
@@ -1010,4 +1058,11 @@ struct TimeBucketAggregate {
     let bucketEnd: Date
     let average: Double
     let dayCount: Int
+}
+
+private struct ComparisonWindowSelection {
+    let baseline: TimeBucketAggregate
+    let latest: TimeBucketAggregate
+    let baselineWindow: [TimeBucketAggregate]
+    let comparisonWindow: [TimeBucketAggregate]
 }
