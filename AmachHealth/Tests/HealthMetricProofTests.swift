@@ -132,7 +132,6 @@ final class HealthMetricProofModelTests: XCTestCase {
         ]
 
         let comparison = ProofComparisonOptions(
-            granularity: .week,
             baselineStartISO: "2025-12-08T00:00:00Z",
             baselineEndISO: "2025-12-15T00:00:00Z",
             comparisonStartISO: "2025-12-22T00:00:00Z",
@@ -147,21 +146,21 @@ final class HealthMetricProofModelTests: XCTestCase {
 
     func test_comparisonOptions_hasExplicitWindows_trueOnlyWhenAllBoundsPresent() {
         let partial = ProofComparisonOptions(
-            granularity: .month,
             baselineStartISO: "2025-01-01T00:00:00Z",
             baselineEndISO: nil,
             comparisonStartISO: "2025-02-01T00:00:00Z",
             comparisonEndISO: "2025-02-28T00:00:00Z"
         )
-        XCTAssertFalse(partial.hasExplicitWindows)
+        XCTAssertFalse(partial.hasComparisonWindow)
+        XCTAssertFalse(partial.hasPrimaryWindow)
 
         let full = ProofComparisonOptions(
-            granularity: .month,
             baselineStartISO: "2025-01-01T00:00:00Z",
             baselineEndISO: "2025-01-31T00:00:00Z",
             comparisonStartISO: "2025-02-01T00:00:00Z",
             comparisonEndISO: "2025-02-28T00:00:00Z"
         )
-        XCTAssertTrue(full.hasExplicitWindows)
+        XCTAssertTrue(full.hasPrimaryWindow)
+        XCTAssertTrue(full.hasComparisonWindow)
     }
 }

@@ -26,7 +26,7 @@ struct ProofGeneratorView: View {
     @State private var selectedCategory: ProofableMetricCategory?
     @State private var selectedMetric: ProofableMetric?
     @State private var selectedPeriod: TrendPeriod = .month
-    @State private var selectedGranularity: ComparisonGranularity = .week
+    @State private var isCompareMode = true
     @State private var baselineWeekStart: Date = Calendar.current.date(byAdding: .day, value: -168, to: Date()) ?? Date()
     @State private var baselineWeekEnd: Date = Calendar.current.date(byAdding: .day, value: -140, to: Date()) ?? Date()
     @State private var comparisonWeekStart: Date = Calendar.current.date(byAdding: .day, value: -35, to: Date()) ?? Date()
@@ -273,12 +273,9 @@ struct ProofGeneratorView: View {
                 .foregroundStyle(Color.amachTextPrimary)
 
             VStack(spacing: AmachSpacing.sm) {
-                Picker("Granularity", selection: $selectedGranularity) {
-                    ForEach(ComparisonGranularity.allCases, id: \.self) { g in
-                        Text(g.title).tag(g)
-                    }
-                }
-                .pickerStyle(.segmented)
+                Toggle("Compare against another range", isOn: $isCompareMode)
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextPrimary)
 
                 Text("Baseline window")
                     .font(AmachType.caption)
@@ -295,26 +292,32 @@ struct ProofGeneratorView: View {
                     .foregroundStyle(Color.amachTextPrimary)
                     .tint(Color.amachPrimaryBright)
 
-                Divider()
+                if isCompareMode {
+                    Divider()
 
-                Text("Comparison window")
-                    .font(AmachType.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Comparison window")
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                DatePicker("Comparison start", selection: $comparisonWeekStart, displayedComponents: [.date])
-                    .font(AmachType.caption)
-                    .foregroundStyle(Color.amachTextPrimary)
-                    .tint(Color.amachPrimaryBright)
+                    DatePicker("Comparison start", selection: $comparisonWeekStart, displayedComponents: [.date])
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextPrimary)
+                        .tint(Color.amachPrimaryBright)
 
-                DatePicker("Comparison end", selection: $comparisonWeekEnd, in: comparisonWeekStart..., displayedComponents: [.date])
-                    .font(AmachType.caption)
-                    .foregroundStyle(Color.amachTextPrimary)
-                    .tint(Color.amachPrimaryBright)
+                    DatePicker("Comparison end", selection: $comparisonWeekEnd, in: comparisonWeekStart..., displayedComponents: [.date])
+                        .font(AmachType.caption)
+                        .foregroundStyle(Color.amachTextPrimary)
+                        .tint(Color.amachPrimaryBright)
 
-                Text("Verifies baseline average window vs comparison average window.")
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextSecondary)
+                    Text("Verifies baseline average vs comparison average (granularity inferred from date span).")
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextSecondary)
+                } else {
+                    Text("Confirms the selected baseline range average (granularity inferred from date span).")
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
             }
             .padding(AmachSpacing.md)
             .amachCard()
@@ -336,18 +339,17 @@ struct ProofGeneratorView: View {
             let iso = ISO8601DateFormatter()
             let comparison = shouldShowWeeklyComparison(for: metric)
                 ? ProofComparisonOptions(
-                    granularity: selectedGranularity,
                     baselineStartISO: iso.string(from: normalizedBoundary(baselineWeekStart)),
                     baselineEndISO: iso.string(from: normalizedBoundary(baselineWeekEnd)),
-                    comparisonStartISO: iso.string(from: normalizedBoundary(comparisonWeekStart)),
-                    comparisonEndISO: iso.string(from: normalizedBoundary(comparisonWeekEnd))
+                    comparisonStartISO: isCompareMode ? iso.string(from: normalizedBoundary(comparisonWeekStart)) : nil,
+                    comparisonEndISO: isCompareMode ? iso.string(from: normalizedBoundary(comparisonWeekEnd)) : nil
                 )
                 : .default
 
             #if DEBUG
             if shouldShowWeeklyComparison(for: metric) {
                 print("""
-                🧪 [Proof] metric=\(metric.id) mode=user_selected_windows granularity=\(selectedGranularity.rawValue)
+                🧪 [Proof] metric=\(metric.id) mode=\(isCompareMode ? "user_selected_windows" : "single_window_confirm")
                 🧪 [Proof] baseline=\(comparison.baselineStartISO ?? "nil") -> \(comparison.baselineEndISO ?? "nil")
                 🧪 [Proof] comparison=\(comparison.comparisonStartISO ?? "nil") -> \(comparison.comparisonEndISO ?? "nil")
                 """)
@@ -409,22 +411,7 @@ struct ProofGeneratorView: View {
         metric.category == .healthKit && metric.proofType == .metricChange
     }
 
-    private func startOfWeek(_ date: Date) -> Date {
-        let calendar = Calendar(identifier: .gregorian)
-        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
-        return calendar.date(from: components) ?? date
-    }
-
     private func normalizedBoundary(_ date: Date) -> Date {
-        let calendar = Calendar(identifier: .gregorian)
-        switch selectedGranularity {
-        case .day:
-            return calendar.startOfDay(for: date)
-        case .week:
-            return startOfWeek(date)
-        case .month:
-            let components = calendar.dateComponents([.year, .month], from: date)
-            return calendar.date(from: components) ?? date
-        }
+        Calendar(identifier: .gregorian).startOfDay(for: date)
     }
 }

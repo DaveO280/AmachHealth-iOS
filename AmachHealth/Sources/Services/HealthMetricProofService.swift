@@ -443,9 +443,9 @@ final class HealthMetricProofService: ObservableObject {
                 #if DEBUG
                 print("⚠️ [Proof] Storj comparison failed for \(metric.id): \(error.localizedDescription)")
                 #endif
-                if comparison.hasExplicitWindows {
+                if comparison.hasPrimaryWindow {
                     // Do not silently revert to local 30-day delta when user selected
-                    // explicit windows/granularity. Force visible failure.
+                    // explicit windows. Force visible failure.
                     throw error
                 }
             }
@@ -540,69 +540,83 @@ final class HealthMetricProofService: ObservableObject {
 
         guard !dailyPoints.isEmpty else { throw ProofError.insufficientData }
 
-        let series = aggregateSeries(
-            from: dailyPoints,
-            granularity: comparison.granularity
-        )
+        let inferredGranularity = inferGranularity(comparison: comparison)
+        let series = aggregateSeries(from: dailyPoints, granularity: inferredGranularity)
         let selected = Self.selectComparisonWindows(from: series, comparison: comparison)
         guard let selected else {
             throw ProofError.insufficientData
         }
         let baseline = selected.baseline
-        let latest = selected.latest
-
-        let delta = latest.average - baseline.average
-        let pctChange = baseline.average != 0 ? ((latest.average - baseline.average) / baseline.average) * 100 : nil
+        let comparisonBucket = selected.comparison
 
         let fmt = NumberFormatter()
         fmt.maximumFractionDigits = 1
         fmt.minimumFractionDigits = 0
 
         let baselineStr = fmt.string(from: NSNumber(value: baseline.average)) ?? String(format: "%.1f", baseline.average)
-        let latestStr = fmt.string(from: NSNumber(value: latest.average)) ?? String(format: "%.1f", latest.average)
-        let deltaText: String
-        if let rendered = fmt.string(from: NSNumber(value: abs(delta))) {
-            deltaText = delta >= 0 ? "+\(rendered)" : "-\(rendered)"
-        } else {
-            deltaText = String(format: "%.1f", delta)
-        }
-
-        let pctText: String
-        if let pct = pctChange, let rendered = fmt.string(from: NSNumber(value: abs(pct))) {
-            pctText = " (\(delta >= 0 ? "+" : "-")\(rendered)%)"
-        } else {
-            pctText = ""
-        }
 
         let unitSuffix = metric.unit.map { " \($0)" } ?? ""
-        let summary = "\(metric.displayName) \(comparison.granularity.rawValue)-average changed from \(baselineStr)\(unitSuffix) to \(latestStr)\(unitSuffix), change \(deltaText)\(unitSuffix)\(pctText)"
+        let summary: String
+        let delta: Double?
+        let pctChange: Double?
+        if let comparison = comparisonBucket {
+            let comparisonStr = fmt.string(from: NSNumber(value: comparison.average)) ?? String(format: "%.1f", comparison.average)
+            let computedDelta = comparison.average - baseline.average
+            let computedPct = baseline.average != 0 ? ((comparison.average - baseline.average) / baseline.average) * 100 : nil
+            let deltaText: String
+            if let rendered = fmt.string(from: NSNumber(value: abs(computedDelta))) {
+                deltaText = computedDelta >= 0 ? "+\(rendered)" : "-\(rendered)"
+            } else {
+                deltaText = String(format: "%.1f", computedDelta)
+            }
+            let pctText: String
+            if let pct = computedPct, let rendered = fmt.string(from: NSNumber(value: abs(pct))) {
+                pctText = " (\(computedDelta >= 0 ? "+" : "-")\(rendered)%)"
+            } else {
+                pctText = ""
+            }
+            summary = "\(metric.displayName) \(inferredGranularity.rawValue)-average changed from \(baselineStr)\(unitSuffix) to \(comparisonStr)\(unitSuffix), change \(deltaText)\(unitSuffix)\(pctText)"
+            delta = computedDelta
+            pctChange = computedPct
+        } else {
+            summary = "\(metric.displayName) \(inferredGranularity.rawValue)-average for selected range was \(baselineStr)\(unitSuffix)"
+            delta = nil
+            pctChange = nil
+        }
 
         let iso = ISO8601DateFormatter()
         #if DEBUG
-        print("""
-        🧪 [Proof] built weekly claim metric=\(metric.id)
-        🧪 [Proof] baselineBucket=\(iso.string(from: baseline.bucketStart)) avg=\(baseline.average) days=\(baseline.dayCount)
-        🧪 [Proof] comparisonBucket=\(iso.string(from: latest.bucketStart)) avg=\(latest.average) days=\(latest.dayCount)
-        🧪 [Proof] delta=\(delta) mode=\("user_selected_windows") granularity=\(comparison.granularity.rawValue)
-        """)
+        print("🧪 [Proof] built claim metric=\(metric.id)")
+        print("🧪 [Proof] baselineBucket=\(iso.string(from: baseline.bucketStart)) avg=\(baseline.average) days=\(baseline.dayCount)")
+        if let c = comparisonBucket {
+            print("🧪 [Proof] comparisonBucket=\(iso.string(from: c.bucketStart)) avg=\(c.average) days=\(c.dayCount)")
+        } else {
+            print("🧪 [Proof] comparisonBucket=none")
+        }
+        let deltaText = delta.map { String($0) } ?? "n/a"
+        let modeText = comparisonBucket == nil ? "single_window_confirm" : "user_selected_windows"
+        print("🧪 [Proof] delta=\(deltaText) mode=\(modeText) granularity=\(inferredGranularity.rawValue)")
         #endif
         var details: [String: String] = [
-            "aggregationType": "\(comparison.granularity.rawValue)_average",
-            "comparisonMode": "user_selected_windows",
-            "comparisonGranularity": comparison.granularity.rawValue,
+            "aggregationType": "\(inferredGranularity.rawValue)_average",
+            "comparisonMode": comparisonBucket == nil ? "single_window_confirm" : "user_selected_windows",
+            "comparisonGranularity": inferredGranularity.rawValue,
             "baselineRangeStart": comparison.baselineStartISO ?? iso.string(from: baseline.bucketStart),
             "baselineRangeEnd": comparison.baselineEndISO ?? iso.string(from: baseline.bucketEnd),
-            "comparisonRangeStart": comparison.comparisonStartISO ?? iso.string(from: latest.bucketStart),
-            "comparisonRangeEnd": comparison.comparisonEndISO ?? iso.string(from: latest.bucketEnd),
             "baselineBucketStart": iso.string(from: baseline.bucketStart),
-            "comparisonBucketStart": iso.string(from: latest.bucketStart),
             "baselineAverage": String(baseline.average),
-            "comparisonAverage": String(latest.average),
             "baselineDayCount": String(baseline.dayCount),
-            "comparisonDayCount": String(latest.dayCount),
             "pointsUsed": String(series.count),
-            "delta": String(delta)
         ]
+        if let comparisonAgg = comparisonBucket {
+            details["comparisonRangeStart"] = comparison.comparisonStartISO ?? iso.string(from: comparisonAgg.bucketStart)
+            details["comparisonRangeEnd"] = comparison.comparisonEndISO ?? iso.string(from: comparisonAgg.bucketEnd)
+            details["comparisonBucketStart"] = iso.string(from: comparisonAgg.bucketStart)
+            details["comparisonAverage"] = String(comparisonAgg.average)
+            details["comparisonDayCount"] = String(comparisonAgg.dayCount)
+        }
+        if let delta { details["delta"] = String(delta) }
+        if let pctChange { details["pctChange"] = String(pctChange) }
 
         #if DEBUG
         if let baselineDebugJSON = encodeBucketDebugJSON(selected.baselineWindow),
@@ -616,7 +630,10 @@ final class HealthMetricProofService: ObservableObject {
             type: .metricChange,
             summary: summary,
             metricKey: metric.id,
-            period: .init(start: iso.string(from: baseline.bucketStart), end: iso.string(from: latest.bucketEnd)),
+            period: .init(
+                start: iso.string(from: baseline.bucketStart),
+                end: iso.string(from: (comparisonBucket ?? baseline).bucketEnd)
+            ),
             details: details
         )
     }
@@ -627,22 +644,30 @@ final class HealthMetricProofService: ObservableObject {
     ) -> ComparisonWindowSelection? {
         let iso = ISO8601DateFormatter()
 
-        if comparison.hasExplicitWindows,
+        if comparison.hasPrimaryWindow,
            let baselineStart = comparison.baselineStartISO.flatMap({ iso.date(from: $0) }),
-           let baselineEnd = comparison.baselineEndISO.flatMap({ iso.date(from: $0) }),
-           let comparisonStart = comparison.comparisonStartISO.flatMap({ iso.date(from: $0) }),
-           let comparisonEnd = comparison.comparisonEndISO.flatMap({ iso.date(from: $0) }) {
+           let baselineEnd = comparison.baselineEndISO.flatMap({ iso.date(from: $0) }) {
             let baselineWindow = series.filter { $0.bucketStart >= baselineStart && $0.bucketStart <= baselineEnd }
-            let comparisonWindow = series.filter { $0.bucketStart >= comparisonStart && $0.bucketStart <= comparisonEnd }
-            guard let baseline = Self.aggregateBuckets(baselineWindow),
-                  let latest = Self.aggregateBuckets(comparisonWindow) else {
-                return nil
+            guard let baseline = Self.aggregateBuckets(baselineWindow) else { return nil }
+
+            if comparison.hasComparisonWindow,
+               let comparisonStart = comparison.comparisonStartISO.flatMap({ iso.date(from: $0) }),
+               let comparisonEnd = comparison.comparisonEndISO.flatMap({ iso.date(from: $0) }) {
+                let comparisonWindow = series.filter { $0.bucketStart >= comparisonStart && $0.bucketStart <= comparisonEnd }
+                guard let latest = Self.aggregateBuckets(comparisonWindow) else { return nil }
+                return ComparisonWindowSelection(
+                    baseline: baseline,
+                    comparison: latest,
+                    baselineWindow: baselineWindow,
+                    comparisonWindow: comparisonWindow
+                )
             }
+
             return ComparisonWindowSelection(
                 baseline: baseline,
-                latest: latest,
+                comparison: nil,
                 baselineWindow: baselineWindow,
-                comparisonWindow: comparisonWindow
+                comparisonWindow: []
             )
         }
 
@@ -652,7 +677,7 @@ final class HealthMetricProofService: ObservableObject {
         }
         return ComparisonWindowSelection(
             baseline: first,
-            latest: last,
+            comparison: last,
             baselineWindow: [first],
             comparisonWindow: [last]
         )
@@ -700,10 +725,11 @@ final class HealthMetricProofService: ObservableObject {
         from series: [TimeBucketAggregate],
         comparison: ProofComparisonOptions
     ) -> (baseline: TimeBucketAggregate, latest: TimeBucketAggregate)? {
-        guard let selected = selectComparisonWindows(from: series, comparison: comparison) else {
+        guard let selected = selectComparisonWindows(from: series, comparison: comparison),
+              let latest = selected.comparison else {
             return nil
         }
-        return (selected.baseline, selected.latest)
+        return (selected.baseline, latest)
     }
     #endif
 
@@ -836,6 +862,24 @@ final class HealthMetricProofService: ObservableObject {
         case .month:
             return computeMonthlyAverages(from: dailyPoints)
         }
+    }
+
+    private func inferGranularity(comparison: ProofComparisonOptions) -> ComparisonGranularity {
+        let iso = ISO8601DateFormatter()
+        let candidates = [
+            comparison.baselineStartISO.flatMap { iso.date(from: $0) },
+            comparison.baselineEndISO.flatMap { iso.date(from: $0) },
+            comparison.comparisonStartISO.flatMap { iso.date(from: $0) },
+            comparison.comparisonEndISO.flatMap { iso.date(from: $0) }
+        ].compactMap { $0 }
+        guard let minDate = candidates.min(),
+              let maxDate = candidates.max() else {
+            return .week
+        }
+        let days = Calendar(identifier: .gregorian).dateComponents([.day], from: minDate, to: maxDate).day ?? 0
+        if days <= 1 { return .day }
+        if days >= 90 { return .month }
+        return .week
     }
 
     private func buildMetricRangeClaim(
@@ -1062,7 +1106,7 @@ struct TimeBucketAggregate {
 
 private struct ComparisonWindowSelection {
     let baseline: TimeBucketAggregate
-    let latest: TimeBucketAggregate
+    let comparison: TimeBucketAggregate?
     let baselineWindow: [TimeBucketAggregate]
     let comparisonWindow: [TimeBucketAggregate]
 }
