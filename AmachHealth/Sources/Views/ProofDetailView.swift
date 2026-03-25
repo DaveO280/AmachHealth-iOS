@@ -85,6 +85,18 @@ struct ProofDetailView: View {
                 if let comparisonMode = proof.claim.details?["comparisonMode"] {
                     row("Comparison", prettyMethodLabel(comparisonMode))
                 }
+                if let baselineRangeStart = proof.claim.details?["baselineRangeStart"] {
+                    row("Baseline range start", baselineRangeStart)
+                }
+                if let baselineRangeEnd = proof.claim.details?["baselineRangeEnd"] {
+                    row("Baseline range end", baselineRangeEnd)
+                }
+                if let comparisonRangeStart = proof.claim.details?["comparisonRangeStart"] {
+                    row("Comparison range start", comparisonRangeStart)
+                }
+                if let comparisonRangeEnd = proof.claim.details?["comparisonRangeEnd"] {
+                    row("Comparison range end", comparisonRangeEnd)
+                }
                 if let baselineWeek = proof.claim.details?["baselineWeekStart"] {
                     row("Baseline week", baselineWeek)
                 }
@@ -188,6 +200,8 @@ struct ProofDetailView: View {
             return "Last 4 vs Prior 4 Weeks"
         case "selected_range_first_vs_latest":
             return "Selected Range (First vs Latest Week)"
+        case "user_selected_windows":
+            return "User-Selected Baseline vs Comparison Windows"
         default:
             return raw.replacingOccurrences(of: "_", with: " ").capitalized
         }

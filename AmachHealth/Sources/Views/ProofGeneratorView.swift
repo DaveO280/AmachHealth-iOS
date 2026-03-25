@@ -26,8 +26,10 @@ struct ProofGeneratorView: View {
     @State private var selectedCategory: ProofableMetricCategory?
     @State private var selectedMetric: ProofableMetric?
     @State private var selectedPeriod: TrendPeriod = .month
-    @State private var selectedWeekRangeStart: Date = Calendar.current.date(byAdding: .day, value: -84, to: Date()) ?? Date()
-    @State private var selectedWeekRangeEnd: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @State private var baselineWeekStart: Date = Calendar.current.date(byAdding: .day, value: -168, to: Date()) ?? Date()
+    @State private var baselineWeekEnd: Date = Calendar.current.date(byAdding: .day, value: -140, to: Date()) ?? Date()
+    @State private var comparisonWeekStart: Date = Calendar.current.date(byAdding: .day, value: -35, to: Date()) ?? Date()
+    @State private var comparisonWeekEnd: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
 
     @State private var generatingMetricId: String?
     @State private var error: String?
@@ -265,22 +267,44 @@ struct ProofGeneratorView: View {
 
     private var weeklyRangePicker: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
-            Text("Week range to verify")
+            Text("Comparison windows")
                 .font(AmachType.h3)
                 .foregroundStyle(Color.amachTextPrimary)
 
             VStack(spacing: AmachSpacing.sm) {
-                DatePicker("From week", selection: $selectedWeekRangeStart, displayedComponents: [.date])
+                Text("Baseline window")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                DatePicker("Baseline start", selection: $baselineWeekStart, displayedComponents: [.date])
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextPrimary)
                     .tint(Color.amachPrimaryBright)
 
-                DatePicker("To week", selection: $selectedWeekRangeEnd, in: selectedWeekRangeStart..., displayedComponents: [.date])
+                DatePicker("Baseline end", selection: $baselineWeekEnd, in: baselineWeekStart..., displayedComponents: [.date])
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextPrimary)
                     .tint(Color.amachPrimaryBright)
 
-                Text("Compares the first valid week vs latest valid week inside this selected range.")
+                Divider()
+
+                Text("Comparison window")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                DatePicker("Comparison start", selection: $comparisonWeekStart, displayedComponents: [.date])
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextPrimary)
+                    .tint(Color.amachPrimaryBright)
+
+                DatePicker("Comparison end", selection: $comparisonWeekEnd, in: comparisonWeekStart..., displayedComponents: [.date])
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextPrimary)
+                    .tint(Color.amachPrimaryBright)
+
+                Text("Verifies baseline average window vs comparison average window.")
                     .font(AmachType.tiny)
                     .foregroundStyle(Color.amachTextSecondary)
             }
@@ -304,8 +328,10 @@ struct ProofGeneratorView: View {
             let iso = ISO8601DateFormatter()
             let comparison = shouldShowWeeklyComparison(for: metric)
                 ? ProofComparisonOptions(
-                    rangeStartISO: iso.string(from: startOfWeek(selectedWeekRangeStart)),
-                    rangeEndISO: iso.string(from: startOfWeek(selectedWeekRangeEnd))
+                    baselineStartISO: iso.string(from: startOfWeek(baselineWeekStart)),
+                    baselineEndISO: iso.string(from: startOfWeek(baselineWeekEnd)),
+                    comparisonStartISO: iso.string(from: startOfWeek(comparisonWeekStart)),
+                    comparisonEndISO: iso.string(from: startOfWeek(comparisonWeekEnd))
                 )
                 : .default
 

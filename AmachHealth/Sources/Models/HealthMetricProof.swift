@@ -18,10 +18,17 @@ enum HealthMetricProofType: String, Codable {
 }
 
 struct ProofComparisonOptions: Codable, Equatable {
-    let rangeStartISO: String?
-    let rangeEndISO: String?
+    let baselineStartISO: String?
+    let baselineEndISO: String?
+    let comparisonStartISO: String?
+    let comparisonEndISO: String?
 
-    static let `default` = ProofComparisonOptions(rangeStartISO: nil, rangeEndISO: nil)
+    static let `default` = ProofComparisonOptions(
+        baselineStartISO: nil,
+        baselineEndISO: nil,
+        comparisonStartISO: nil,
+        comparisonEndISO: nil
+    )
 }
 
 /// Human-readable claim text plus structured payload for the verifier.
