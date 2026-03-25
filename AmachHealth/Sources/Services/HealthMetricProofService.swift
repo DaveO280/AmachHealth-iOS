@@ -530,8 +530,11 @@ final class HealthMetricProofService: ObservableObject {
 
         guard !dailyPoints.isEmpty else { throw ProofError.insufficientData }
 
-        let weekly = computeWeeklyAverages(from: dailyPoints)
-        let selected = selectComparisonWindows(from: weekly, comparison: comparison)
+        let series = aggregateSeries(
+            from: dailyPoints,
+            granularity: comparison.granularity
+        )
+        let selected = selectComparisonWindows(from: series, comparison: comparison)
         guard let baseline = selected?.baseline, let latest = selected?.latest else {
             throw ProofError.insufficientData
         }
@@ -560,45 +563,46 @@ final class HealthMetricProofService: ObservableObject {
         }
 
         let unitSuffix = metric.unit.map { " \($0)" } ?? ""
-        let summary = "\(metric.displayName) weekly average moved from \(baselineStr)\(unitSuffix) to \(latestStr)\(unitSuffix), change \(deltaText)\(unitSuffix)\(pctText)"
+        let summary = "\(metric.displayName) \(comparison.granularity.rawValue)-average changed from \(baselineStr)\(unitSuffix) to \(latestStr)\(unitSuffix), change \(deltaText)\(unitSuffix)\(pctText)"
 
         let iso = ISO8601DateFormatter()
         #if DEBUG
         print("""
         🧪 [Proof] built weekly claim metric=\(metric.id)
-        🧪 [Proof] baselineWeek=\(iso.string(from: baseline.weekStart)) avg=\(baseline.average) days=\(baseline.dayCount)
-        🧪 [Proof] comparisonWeek=\(iso.string(from: latest.weekStart)) avg=\(latest.average) days=\(latest.dayCount)
-        🧪 [Proof] delta=\(delta) mode=\("user_selected_windows")
+        🧪 [Proof] baselineBucket=\(iso.string(from: baseline.bucketStart)) avg=\(baseline.average) days=\(baseline.dayCount)
+        🧪 [Proof] comparisonBucket=\(iso.string(from: latest.bucketStart)) avg=\(latest.average) days=\(latest.dayCount)
+        🧪 [Proof] delta=\(delta) mode=\("user_selected_windows") granularity=\(comparison.granularity.rawValue)
         """)
         #endif
         return HealthMetricClaim(
             type: .metricChange,
             summary: summary,
             metricKey: metric.id,
-            period: .init(start: iso.string(from: baseline.weekStart), end: iso.string(from: latest.weekEnd)),
+            period: .init(start: iso.string(from: baseline.bucketStart), end: iso.string(from: latest.bucketEnd)),
             details: [
-                "aggregationType": "weekly_average",
+                "aggregationType": "\(comparison.granularity.rawValue)_average",
                 "comparisonMode": "user_selected_windows",
-                "baselineRangeStart": comparison.baselineStartISO ?? iso.string(from: baseline.weekStart),
-                "baselineRangeEnd": comparison.baselineEndISO ?? iso.string(from: baseline.weekEnd),
-                "comparisonRangeStart": comparison.comparisonStartISO ?? iso.string(from: latest.weekStart),
-                "comparisonRangeEnd": comparison.comparisonEndISO ?? iso.string(from: latest.weekEnd),
-                "baselineWeekStart": iso.string(from: baseline.weekStart),
-                "latestWeekStart": iso.string(from: latest.weekStart),
+                "comparisonGranularity": comparison.granularity.rawValue,
+                "baselineRangeStart": comparison.baselineStartISO ?? iso.string(from: baseline.bucketStart),
+                "baselineRangeEnd": comparison.baselineEndISO ?? iso.string(from: baseline.bucketEnd),
+                "comparisonRangeStart": comparison.comparisonStartISO ?? iso.string(from: latest.bucketStart),
+                "comparisonRangeEnd": comparison.comparisonEndISO ?? iso.string(from: latest.bucketEnd),
+                "baselineBucketStart": iso.string(from: baseline.bucketStart),
+                "comparisonBucketStart": iso.string(from: latest.bucketStart),
                 "baselineAverage": String(baseline.average),
-                "latestAverage": String(latest.average),
+                "comparisonAverage": String(latest.average),
                 "baselineDayCount": String(baseline.dayCount),
-                "latestDayCount": String(latest.dayCount),
-                "weeklyPointsUsed": String(weekly.count),
+                "comparisonDayCount": String(latest.dayCount),
+                "pointsUsed": String(series.count),
                 "delta": String(delta)
             ]
         )
     }
 
     private func selectComparisonWindows(
-        from weekly: [WeeklyAggregate],
+        from series: [TimeBucketAggregate],
         comparison: ProofComparisonOptions
-    ) -> (baseline: WeeklyAggregate, latest: WeeklyAggregate)? {
+    ) -> (baseline: TimeBucketAggregate, latest: TimeBucketAggregate)? {
         let iso = ISO8601DateFormatter()
         let hasExplicitRanges =
             comparison.baselineStartISO != nil &&
@@ -611,8 +615,8 @@ final class HealthMetricProofService: ObservableObject {
            let baselineEnd = comparison.baselineEndISO.flatMap({ iso.date(from: $0) }),
            let comparisonStart = comparison.comparisonStartISO.flatMap({ iso.date(from: $0) }),
            let comparisonEnd = comparison.comparisonEndISO.flatMap({ iso.date(from: $0) }) {
-            let baselineWindow = weekly.filter { $0.weekStart >= baselineStart && $0.weekStart <= baselineEnd }
-            let comparisonWindow = weekly.filter { $0.weekStart >= comparisonStart && $0.weekStart <= comparisonEnd }
+            let baselineWindow = series.filter { $0.bucketStart >= baselineStart && $0.bucketStart <= baselineEnd }
+            let comparisonWindow = series.filter { $0.bucketStart >= comparisonStart && $0.bucketStart <= comparisonEnd }
             guard let baseline = aggregateWeeklyWindow(baselineWindow),
                   let latest = aggregateWeeklyWindow(comparisonWindow) else {
                 return nil
@@ -621,21 +625,21 @@ final class HealthMetricProofService: ObservableObject {
         }
 
         // Backward-compatible fallback
-        guard weekly.count >= 2, let first = weekly.first, let last = weekly.last else {
+        guard series.count >= 2, let first = series.first, let last = series.last else {
             return nil
         }
         return (first, last)
     }
 
-    private func aggregateWeeklyWindow(_ weeks: [WeeklyAggregate]) -> WeeklyAggregate? {
-        guard let first = weeks.first, let last = weeks.last, !weeks.isEmpty else { return nil }
-        let dayCount = weeks.reduce(0) { $0 + $1.dayCount }
+    private func aggregateWeeklyWindow(_ buckets: [TimeBucketAggregate]) -> TimeBucketAggregate? {
+        guard let first = buckets.first, let last = buckets.last, !buckets.isEmpty else { return nil }
+        let dayCount = buckets.reduce(0) { $0 + $1.dayCount }
         guard dayCount > 0 else { return nil }
-        let weightedSum = weeks.reduce(0.0) { $0 + ($1.average * Double($1.dayCount)) }
+        let weightedSum = buckets.reduce(0.0) { $0 + ($1.average * Double($1.dayCount)) }
         let average = weightedSum / Double(dayCount)
-        return WeeklyAggregate(
-            weekStart: first.weekStart,
-            weekEnd: last.weekEnd,
+        return TimeBucketAggregate(
+            bucketStart: first.bucketStart,
+            bucketEnd: last.bucketEnd,
             average: average,
             dayCount: dayCount
         )
@@ -706,7 +710,7 @@ final class HealthMetricProofService: ObservableObject {
             .lowercased()
     }
 
-    private func computeWeeklyAverages(from dailyPoints: [(date: Date, value: Double)]) -> [WeeklyAggregate] {
+    private func computeWeeklyAverages(from dailyPoints: [(date: Date, value: Double)]) -> [TimeBucketAggregate] {
         var grouped: [Date: [Double]] = [:]
         let calendar = Calendar(identifier: .gregorian)
 
@@ -721,14 +725,55 @@ final class HealthMetricProofService: ObservableObject {
                 guard values.count >= 4 else { return nil }
                 let average = values.reduce(0, +) / Double(values.count)
                 let weekEnd = calendar.date(byAdding: .day, value: 6, to: weekStart) ?? weekStart
-                return WeeklyAggregate(
-                    weekStart: weekStart,
-                    weekEnd: weekEnd,
+                return TimeBucketAggregate(
+                    bucketStart: weekStart,
+                    bucketEnd: weekEnd,
                     average: average,
                     dayCount: values.count
                 )
             }
-            .sorted { $0.weekStart < $1.weekStart }
+            .sorted { $0.bucketStart < $1.bucketStart }
+    }
+
+    private func computeDailyAverages(from dailyPoints: [(date: Date, value: Double)]) -> [TimeBucketAggregate] {
+        let calendar = Calendar(identifier: .gregorian)
+        return dailyPoints.map { point in
+            let dayStart = calendar.startOfDay(for: point.date)
+            let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)?.addingTimeInterval(-1) ?? dayStart
+            return TimeBucketAggregate(bucketStart: dayStart, bucketEnd: dayEnd, average: point.value, dayCount: 1)
+        }
+        .sorted { $0.bucketStart < $1.bucketStart }
+    }
+
+    private func computeMonthlyAverages(from dailyPoints: [(date: Date, value: Double)]) -> [TimeBucketAggregate] {
+        var grouped: [Date: [Double]] = [:]
+        let calendar = Calendar(identifier: .gregorian)
+        for point in dailyPoints {
+            let components = calendar.dateComponents([.year, .month], from: point.date)
+            guard let monthStart = calendar.date(from: components) else { continue }
+            grouped[monthStart, default: []].append(point.value)
+        }
+        return grouped.compactMap { monthStart, values in
+            guard !values.isEmpty else { return nil }
+            let average = values.reduce(0, +) / Double(values.count)
+            let monthEnd = calendar.date(byAdding: DateComponents(month: 1, day: 0, second: -1), to: monthStart) ?? monthStart
+            return TimeBucketAggregate(bucketStart: monthStart, bucketEnd: monthEnd, average: average, dayCount: values.count)
+        }
+        .sorted { $0.bucketStart < $1.bucketStart }
+    }
+
+    private func aggregateSeries(
+        from dailyPoints: [(date: Date, value: Double)],
+        granularity: ComparisonGranularity
+    ) -> [TimeBucketAggregate] {
+        switch granularity {
+        case .day:
+            return computeDailyAverages(from: dailyPoints)
+        case .week:
+            return computeWeeklyAverages(from: dailyPoints)
+        case .month:
+            return computeMonthlyAverages(from: dailyPoints)
+        }
     }
 
     private func buildMetricRangeClaim(
@@ -946,9 +991,9 @@ enum ProofError: LocalizedError {
     }
 }
 
-private struct WeeklyAggregate {
-    let weekStart: Date
-    let weekEnd: Date
+private struct TimeBucketAggregate {
+    let bucketStart: Date
+    let bucketEnd: Date
     let average: Double
     let dayCount: Int
 }

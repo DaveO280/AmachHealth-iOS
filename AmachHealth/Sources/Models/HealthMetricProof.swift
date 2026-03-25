@@ -18,17 +18,33 @@ enum HealthMetricProofType: String, Codable {
 }
 
 struct ProofComparisonOptions: Codable, Equatable {
+    let granularity: ComparisonGranularity
     let baselineStartISO: String?
     let baselineEndISO: String?
     let comparisonStartISO: String?
     let comparisonEndISO: String?
 
     static let `default` = ProofComparisonOptions(
+        granularity: .week,
         baselineStartISO: nil,
         baselineEndISO: nil,
         comparisonStartISO: nil,
         comparisonEndISO: nil
     )
+}
+
+enum ComparisonGranularity: String, Codable, CaseIterable {
+    case day
+    case week
+    case month
+
+    var title: String {
+        switch self {
+        case .day: return "Day"
+        case .week: return "Week"
+        case .month: return "Month"
+        }
+    }
 }
 
 /// Human-readable claim text plus structured payload for the verifier.

@@ -26,6 +26,7 @@ struct ProofGeneratorView: View {
     @State private var selectedCategory: ProofableMetricCategory?
     @State private var selectedMetric: ProofableMetric?
     @State private var selectedPeriod: TrendPeriod = .month
+    @State private var selectedGranularity: ComparisonGranularity = .week
     @State private var baselineWeekStart: Date = Calendar.current.date(byAdding: .day, value: -168, to: Date()) ?? Date()
     @State private var baselineWeekEnd: Date = Calendar.current.date(byAdding: .day, value: -140, to: Date()) ?? Date()
     @State private var comparisonWeekStart: Date = Calendar.current.date(byAdding: .day, value: -35, to: Date()) ?? Date()
@@ -272,6 +273,13 @@ struct ProofGeneratorView: View {
                 .foregroundStyle(Color.amachTextPrimary)
 
             VStack(spacing: AmachSpacing.sm) {
+                Picker("Granularity", selection: $selectedGranularity) {
+                    ForEach(ComparisonGranularity.allCases, id: \.self) { g in
+                        Text(g.title).tag(g)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 Text("Baseline window")
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextSecondary)
@@ -328,17 +336,18 @@ struct ProofGeneratorView: View {
             let iso = ISO8601DateFormatter()
             let comparison = shouldShowWeeklyComparison(for: metric)
                 ? ProofComparisonOptions(
-                    baselineStartISO: iso.string(from: startOfWeek(baselineWeekStart)),
-                    baselineEndISO: iso.string(from: startOfWeek(baselineWeekEnd)),
-                    comparisonStartISO: iso.string(from: startOfWeek(comparisonWeekStart)),
-                    comparisonEndISO: iso.string(from: startOfWeek(comparisonWeekEnd))
+                    granularity: selectedGranularity,
+                    baselineStartISO: iso.string(from: normalizedBoundary(baselineWeekStart)),
+                    baselineEndISO: iso.string(from: normalizedBoundary(baselineWeekEnd)),
+                    comparisonStartISO: iso.string(from: normalizedBoundary(comparisonWeekStart)),
+                    comparisonEndISO: iso.string(from: normalizedBoundary(comparisonWeekEnd))
                 )
                 : .default
 
             #if DEBUG
             if shouldShowWeeklyComparison(for: metric) {
                 print("""
-                🧪 [Proof] metric=\(metric.id) mode=user_selected_windows
+                🧪 [Proof] metric=\(metric.id) mode=user_selected_windows granularity=\(selectedGranularity.rawValue)
                 🧪 [Proof] baseline=\(comparison.baselineStartISO ?? "nil") -> \(comparison.baselineEndISO ?? "nil")
                 🧪 [Proof] comparison=\(comparison.comparisonStartISO ?? "nil") -> \(comparison.comparisonEndISO ?? "nil")
                 """)
@@ -404,5 +413,18 @@ struct ProofGeneratorView: View {
         let calendar = Calendar(identifier: .gregorian)
         let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
         return calendar.date(from: components) ?? date
+    }
+
+    private func normalizedBoundary(_ date: Date) -> Date {
+        let calendar = Calendar(identifier: .gregorian)
+        switch selectedGranularity {
+        case .day:
+            return calendar.startOfDay(for: date)
+        case .week:
+            return startOfWeek(date)
+        case .month:
+            let components = calendar.dateComponents([.year, .month], from: date)
+            return calendar.date(from: components) ?? date
+        }
     }
 }

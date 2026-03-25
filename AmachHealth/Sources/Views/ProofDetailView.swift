@@ -97,14 +97,14 @@ struct ProofDetailView: View {
                 if let comparisonRangeEnd = proof.claim.details?["comparisonRangeEnd"] {
                     row("Comparison range end", comparisonRangeEnd)
                 }
-                if let baselineWeek = proof.claim.details?["baselineWeekStart"] {
-                    row("Baseline week", baselineWeek)
+                if let baselineBucket = proof.claim.details?["baselineBucketStart"] {
+                    row("Baseline bucket", baselineBucket)
                 }
-                if let latestWeek = proof.claim.details?["latestWeekStart"] {
-                    row("Latest week", latestWeek)
+                if let comparisonBucket = proof.claim.details?["comparisonBucketStart"] {
+                    row("Comparison bucket", comparisonBucket)
                 }
-                if let points = proof.claim.details?["weeklyPointsUsed"] {
-                    row("Weeks used", points)
+                if let points = proof.claim.details?["pointsUsed"] {
+                    row("Points used", points)
                 }
             }
         }
