@@ -431,14 +431,24 @@ final class HealthMetricProofService: ObservableObject {
         encryptionKey: WalletEncryptionKey,
         comparison: ProofComparisonOptions
     ) async throws -> HealthMetricClaim {
-        if metric.category == .healthKit,
-           let storjClaim = try? await buildStorjWeeklyAverageClaim(
-            metric: metric,
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            comparison: comparison
-           ) {
-            return storjClaim
+        if metric.category == .healthKit {
+            do {
+                return try await buildStorjWeeklyAverageClaim(
+                    metric: metric,
+                    walletAddress: walletAddress,
+                    encryptionKey: encryptionKey,
+                    comparison: comparison
+                )
+            } catch {
+                #if DEBUG
+                print("⚠️ [Proof] Storj comparison failed for \(metric.id): \(error.localizedDescription)")
+                #endif
+                if comparison.hasExplicitWindows {
+                    // Do not silently revert to local 30-day delta when user selected
+                    // explicit windows/granularity. Force visible failure.
+                    throw error
+                }
+            }
         }
 
         return try buildLocalMetricChangeClaim(metric: metric, period: period)
@@ -534,7 +544,7 @@ final class HealthMetricProofService: ObservableObject {
             from: dailyPoints,
             granularity: comparison.granularity
         )
-        let selected = selectComparisonWindows(from: series, comparison: comparison)
+        let selected = Self.selectComparisonWindows(from: series, comparison: comparison)
         guard let baseline = selected?.baseline, let latest = selected?.latest else {
             throw ProofError.insufficientData
         }
@@ -599,26 +609,21 @@ final class HealthMetricProofService: ObservableObject {
         )
     }
 
-    private func selectComparisonWindows(
+    private static func selectComparisonWindows(
         from series: [TimeBucketAggregate],
         comparison: ProofComparisonOptions
     ) -> (baseline: TimeBucketAggregate, latest: TimeBucketAggregate)? {
         let iso = ISO8601DateFormatter()
-        let hasExplicitRanges =
-            comparison.baselineStartISO != nil &&
-            comparison.baselineEndISO != nil &&
-            comparison.comparisonStartISO != nil &&
-            comparison.comparisonEndISO != nil
 
-        if hasExplicitRanges,
+        if comparison.hasExplicitWindows,
            let baselineStart = comparison.baselineStartISO.flatMap({ iso.date(from: $0) }),
            let baselineEnd = comparison.baselineEndISO.flatMap({ iso.date(from: $0) }),
            let comparisonStart = comparison.comparisonStartISO.flatMap({ iso.date(from: $0) }),
            let comparisonEnd = comparison.comparisonEndISO.flatMap({ iso.date(from: $0) }) {
             let baselineWindow = series.filter { $0.bucketStart >= baselineStart && $0.bucketStart <= baselineEnd }
             let comparisonWindow = series.filter { $0.bucketStart >= comparisonStart && $0.bucketStart <= comparisonEnd }
-            guard let baseline = aggregateWeeklyWindow(baselineWindow),
-                  let latest = aggregateWeeklyWindow(comparisonWindow) else {
+            guard let baseline = Self.aggregateBuckets(baselineWindow),
+                  let latest = Self.aggregateBuckets(comparisonWindow) else {
                 return nil
             }
             return (baseline, latest)
@@ -631,7 +636,7 @@ final class HealthMetricProofService: ObservableObject {
         return (first, last)
     }
 
-    private func aggregateWeeklyWindow(_ buckets: [TimeBucketAggregate]) -> TimeBucketAggregate? {
+    private static func aggregateBuckets(_ buckets: [TimeBucketAggregate]) -> TimeBucketAggregate? {
         guard let first = buckets.first, let last = buckets.last, !buckets.isEmpty else { return nil }
         let dayCount = buckets.reduce(0) { $0 + $1.dayCount }
         guard dayCount > 0 else { return nil }
@@ -644,6 +649,15 @@ final class HealthMetricProofService: ObservableObject {
             dayCount: dayCount
         )
     }
+
+    #if DEBUG
+    static func testSelectComparisonWindows(
+        from series: [TimeBucketAggregate],
+        comparison: ProofComparisonOptions
+    ) -> (baseline: TimeBucketAggregate, latest: TimeBucketAggregate)? {
+        selectComparisonWindows(from: series, comparison: comparison)
+    }
+    #endif
 
     private func loadStorjDailySummaries(
         walletAddress: String,
@@ -991,7 +1005,7 @@ enum ProofError: LocalizedError {
     }
 }
 
-private struct TimeBucketAggregate {
+struct TimeBucketAggregate {
     let bucketStart: Date
     let bucketEnd: Date
     let average: Double

@@ -31,6 +31,13 @@ struct ProofComparisonOptions: Codable, Equatable {
         comparisonStartISO: nil,
         comparisonEndISO: nil
     )
+
+    var hasExplicitWindows: Bool {
+        baselineStartISO != nil &&
+        baselineEndISO != nil &&
+        comparisonStartISO != nil &&
+        comparisonEndISO != nil
+    }
 }
 
 enum ComparisonGranularity: String, Codable, CaseIterable {

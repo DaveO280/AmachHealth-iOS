@@ -119,4 +119,49 @@ final class HealthMetricProofModelTests: XCTestCase {
         XCTAssertEqual(result.proof?.claim.metricKey, "appleHealth")
         XCTAssertEqual(result.proof?.evidence.dataType, "apple-health-full-export")
     }
+
+    func test_selectComparisonWindows_usesExplicitUserWindows_notFirstLastFallback() throws {
+        let iso = ISO8601DateFormatter()
+        func d(_ s: String) -> Date { iso.date(from: s)! }
+
+        let series: [TimeBucketAggregate] = [
+            .init(bucketStart: d("2025-12-01T00:00:00Z"), bucketEnd: d("2025-12-01T23:59:59Z"), average: 10, dayCount: 1),
+            .init(bucketStart: d("2025-12-08T00:00:00Z"), bucketEnd: d("2025-12-08T23:59:59Z"), average: 20, dayCount: 1),
+            .init(bucketStart: d("2025-12-15T00:00:00Z"), bucketEnd: d("2025-12-15T23:59:59Z"), average: 30, dayCount: 1),
+            .init(bucketStart: d("2025-12-22T00:00:00Z"), bucketEnd: d("2025-12-22T23:59:59Z"), average: 40, dayCount: 1),
+        ]
+
+        let comparison = ProofComparisonOptions(
+            granularity: .week,
+            baselineStartISO: "2025-12-08T00:00:00Z",
+            baselineEndISO: "2025-12-15T00:00:00Z",
+            comparisonStartISO: "2025-12-22T00:00:00Z",
+            comparisonEndISO: "2025-12-22T00:00:00Z"
+        )
+
+        let selected = HealthMetricProofService.testSelectComparisonWindows(from: series, comparison: comparison)
+        XCTAssertNotNil(selected)
+        XCTAssertEqual(selected?.baseline.average, 25, accuracy: 0.001) // (20+30)/2
+        XCTAssertEqual(selected?.latest.average, 40, accuracy: 0.001)
+    }
+
+    func test_comparisonOptions_hasExplicitWindows_trueOnlyWhenAllBoundsPresent() {
+        let partial = ProofComparisonOptions(
+            granularity: .month,
+            baselineStartISO: "2025-01-01T00:00:00Z",
+            baselineEndISO: nil,
+            comparisonStartISO: "2025-02-01T00:00:00Z",
+            comparisonEndISO: "2025-02-28T00:00:00Z"
+        )
+        XCTAssertFalse(partial.hasExplicitWindows)
+
+        let full = ProofComparisonOptions(
+            granularity: .month,
+            baselineStartISO: "2025-01-01T00:00:00Z",
+            baselineEndISO: "2025-01-31T00:00:00Z",
+            comparisonStartISO: "2025-02-01T00:00:00Z",
+            comparisonEndISO: "2025-02-28T00:00:00Z"
+        )
+        XCTAssertTrue(full.hasExplicitWindows)
+    }
 }
