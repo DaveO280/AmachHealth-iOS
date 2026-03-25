@@ -17,24 +17,11 @@ enum HealthMetricProofType: String, Codable {
     case bodyComposition = "body_composition"
 }
 
-enum WeeklyComparisonMode: String, Codable, CaseIterable {
-    case firstVsLatest = "first_vs_latest"
-    case latestVsPrevious = "latest_vs_previous"
-    case recent4VsPrior4 = "recent4_vs_prior4"
-
-    var title: String {
-        switch self {
-        case .firstVsLatest: return "First vs Latest Week"
-        case .latestVsPrevious: return "Latest vs Previous Week"
-        case .recent4VsPrior4: return "Last 4 vs Prior 4 Weeks"
-        }
-    }
-}
-
 struct ProofComparisonOptions: Codable, Equatable {
-    let weeklyMode: WeeklyComparisonMode
+    let rangeStartISO: String?
+    let rangeEndISO: String?
 
-    static let `default` = ProofComparisonOptions(weeklyMode: .firstVsLatest)
+    static let `default` = ProofComparisonOptions(rangeStartISO: nil, rangeEndISO: nil)
 }
 
 /// Human-readable claim text plus structured payload for the verifier.

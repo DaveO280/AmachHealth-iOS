@@ -26,7 +26,8 @@ struct ProofGeneratorView: View {
     @State private var selectedCategory: ProofableMetricCategory?
     @State private var selectedMetric: ProofableMetric?
     @State private var selectedPeriod: TrendPeriod = .month
-    @State private var selectedWeeklyComparison: WeeklyComparisonMode = .firstVsLatest
+    @State private var selectedWeekRangeStart: Date = Calendar.current.date(byAdding: .day, value: -84, to: Date()) ?? Date()
+    @State private var selectedWeekRangeEnd: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
 
     @State private var generatingMetricId: String?
     @State private var error: String?
@@ -45,16 +46,14 @@ struct ProofGeneratorView: View {
 
                     categoryPicker
 
-                    if !filteredMetrics.isEmpty {
-                        metricList
-                    }
+                    metricSelector
 
                     if let metric = selectedMetric, !metric.supportedPeriods.isEmpty {
                         periodPicker(for: metric)
                     }
 
                     if let metric = selectedMetric, shouldShowWeeklyComparison(for: metric) {
-                        weeklyComparisonPicker
+                        weeklyRangePicker
                     }
 
                     if selectedMetric != nil {
@@ -160,61 +159,48 @@ struct ProofGeneratorView: View {
         }
     }
 
-    private var metricList: some View {
+    private var metricSelector: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.md) {
-            Text("Select a metric")
+            Text("Metric")
                 .font(AmachType.h3)
                 .foregroundStyle(Color.amachTextPrimary)
 
-            VStack(spacing: AmachSpacing.sm) {
+            Menu {
                 ForEach(filteredMetrics) { metric in
-                    metricRow(for: metric)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedMetric = metric
+                            if !metric.supportedPeriods.isEmpty && !metric.supportedPeriods.contains(selectedPeriod) {
+                                selectedPeriod = metric.supportedPeriods[0]
+                            }
+                        }
+                    } label: {
+                        Label(metric.displayName, systemImage: metric.icon)
+                    }
                 }
-            }
-        }
-    }
-
-    private func metricRow(for metric: ProofableMetric) -> some View {
-        let isSelected = selectedMetric?.id == metric.id
-        return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedMetric = metric
-                if !metric.supportedPeriods.isEmpty && !metric.supportedPeriods.contains(selectedPeriod) {
-                    selectedPeriod = metric.supportedPeriods[0]
-                }
-            }
-        } label: {
-            HStack(spacing: AmachSpacing.md) {
-                Image(systemName: metric.icon)
-                    .font(.system(size: 18))
-                    .foregroundStyle(Color.amachPrimaryBright)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(metric.displayName)
-                        .font(AmachType.body)
-                        .foregroundStyle(Color.amachTextPrimary)
-                    Text(metric.subtitle)
-                        .font(AmachType.tiny)
-                        .foregroundStyle(Color.amachTextSecondary)
-                }
-
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
+            } label: {
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: selectedMetric?.icon ?? "slider.horizontal.3")
+                        .font(.system(size: 18))
                         .foregroundStyle(Color.amachPrimaryBright)
-                } else {
-                    Image(systemName: "circle")
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(selectedMetric?.displayName ?? "Select a metric")
+                            .font(AmachType.body)
+                            .foregroundStyle(Color.amachTextPrimary)
+                        Text(selectedMetric?.subtitle ?? "Choose what to prove")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+
+                    Spacer()
+                    Image(systemName: "chevron.down")
                         .foregroundStyle(Color.amachTextSecondary)
                 }
+                .padding(AmachSpacing.lg)
+                .amachCard()
             }
-            .padding(AmachSpacing.lg)
-            .amachCard()
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.amachPrimaryBright : Color.clear, lineWidth: 1.5)
-            )
         }
     }
 
@@ -277,33 +263,29 @@ struct ProofGeneratorView: View {
         .disabled(isGenerating || !wallet.isConnected)
     }
 
-    private var weeklyComparisonPicker: some View {
+    private var weeklyRangePicker: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
-            Text("Weekly comparison")
+            Text("Week range to verify")
                 .font(AmachType.h3)
                 .foregroundStyle(Color.amachTextPrimary)
 
-            Menu {
-                ForEach(WeeklyComparisonMode.allCases, id: \.self) { mode in
-                    Button(mode.title) {
-                        selectedWeeklyComparison = mode
-                    }
-                }
-            } label: {
-                HStack {
-                    Text(selectedWeeklyComparison.title)
-                        .font(AmachType.caption)
-                        .foregroundStyle(Color.amachTextPrimary)
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(Color.amachTextSecondary)
-                }
-                .padding(.horizontal, AmachSpacing.md)
-                .padding(.vertical, AmachSpacing.sm)
-                .background(Color.amachSurface)
-                .cornerRadius(10)
+            VStack(spacing: AmachSpacing.sm) {
+                DatePicker("From week", selection: $selectedWeekRangeStart, displayedComponents: [.date])
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextPrimary)
+                    .tint(Color.amachPrimaryBright)
+
+                DatePicker("To week", selection: $selectedWeekRangeEnd, in: selectedWeekRangeStart..., displayedComponents: [.date])
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextPrimary)
+                    .tint(Color.amachPrimaryBright)
+
+                Text("Compares the first valid week vs latest valid week inside this selected range.")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
             }
+            .padding(AmachSpacing.md)
+            .amachCard()
         }
     }
 
@@ -319,10 +301,18 @@ struct ProofGeneratorView: View {
         defer { generatingMetricId = nil }
 
         do {
+            let iso = ISO8601DateFormatter()
+            let comparison = shouldShowWeeklyComparison(for: metric)
+                ? ProofComparisonOptions(
+                    rangeStartISO: iso.string(from: startOfWeek(selectedWeekRangeStart)),
+                    rangeEndISO: iso.string(from: startOfWeek(selectedWeekRangeEnd))
+                )
+                : .default
+
             _ = try await proofService.generateProof(
                 for: metric,
                 period: selectedPeriod,
-                comparison: ProofComparisonOptions(weeklyMode: selectedWeeklyComparison),
+                comparison: comparison,
                 labSummary: latestLabSummary,
                 dexaSummary: latestDexaSummary
             )
@@ -370,5 +360,11 @@ struct ProofGeneratorView: View {
 
     private func shouldShowWeeklyComparison(for metric: ProofableMetric) -> Bool {
         metric.category == .healthKit && metric.proofType == .metricChange
+    }
+
+    private func startOfWeek(_ date: Date) -> Date {
+        let calendar = Calendar(identifier: .gregorian)
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return calendar.date(from: components) ?? date
     }
 }

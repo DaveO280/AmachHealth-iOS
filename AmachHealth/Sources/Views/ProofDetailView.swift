@@ -186,6 +186,8 @@ struct ProofDetailView: View {
             return "Latest vs Previous Week"
         case "recent4_vs_prior4":
             return "Last 4 vs Prior 4 Weeks"
+        case "selected_range_first_vs_latest":
+            return "Selected Range (First vs Latest Week)"
         default:
             return raw.replacingOccurrences(of: "_", with: " ").capitalized
         }

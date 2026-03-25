@@ -530,10 +530,18 @@ final class HealthMetricProofService: ObservableObject {
 
         guard !dailyPoints.isEmpty else { throw ProofError.insufficientData }
 
-        let weekly = computeWeeklyAverages(from: dailyPoints)
-        let selectedPair = selectWeeklyComparison(weekly, mode: comparison.weeklyMode)
-        guard let baseline = selectedPair?.baseline,
-              let latest = selectedPair?.latest else {
+        var weekly = computeWeeklyAverages(from: dailyPoints)
+
+        if let rangeStartISO = comparison.rangeStartISO,
+           let rangeEndISO = comparison.rangeEndISO,
+           let rangeStart = ISO8601DateFormatter().date(from: rangeStartISO),
+           let rangeEnd = ISO8601DateFormatter().date(from: rangeEndISO) {
+            weekly = weekly.filter { $0.weekStart >= rangeStart && $0.weekStart <= rangeEnd }
+        }
+
+        guard weekly.count >= 2,
+              let baseline = weekly.first,
+              let latest = weekly.last else {
             throw ProofError.insufficientData
         }
 
@@ -571,7 +579,9 @@ final class HealthMetricProofService: ObservableObject {
             period: .init(start: iso.string(from: baseline.weekStart), end: iso.string(from: latest.weekEnd)),
             details: [
                 "aggregationType": "weekly_average",
-                "comparisonMode": comparison.weeklyMode.rawValue,
+                "comparisonMode": "selected_range_first_vs_latest",
+                "selectedRangeStart": comparison.rangeStartISO ?? iso.string(from: baseline.weekStart),
+                "selectedRangeEnd": comparison.rangeEndISO ?? iso.string(from: latest.weekStart),
                 "baselineWeekStart": iso.string(from: baseline.weekStart),
                 "latestWeekStart": iso.string(from: latest.weekStart),
                 "baselineAverage": String(baseline.average),
@@ -581,43 +591,6 @@ final class HealthMetricProofService: ObservableObject {
                 "weeklyPointsUsed": String(weekly.count),
                 "delta": String(delta)
             ]
-        )
-    }
-
-    private func selectWeeklyComparison(
-        _ weekly: [WeeklyAggregate],
-        mode: WeeklyComparisonMode
-    ) -> (baseline: WeeklyAggregate, latest: WeeklyAggregate)? {
-        switch mode {
-        case .firstVsLatest:
-            guard let first = weekly.first, let latest = weekly.last, weekly.count >= 2 else { return nil }
-            return (first, latest)
-        case .latestVsPrevious:
-            guard weekly.count >= 2 else { return nil }
-            return (weekly[weekly.count - 2], weekly[weekly.count - 1])
-        case .recent4VsPrior4:
-            guard weekly.count >= 8 else { return nil }
-            let prior = Array(weekly[(weekly.count - 8)..<(weekly.count - 4)])
-            let recent = Array(weekly[(weekly.count - 4)..<weekly.count])
-            guard let priorAgg = aggregateWeeklyWindow(prior),
-                  let recentAgg = aggregateWeeklyWindow(recent) else {
-                return nil
-            }
-            return (priorAgg, recentAgg)
-        }
-    }
-
-    private func aggregateWeeklyWindow(_ weeks: [WeeklyAggregate]) -> WeeklyAggregate? {
-        guard let first = weeks.first, let last = weeks.last, !weeks.isEmpty else { return nil }
-        let dayCount = weeks.reduce(0) { $0 + $1.dayCount }
-        guard dayCount > 0 else { return nil }
-        let weightedSum = weeks.reduce(0.0) { $0 + ($1.average * Double($1.dayCount)) }
-        let average = weightedSum / Double(dayCount)
-        return WeeklyAggregate(
-            weekStart: first.weekStart,
-            weekEnd: last.weekEnd,
-            average: average,
-            dayCount: dayCount
         )
     }
 
