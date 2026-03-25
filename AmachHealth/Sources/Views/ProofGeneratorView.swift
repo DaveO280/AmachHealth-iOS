@@ -335,6 +335,18 @@ struct ProofGeneratorView: View {
                 )
                 : .default
 
+            #if DEBUG
+            if shouldShowWeeklyComparison(for: metric) {
+                print("""
+                🧪 [Proof] metric=\(metric.id) mode=user_selected_windows
+                🧪 [Proof] baseline=\(comparison.baselineStartISO ?? "nil") -> \(comparison.baselineEndISO ?? "nil")
+                🧪 [Proof] comparison=\(comparison.comparisonStartISO ?? "nil") -> \(comparison.comparisonEndISO ?? "nil")
+                """)
+            } else {
+                print("🧪 [Proof] metric=\(metric.id) mode=default period=\(selectedPeriod.rawValue)")
+            }
+            #endif
+
             _ = try await proofService.generateProof(
                 for: metric,
                 period: selectedPeriod,

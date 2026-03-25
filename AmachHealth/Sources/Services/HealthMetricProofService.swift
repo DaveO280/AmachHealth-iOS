@@ -563,6 +563,14 @@ final class HealthMetricProofService: ObservableObject {
         let summary = "\(metric.displayName) weekly average moved from \(baselineStr)\(unitSuffix) to \(latestStr)\(unitSuffix), change \(deltaText)\(unitSuffix)\(pctText)"
 
         let iso = ISO8601DateFormatter()
+        #if DEBUG
+        print("""
+        🧪 [Proof] built weekly claim metric=\(metric.id)
+        🧪 [Proof] baselineWeek=\(iso.string(from: baseline.weekStart)) avg=\(baseline.average) days=\(baseline.dayCount)
+        🧪 [Proof] comparisonWeek=\(iso.string(from: latest.weekStart)) avg=\(latest.average) days=\(latest.dayCount)
+        🧪 [Proof] delta=\(delta) mode=\("user_selected_windows")
+        """)
+        #endif
         return HealthMetricClaim(
             type: .metricChange,
             summary: summary,
