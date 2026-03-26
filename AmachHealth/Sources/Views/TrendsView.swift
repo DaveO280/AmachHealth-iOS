@@ -88,7 +88,7 @@ struct TrendsView: View {
                 }
             }
             .task {
-                await dashboard.load()
+                await dashboard.load(force: true)
                 lumaContext.update(screen: "Trends")
             }
             .sheet(isPresented: $showLuma) {

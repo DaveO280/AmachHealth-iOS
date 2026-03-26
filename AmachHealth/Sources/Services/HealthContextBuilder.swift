@@ -351,8 +351,8 @@ struct HealthContextBuilder {
         Metrics reflect completed calendar days only. \
         'latest' is yesterday's full-day value; \
         'sevenDayAvg' is the 7-day rolling average of completed days. \
-        Never comment on today's partial-day accumulations (steps, calories, exercise) \
-        unless the user specifically asks about today. \
+        Today's running totals (partial day) are provided separately in the 'today_partial' block — \
+        reference those when the user asks about today specifically. \
         For time-sensitive questions like comparing a workout HRV to similar workouts, \
         use the trend data the user provides in their message.
         """
@@ -458,6 +458,13 @@ struct HealthContextBuilder {
 
         // 2. metrics — formatted health metrics text
         blocks.append(ContextBlock(type: "metrics", content: formatMetrics(metrics, dateRange: dateRange)))
+
+        // 2b. today_partial — running totals for cumulative metrics (steps, calories, exercise)
+        //     These match what the dashboard displays and allow Luma to answer "today" questions correctly.
+        let todayPartialContent = formatTodayPartial(today)
+        if !todayPartialContent.isEmpty {
+            blocks.append(ContextBlock(type: "today_partial", content: todayPartialContent))
+        }
 
         // 3. labs_bloodwork + labs_dexa — separate blocks for targeted queries
         if let labs = LabContextService.shared.context {
@@ -710,6 +717,33 @@ struct HealthContextBuilder {
         if let notes = dx.notes, !notes.isEmpty {
             lines.append("  Notes: " + notes.joined(separator: "; "))
         }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Today's running totals for cumulative metrics — matches what the dashboard shows.
+    /// Only includes metrics with a non-zero value to keep the block concise.
+    private static func formatTodayPartial(_ today: DashboardTodayData) -> String {
+        let now = Date()
+        let cal = Calendar.current
+        let startOfDay = cal.startOfDay(for: now)
+        let secondsElapsed = now.timeIntervalSince(startOfDay)
+        let hoursElapsed = secondsElapsed / 3600
+        let timeLabel = String(format: "%.1f hrs into the day", hoursElapsed)
+
+        var lines: [String] = ["Today's running totals (\(timeLabel)):"]
+        if today.steps > 0 {
+            lines.append(String(format: "  - Steps: %.0f (so far today)", today.steps))
+        }
+        if today.activeCalories > 0 {
+            lines.append(String(format: "  - Active calories: %.0f kcal (so far today)", today.activeCalories))
+        }
+        if today.exerciseMinutes > 0 {
+            lines.append(String(format: "  - Exercise: %.0f min (so far today)", today.exerciseMinutes))
+        }
+        if today.heartRateAvg > 0 {
+            lines.append(String(format: "  - Heart rate avg: %.0f bpm (today)", today.heartRateAvg))
+        }
+        guard lines.count > 1 else { return "" }
         return lines.joined(separator: "\n")
     }
 

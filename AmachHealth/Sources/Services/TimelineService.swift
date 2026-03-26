@@ -94,6 +94,42 @@ final class TimelineService: ObservableObject {
         }
     }
 
+    func updateEvent(
+        _ event: TimelineEvent,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws {
+        error = nil
+        replaceLocalEvent(with: event)
+
+        do {
+            let storeResult = try await api.storeTimelineEvent(
+                event: event,
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey
+            )
+            timelineDebug("Updated timeline event \(event.id) at \(storeResult.storjUri)")
+
+            var storedEvent = event
+            if let attestation = try? await api.createAttestation(
+                storjUri: storeResult.storjUri,
+                dataType: "timeline-event",
+                action: "update",
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey,
+                metadata: ["eventType": event.eventType.rawValue]
+            ) {
+                storedEvent.attestationTxHash = attestation.txHash
+            }
+
+            replaceLocalEvent(with: storedEvent)
+        } catch {
+            timelineDebug("Failed to update timeline event \(event.id): \(error.localizedDescription)")
+            self.error = error.localizedDescription
+            throw error
+        }
+    }
+
     // MARK: - Cache
 
     private func loadFromCache() -> [TimelineEvent] {

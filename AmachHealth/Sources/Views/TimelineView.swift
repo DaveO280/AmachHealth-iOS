@@ -8,6 +8,7 @@ struct TimelineView: View {
     @EnvironmentObject private var timeline: TimelineService
 
     @State private var showingAddEvent = false
+    @State private var editingEvent: TimelineEvent? = nil
     @State private var filter: TimelineFilter = .all
 
     var body: some View {
@@ -41,7 +42,9 @@ struct TimelineView: View {
                                             .textCase(.uppercase)
 
                                         ForEach(groupedEvents[day] ?? []) { event in
-                                            TimelineEventCard(event: event)
+                                            TimelineEventCard(event: event) {
+                                                editingEvent = event
+                                            }
                                         }
                                     }
                                 }
@@ -72,6 +75,12 @@ struct TimelineView: View {
             }
             .sheet(isPresented: $showingAddEvent) {
                 AddTimelineEventSheet()
+                    .environmentObject(wallet)
+                    .environmentObject(timeline)
+                    .presentationBackground(Color.amachSurface)
+            }
+            .sheet(item: $editingEvent) { event in
+                AddTimelineEventSheet(existingEvent: event)
                     .environmentObject(wallet)
                     .environmentObject(timeline)
                     .presentationBackground(Color.amachSurface)
@@ -257,6 +266,12 @@ private extension TimelineView {
 
 private struct TimelineEventCard: View {
     let event: TimelineEvent
+    let onEdit: (() -> Void)?
+
+    init(event: TimelineEvent, onEdit: (() -> Void)? = nil) {
+        self.event = event
+        self.onEdit = onEdit
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
@@ -294,9 +309,27 @@ private struct TimelineEventCard: View {
 
                 Spacer()
 
-                Text(event.timestamp, style: .time)
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextSecondary)
+                HStack(spacing: AmachSpacing.sm) {
+                    Text(event.timestamp, style: .time)
+                        .font(AmachType.tiny)
+                        .foregroundStyle(Color.amachTextSecondary)
+
+                    if !event.isAnomaly, let onEdit {
+                        Button {
+                            AmachHaptics.cardTap()
+                            onEdit()
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.amachTextSecondary)
+                                .frame(width: 28, height: 28)
+                                .background(Color.amachPrimary.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: AmachRadius.xs))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Edit event")
+                    }
+                }
             }
 
             if event.isAnomaly {
