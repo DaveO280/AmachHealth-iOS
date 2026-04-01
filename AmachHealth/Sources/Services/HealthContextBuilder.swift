@@ -351,10 +351,7 @@ struct HealthContextBuilder {
         Metrics reflect completed calendar days only. \
         'latest' is yesterday's full-day value; \
         'sevenDayAvg' is the 7-day rolling average of completed days. \
-        Never comment on today's partial-day accumulations (steps, calories, exercise) \
-        unless the user specifically asks about today. \
-        For time-sensitive questions like comparing a workout HRV to similar workouts, \
-        use the trend data the user provides in their message.
+        Do not comment on today's partial accumulations unless the user asks about today.
         """
 
     /// Build chat context from the dashboard's cached today data + trends.
@@ -488,7 +485,15 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "memory", content: formatMemory(mem)))
         }
 
-        // 6. timeline — active meds, conditions, allergies, recent anomalies
+        // 6. today_partial — running totals for today (steps + active cal only, trimmed to stay under context budget)
+        if today.steps > 0 || today.activeCalories > 0 {
+            var parts: [String] = []
+            if today.steps > 0 { parts.append(String(format: "%.0f steps", today.steps)) }
+            if today.activeCalories > 0 { parts.append(String(format: "%.0f active cal", today.activeCalories)) }
+            blocks.append(ContextBlock(type: "today_partial", content: "Today so far: " + parts.joined(separator: ", ")))
+        }
+
+        // 7. timeline — active meds, conditions, allergies, recent anomalies
         let timelineContent = formatTimeline(TimelineService.shared.events)
         if !timelineContent.isEmpty {
             blocks.append(ContextBlock(type: "timeline", content: timelineContent))
