@@ -70,6 +70,19 @@
 		EE0000000000000000000012 /* WalletServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000002 /* WalletServiceProtocol.swift */; };
 		EE0000000000000000000013 /* ChatService+Testing.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000003 /* ChatService+Testing.swift */; };
 		EE0000000000000000000014 /* ZKSyncAttestationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000004 /* ZKSyncAttestationService.swift */; };
+		FF0000000000000000000201 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000101 /* APIClientTests.swift */; };
+		FF0000000000000000000202 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000102 /* AppStateTests.swift */; };
+		FF0000000000000000000203 /* ChatServiceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000103 /* ChatServiceIntegrationTests.swift */; };
+		FF0000000000000000000204 /* ChatServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000104 /* ChatServiceTests.swift */; };
+		FF0000000000000000000205 /* DesignTokenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000105 /* DesignTokenTests.swift */; };
+		FF0000000000000000000206 /* HealthKitMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000106 /* HealthKitMappingTests.swift */; };
+		FF0000000000000000000207 /* HealthMetricProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000107 /* HealthMetricProofTests.swift */; };
+		FF0000000000000000000208 /* SeedHealthKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000108 /* SeedHealthKitTests.swift */; };
+		FF0000000000000000000209 /* TimelineFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* TimelineFeatureTests.swift */; };
+		FF000000000000000000020A /* MockAmachAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010A /* MockAmachAPIClient.swift */; };
+		FF000000000000000000020B /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010B /* MockURLSession.swift */; };
+		FF000000000000000000020C /* MockWalletService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010C /* MockWalletService.swift */; };
+		FF000000000000000000020D /* MockDataSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010D /* MockDataSeeder.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -138,6 +151,20 @@
 		DD0000000000000000000036 /* ProfilePreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProfilePreviews.swift; path = AmachHealth/Sources/Previews/ProfilePreviews.swift; sourceTree = SOURCE_ROOT; };
 		DD0000000000000000000037 /* ChatPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatPreviews.swift; path = AmachHealth/Sources/Previews/ChatPreviews.swift; sourceTree = SOURCE_ROOT; };
 		DD0000000000000000000038 /* OnboardingPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OnboardingPreviews.swift; path = AmachHealth/Sources/Previews/OnboardingPreviews.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000001 /* Amach HealthTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Amach HealthTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FF0000000000000000000101 /* APIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = APIClientTests.swift; path = AmachHealth/Tests/APIClientTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000102 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppStateTests.swift; path = AmachHealth/Tests/AppStateTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000103 /* ChatServiceIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatServiceIntegrationTests.swift; path = AmachHealth/Tests/ChatServiceIntegrationTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000104 /* ChatServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatServiceTests.swift; path = AmachHealth/Tests/ChatServiceTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000105 /* DesignTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DesignTokenTests.swift; path = AmachHealth/Tests/DesignTokenTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000106 /* HealthKitMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthKitMappingTests.swift; path = AmachHealth/Tests/HealthKitMappingTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000107 /* HealthMetricProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMetricProofTests.swift; path = AmachHealth/Tests/HealthMetricProofTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000108 /* SeedHealthKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SeedHealthKitTests.swift; path = AmachHealth/Tests/SeedHealthKitTests.swift; sourceTree = SOURCE_ROOT; };
+		FF0000000000000000000109 /* TimelineFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineFeatureTests.swift; path = AmachHealth/Tests/TimelineFeatureTests.swift; sourceTree = SOURCE_ROOT; };
+		FF000000000000000000010A /* MockAmachAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockAmachAPIClient.swift; path = AmachHealth/Tests/Helpers/MockAmachAPIClient.swift; sourceTree = SOURCE_ROOT; };
+		FF000000000000000000010B /* MockURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockURLSession.swift; path = AmachHealth/Tests/Helpers/MockURLSession.swift; sourceTree = SOURCE_ROOT; };
+		FF000000000000000000010C /* MockWalletService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockWalletService.swift; path = AmachHealth/Tests/Helpers/MockWalletService.swift; sourceTree = SOURCE_ROOT; };
+		FF000000000000000000010D /* MockDataSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockDataSeeder.swift; path = AmachHealth/Tests/MockDataSeeder.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,11 +178,30 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXContainerItemProxy section */
+		FF0000000000000000000600 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000700 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000500;
+			remoteInfo = "Amach Health";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		FF0000000000000000000601 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA0000000000000000000500 /* Amach Health */;
+			targetProxy = FF0000000000000000000600 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin PBXGroup section */
 		AA0000000000000000000400 = {
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000401 /* AmachHealth */,
+				FF0000000000000000000400 /* Tests */,
 				AA0000000000000000000402 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -173,8 +219,38 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000001 /* Amach Health.app */,
+				FF0000000000000000000001 /* Amach HealthTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		FF0000000000000000000400 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				FF0000000000000000000101 /* APIClientTests.swift */,
+				FF0000000000000000000102 /* AppStateTests.swift */,
+				FF0000000000000000000103 /* ChatServiceIntegrationTests.swift */,
+				FF0000000000000000000104 /* ChatServiceTests.swift */,
+				FF0000000000000000000105 /* DesignTokenTests.swift */,
+				FF0000000000000000000106 /* HealthKitMappingTests.swift */,
+				FF0000000000000000000107 /* HealthMetricProofTests.swift */,
+				FF0000000000000000000108 /* SeedHealthKitTests.swift */,
+				FF0000000000000000000109 /* TimelineFeatureTests.swift */,
+				FF000000000000000000010D /* MockDataSeeder.swift */,
+				FF0000000000000000000450 /* Helpers */,
+			);
+			name = Tests;
+			path = AmachHealth/Tests;
+			sourceTree = SOURCE_ROOT;
+		};
+		FF0000000000000000000450 /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				FF000000000000000000010A /* MockAmachAPIClient.swift */,
+				FF000000000000000000010B /* MockURLSession.swift */,
+				FF000000000000000000010C /* MockWalletService.swift */,
+			);
+			name = Helpers;
 			sourceTree = "<group>";
 		};
 		AA0000000000000000000410 /* Sources */ = {
@@ -342,6 +418,22 @@
 			productReference = AA0000000000000000000001 /* Amach Health.app */;
 			productType = "com.apple.product-type.application";
 		};
+		FF0000000000000000000500 /* Amach HealthTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FD000000000000000000AAAA /* Build configuration list for PBXNativeTarget "Amach HealthTests" */;
+			buildPhases = (
+				FF0000000000000000000300 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FF0000000000000000000601 /* PBXTargetDependency */,
+			);
+			name = "Amach HealthTests";
+			productName = "Amach HealthTests";
+			productReference = FF0000000000000000000001 /* Amach HealthTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -374,6 +466,7 @@
 			projectRoot = "";
 			targets = (
 				AA0000000000000000000500 /* Amach Health */,
+				FF0000000000000000000500 /* Amach HealthTests */,
 			);
 		};
 /* End PBXProject section */
@@ -455,6 +548,26 @@
 				DD0000000000000000000026 /* ProfilePreviews.swift in Sources */,
 				DD0000000000000000000027 /* ChatPreviews.swift in Sources */,
 				DD0000000000000000000028 /* OnboardingPreviews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FF0000000000000000000300 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FF0000000000000000000201 /* APIClientTests.swift in Sources */,
+				FF0000000000000000000202 /* AppStateTests.swift in Sources */,
+				FF0000000000000000000203 /* ChatServiceIntegrationTests.swift in Sources */,
+				FF0000000000000000000204 /* ChatServiceTests.swift in Sources */,
+				FF0000000000000000000205 /* DesignTokenTests.swift in Sources */,
+				FF0000000000000000000206 /* HealthKitMappingTests.swift in Sources */,
+				FF0000000000000000000207 /* HealthMetricProofTests.swift in Sources */,
+				FF0000000000000000000208 /* SeedHealthKitTests.swift in Sources */,
+				FF0000000000000000000209 /* TimelineFeatureTests.swift in Sources */,
+				FF000000000000000000020A /* MockAmachAPIClient.swift in Sources */,
+				FF000000000000000000020B /* MockURLSession.swift in Sources */,
+				FF000000000000000000020C /* MockWalletService.swift in Sources */,
+				FF000000000000000000020D /* MockDataSeeder.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -597,6 +710,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.amach.health;
+				PRODUCT_MODULE_NAME = AmachHealth;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -623,11 +737,48 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.amach.health;
+				PRODUCT_MODULE_NAME = AmachHealth;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		FF0000000000000000000802 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGNING_REQUIRED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.amach.health.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Amach Health.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Amach Health";
+			};
+			name = Debug;
+		};
+		FF0000000000000000000803 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGNING_REQUIRED = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.amach.health.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Amach Health.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Amach Health";
 			};
 			name = Release;
 		};
@@ -648,6 +799,15 @@
 			buildConfigurations = (
 				AA0000000000000000000802 /* Debug */,
 				AA0000000000000000000803 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FD000000000000000000AAAA /* Build configuration list for PBXNativeTarget "Amach HealthTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FF0000000000000000000802 /* Debug */,
+				FF0000000000000000000803 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -21,6 +21,7 @@ import XCTest
 // calculateCompleteness() is pure logic — no HealthKit calls.
 // It takes [String] metric identifiers and two Dates.
 
+@MainActor
 final class CompletenessScoreTests: XCTestCase {
 
     // Reference dates for a 90-day window
@@ -353,7 +354,7 @@ final class MetricSummaryTests: XCTestCase {
         // Heart rate: avg + min + max
         let summary = MetricSummary(total: nil, avg: 72.5, min: 55, max: 110, count: 288)
         XCTAssertNil(summary.total)
-        XCTAssertEqual(summary.avg, 72.5, accuracy: 0.01)
+        XCTAssertEqual(summary.avg ?? 0, 72.5, accuracy: 0.01)
         XCTAssertEqual(summary.min, 55)
         XCTAssertEqual(summary.max, 110)
     }

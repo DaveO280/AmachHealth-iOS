@@ -12,6 +12,8 @@ final class MockWalletService: WalletServiceProtocol {
     var address: String?
     var encryptionKey: WalletEncryptionKey?
 
+    var transactionResult: Result<String, Error> = .success("0xmocktxhash")
+
     init(
         isConnected: Bool = true,
         address: String = "0xtest000000000000000000000000000000001",
@@ -20,6 +22,10 @@ final class MockWalletService: WalletServiceProtocol {
         self.isConnected = isConnected
         self.address = address
         self.encryptionKey = encryptionKey
+    }
+
+    func sendTransaction(to: String, data: String, chainId: Int) async throws -> String {
+        try transactionResult.get()
     }
 }
 

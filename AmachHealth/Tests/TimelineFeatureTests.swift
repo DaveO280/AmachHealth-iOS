@@ -76,26 +76,19 @@ final class LabRecordTests: XCTestCase {
 }
 
 final class AIChatContextWalletTests: XCTestCase {
-    func test_ai_chat_context_encodes_wallet_credentials() throws {
+    func test_ai_chat_context_encodes_user_address() throws {
         let context = AIChatContext(
             metrics: nil,
             dateRange: nil,
             proactive: nil,
             memory: nil,
-            userAddress: "0xabc",
-            encryptionKey: WalletEncryptionKey(
-                walletAddress: "0xabc",
-                encryptionKey: "deadbeef",
-                signature: "0xsig",
-                timestamp: 123
-            )
+            userAddress: "0xabc"
         )
 
         let data = try JSONEncoder().encode(context)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         XCTAssertEqual(json?["userAddress"] as? String, "0xabc")
-        XCTAssertNotNil(json?["encryptionKey"] as? [String: Any])
     }
 }
 

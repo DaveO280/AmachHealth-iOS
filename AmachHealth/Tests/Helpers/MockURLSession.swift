@@ -90,7 +90,7 @@ final class MockURLProtocol: URLProtocol {
         // Match on path suffix (ignore host)
         let path = request.url?.path ?? ""
         guard let stub = MockURLProtocol.stubs.first(where: { path.hasSuffix($0.key) })?.value else {
-            client?.urlProtocol(self, didFailWithError: URLError(.fileNotFound))
+            client?.urlProtocol(self, didFailWithError: URLError(.resourceUnavailable))
             return
         }
 

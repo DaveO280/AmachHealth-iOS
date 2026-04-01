@@ -172,7 +172,7 @@ final class MockAmachAPIClient: AmachAPIClientProtocol {
 
 extension AIChatResponse {
     static func fixture(content: String = "Mock Luma response.") -> AIChatResponse {
-        AIChatResponse(content: content, model: "mock-venice-v1")
+        AIChatResponse(content: content, usage: nil, model: "mock-venice-v1")
     }
 }
 

@@ -120,6 +120,7 @@ final class HealthMetricProofModelTests: XCTestCase {
         XCTAssertEqual(result.proof?.evidence.dataType, "apple-health-full-export")
     }
 
+    @MainActor
     func test_selectComparisonWindows_usesExplicitUserWindows_notFirstLastFallback() throws {
         let iso = ISO8601DateFormatter()
         func d(_ s: String) -> Date { iso.date(from: s)! }
@@ -138,10 +139,9 @@ final class HealthMetricProofModelTests: XCTestCase {
             comparisonEndISO: "2025-12-22T00:00:00Z"
         )
 
-        let selected = HealthMetricProofService.testSelectComparisonWindows(from: series, comparison: comparison)
-        XCTAssertNotNil(selected)
-        XCTAssertEqual(selected?.baseline.average, 25, accuracy: 0.001) // (20+30)/2
-        XCTAssertEqual(selected?.latest.average, 40, accuracy: 0.001)
+        let selected = try XCTUnwrap(HealthMetricProofService.testSelectComparisonWindows(from: series, comparison: comparison))
+        XCTAssertEqual(selected.baseline.average ?? 0, 25, accuracy: 0.001) // (20+30)/2
+        XCTAssertEqual(selected.latest.average ?? 0, 40, accuracy: 0.001)
     }
 
     func test_comparisonOptions_hasExplicitWindows_trueOnlyWhenAllBoundsPresent() {
