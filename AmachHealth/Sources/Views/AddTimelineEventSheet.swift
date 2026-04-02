@@ -8,12 +8,26 @@ struct AddTimelineEventSheet: View {
     @EnvironmentObject private var wallet: WalletService
     @EnvironmentObject private var timeline: TimelineService
 
+    let existingEvent: TimelineEvent?
+
+    init(existingEvent: TimelineEvent? = nil) {
+        self.existingEvent = existingEvent
+        if let event = existingEvent {
+            _step = State(initialValue: .details)
+            _selectedType = State(initialValue: event.eventType)
+            _fieldValues = State(initialValue: event.data)
+            _eventDate = State(initialValue: event.timestamp)
+        }
+    }
+
     @State private var step: AddStep = .type
     @State private var selectedType: TimelineEventType?
     @State private var fieldValues: [String: String] = [:]
     @State private var eventDate = Date()
     @State private var isSaving = false
     @State private var error: String?
+
+    private var isEditMode: Bool { existingEvent != nil }
 
     var body: some View {
         NavigationStack {
@@ -33,7 +47,7 @@ struct AddTimelineEventSheet: View {
                     .padding(AmachSpacing.md)
                 }
             }
-            .navigationTitle("Add Health Event")
+            .navigationTitle(isEditMode ? "Edit Health Event" : "Add Health Event")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -59,7 +73,7 @@ struct AddTimelineEventSheet: View {
 
             Text(step == .type
                  ? "Timeline events sync to Storj so they can appear across iOS and web."
-                 : "Add the key details below. Required fields must be filled before saving.")
+                 : (isEditMode ? "Update the details below and save to sync changes." : "Add the key details below. Required fields must be filled before saving."))
                 .font(AmachType.caption)
                 .foregroundStyle(Color.amachTextSecondary)
         }
@@ -160,7 +174,7 @@ struct AddTimelineEventSheet: View {
                                 .tint(.white)
                                 .scaleEffect(0.85)
                         }
-                        Text("Save Event")
+                        Text(isEditMode ? "Update Event" : "Save Event")
                     }
                 }
                 .amachPrimaryButtonStyle(isLoading: isSaving)
@@ -186,7 +200,7 @@ struct AddTimelineEventSheet: View {
     private func saveEvent() async {
         guard let selectedType else { return }
         guard let encryptionKey = wallet.encryptionKey else {
-            error = "Connect your wallet before adding timeline events."
+            error = "Connect your wallet before saving timeline events."
             return
         }
 
@@ -201,28 +215,54 @@ struct AddTimelineEventSheet: View {
             }
         }
 
-        let event = TimelineEvent(
-            id: UUID().uuidString.lowercased(),
-            eventType: selectedType,
-            timestamp: eventDate,
-            data: cleanedValues,
-            metadata: TimelineEventMetadata(
-                platform: "ios",
-                version: "1",
-                source: .userEntered
+        if let existing = existingEvent {
+            let updatedEvent = TimelineEvent(
+                id: existing.id,
+                eventType: selectedType,
+                timestamp: eventDate,
+                data: cleanedValues,
+                metadata: existing.metadata,
+                anomalyType: existing.anomalyType,
+                metricType: existing.metricType,
+                direction: existing.direction,
+                deviationPct: existing.deviationPct,
+                resolvedAt: existing.resolvedAt,
+                attestationTxHash: existing.attestationTxHash
             )
-        )
-
-        do {
-            try await timeline.addEvent(
-                event,
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
+            do {
+                try await timeline.updateEvent(
+                    updatedEvent,
+                    walletAddress: encryptionKey.walletAddress,
+                    encryptionKey: encryptionKey
+                )
+                AmachHaptics.success()
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+        } else {
+            let event = TimelineEvent(
+                id: UUID().uuidString.lowercased(),
+                eventType: selectedType,
+                timestamp: eventDate,
+                data: cleanedValues,
+                metadata: TimelineEventMetadata(
+                    platform: "ios",
+                    version: "1",
+                    source: .userEntered
+                )
             )
-            AmachHaptics.success()
-            dismiss()
-        } catch {
-            self.error = error.localizedDescription
+            do {
+                try await timeline.addEvent(
+                    event,
+                    walletAddress: encryptionKey.walletAddress,
+                    encryptionKey: encryptionKey
+                )
+                AmachHaptics.success()
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
         }
     }
 }
