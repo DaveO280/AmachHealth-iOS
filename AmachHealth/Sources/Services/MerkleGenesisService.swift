@@ -1,0 +1,415 @@
+// MerkleGenesisService.swift
+// AmachHealth
+//
+// Xcode: keep this file OUT of the iOS app target. Run the pipeline on Mac/CI; circom
+// proving stays off-device. In-repo for shared tooling and future macOS/CLI targets.
+//
+// Orchestrates the full genesis Merkle root pipeline.
+// This is the Phase 6 integration layer.
+//
+// Pipeline:
+//   HealthKit
+//     ↓
+//   MerkleNormalizationService    (Phase 1: normalize 90 days → NormalizedDailyLeaf[])
+//     ↓
+//   LeafHashingService            (Phase 2: Poseidon hash each leaf → HashedLeaf[])
+//     ↓
+//   MerkleTreeBuilder             (Phase 3: build binary tree → MerkleTreeResult)
+//     ↓
+//   Storj upload (encrypted tree.json + leaves.json + metadata.json)
+//     ↓
+//   ZKSyncAttestationService      (Phase 5: commitGenesisRoot() on-chain)
+//     ↓
+//   [Genesis root confirmed on-chain]
+//
+// Usage:
+//   let result = try await MerkleGenesisService.shared.generateGenesisRoot()
+
+import Foundation
+import HealthKit
+
+// MARK: - Pipeline Result
+
+struct GenesisRootResult {
+    let root: String                    // Poseidon hash hex (no 0x)
+    let rootPadded: String              // 0x-prefixed 32-byte hex for contract
+    let leafCount: Int
+    let treeDepth: Int
+    let startDayId: UInt32
+    let endDayId: UInt32
+    let storjTreeUri: String?           // storj://... for tree.json.enc
+    let storjLeavesUri: String?         // storj://... for leaves.json.enc
+    let onChainTxHash: String?          // transaction hash from commitGenesisRoot()
+    let generatedAt: Date
+}
+
+// MARK: - Pipeline Progress
+
+enum GenesisProgress: Equatable {
+    case idle
+    case normalizing(progress: Double)  // 0-25%
+    case hashing(progress: Double)      // 25-50%
+    case buildingTree(progress: Double) // 50-65%
+    case uploadingToStorj               // 65-85%
+    case submittingOnChain              // 85-95%
+    case complete
+    case error(String)
+
+    var progressFraction: Double {
+        switch self {
+        case .idle: return 0
+        case .normalizing(let p): return p * 0.25
+        case .hashing(let p): return 0.25 + p * 0.25
+        case .buildingTree(let p): return 0.50 + p * 0.15
+        case .uploadingToStorj: return 0.75
+        case .submittingOnChain: return 0.90
+        case .complete: return 1.0
+        case .error: return 0
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .idle: return "Ready"
+        case .normalizing: return "Normalizing 90 days of health data…"
+        case .hashing: return "Computing Poseidon leaf hashes…"
+        case .buildingTree: return "Building Merkle tree…"
+        case .uploadingToStorj: return "Encrypting and uploading to Storj…"
+        case .submittingOnChain: return "Committing root on-chain…"
+        case .complete: return "Genesis root committed ✓"
+        case .error(let msg): return "Error: \(msg)"
+        }
+    }
+}
+
+// MARK: - Service
+
+@MainActor
+final class MerkleGenesisService: ObservableObject {
+    static let shared = MerkleGenesisService()
+
+    @Published private(set) var progress: GenesisProgress = .idle
+    @Published private(set) var lastResult: GenesisRootResult?
+
+    private let healthKit = HealthKitService.shared
+    private let wallet = WalletService.shared
+    private let api = AmachAPIClient.shared
+    private let normalization: MerkleNormalizationService
+    private let hasher = LeafHashingService.shared
+    private let treeBuilder = MerkleTreeBuilder.shared
+    private let attestation = ZKSyncAttestationService.shared
+
+    private init() {
+        // Wallet address not available until connected — initialize with placeholder
+        // and reinitialize when wallet connects
+        self.normalization = MerkleNormalizationService(walletAddress: Data(repeating: 0, count: 32))
+    }
+
+    // MARK: - Main Entry Point
+
+    /// Execute the full genesis root pipeline.
+    ///
+    /// - Parameters:
+    ///   - daysBack: Number of days to include (default: 90)
+    ///   - endDate: End of the window (default: today)
+    /// - Returns: GenesisRootResult with on-chain confirmation
+    func generateGenesisRoot(
+        daysBack: Int = 90,
+        endDate: Date = Date()
+    ) async throws -> GenesisRootResult {
+        progress = .normalizing(progress: 0)
+
+        // ─── Step 0: Validate prerequisites ──────────────────────────
+        guard wallet.isConnected, let encryptionKey = wallet.encryptionKey else {
+            throw GenesisError.walletNotConnected
+        }
+
+        guard let walletAddress = wallet.address else {
+            throw GenesisError.walletNotConnected
+        }
+
+        // Parse wallet address bytes for leaf normalization
+        let walletBytes = parseWalletAddress(walletAddress)
+
+        // ─── Step 1: Fetch HealthKit data ─────────────────────────────
+        let startDate = Calendar.current.date(byAdding: .day, value: -daysBack, to: endDate)!
+        progress = .normalizing(progress: 0.1)
+
+        let rawSamples = try await fetchHealthKitSamples(from: startDate, to: endDate)
+        progress = .normalizing(progress: 0.5)
+
+        // ─── Step 2: Normalize into leaves ───────────────────────────
+        let normalizationService = MerkleNormalizationService(walletAddress: walletBytes)
+        let leaves = normalizationService.normalize(
+            samples: rawSamples.quantities,
+            workouts: rawSamples.workouts,
+            restingHRSamples: rawSamples.restingHR,
+            start: startDate,
+            end: endDate,
+            timezone: .current
+        )
+
+        guard !leaves.isEmpty else {
+            throw GenesisError.noHealthData
+        }
+
+        progress = .normalizing(progress: 1.0)
+        print("🌿 [Genesis] Normalized \(leaves.count) leaves")
+
+        // ─── Step 3: Poseidon hash each leaf ─────────────────────────
+        progress = .hashing(progress: 0)
+        let hashedLeaves = try await hasher.hashLeaves(leaves)
+        progress = .hashing(progress: 1.0)
+        print("🔐 [Genesis] Hashed \(hashedLeaves.count) leaves")
+
+        // ─── Step 4: Build Merkle tree ────────────────────────────────
+        progress = .buildingTree(progress: 0)
+        let treeResult = try await treeBuilder.buildGenesisTree(from: hashedLeaves)
+        progress = .buildingTree(progress: 1.0)
+        print("🌳 [Genesis] Built tree — root: \(treeResult.root.prefix(16))… depth: \(treeResult.treeDepth)")
+
+        // ─── Step 5: Upload to Storj ──────────────────────────────────
+        progress = .uploadingToStorj
+
+        let payload = try treeBuilder.buildStorjPayload(
+            tree: treeResult,
+            hashedLeaves: hashedLeaves,
+            walletAddress: walletAddress
+        )
+
+        var treeStorjUri: String?
+        var leavesStorjUri: String?
+
+        do {
+            let (treeUri, leavesUri) = try await uploadMerklePayload(
+                payload: payload,
+                encryptionKey: encryptionKey
+            )
+            treeStorjUri = treeUri
+            leavesStorjUri = leavesUri
+            print("📦 [Genesis] Uploaded to Storj: \(treeUri)")
+        } catch {
+            // Non-fatal: continue without Storj (on-chain commitment is the primary)
+            print("⚠️ [Genesis] Storj upload failed: \(error.localizedDescription) — continuing")
+        }
+
+        // ─── Step 6: Commit root on-chain ─────────────────────────────
+        progress = .submittingOnChain
+
+        var onChainTxHash: String?
+        do {
+            onChainTxHash = try await submitGenesisRootOnChain(
+                treeResult: treeResult,
+                walletAddress: walletAddress
+            )
+            print("⛓️ [Genesis] On-chain root committed: \(onChainTxHash ?? "no hash")")
+        } catch {
+            print("⚠️ [Genesis] On-chain commitment failed: \(error.localizedDescription)")
+            throw GenesisError.attestationFailed(error.localizedDescription)
+        }
+
+        // ─── Done ──────────────────────────────────────────────────────
+        progress = .complete
+
+        let result = GenesisRootResult(
+            root: treeResult.root,
+            rootPadded: treeResult.rootPadded,
+            leafCount: treeResult.leafCount,
+            treeDepth: treeResult.treeDepth,
+            startDayId: treeResult.startDayId,
+            endDayId: treeResult.endDayId,
+            storjTreeUri: treeStorjUri,
+            storjLeavesUri: leavesStorjUri,
+            onChainTxHash: onChainTxHash,
+            generatedAt: Date()
+        )
+
+        lastResult = result
+        return result
+    }
+
+    // MARK: - HealthKit Fetching
+
+    private struct HealthKitBundle {
+        let quantities: [HealthSample]
+        let workouts: [WorkoutSample]
+        let restingHR: [HealthSample]
+    }
+
+    private func fetchHealthKitSamples(from start: Date, to end: Date) async throws -> HealthKitBundle {
+        // We reuse the existing HealthKitService for sample fetching.
+        // The raw data it returns must be adapted to our HealthSample type.
+
+        let rawData = try await healthKit.fetchAllHealthData(
+            from: start,
+            to: end
+        ) { [weak self] prog, _ in
+            self?.progress = .normalizing(progress: 0.1 + prog * 0.35)
+        }
+
+        // Convert HealthDataPoint → HealthSample
+        var quantities: [HealthSample] = []
+        var restingHR: [HealthSample] = []
+
+        for (metricType, points) in rawData {
+            for point in points {
+                let sample = HealthSample(
+                    metricType: metricType,
+                    value: point.value,
+                    unit: point.unit ?? "",
+                    startDate: point.date,
+                    endDate: point.endDate ?? point.date,
+                    sourceBundleID: point.source ?? "com.apple.health",
+                    device: point.device
+                )
+
+                if metricType == "HKQuantityTypeIdentifierRestingHeartRate" {
+                    restingHR.append(sample)
+                } else {
+                    quantities.append(sample)
+                }
+            }
+        }
+
+        // Workouts — fetched separately as typed WorkoutSample objects
+        // (fetchAllHealthData returns workouts as HealthDataPoint strings,
+        //  which loses the HKWorkoutActivityType enum needed by normalization)
+        let workouts = try await healthKit.fetchWorkoutSamples(from: start, to: end)
+
+        return HealthKitBundle(quantities: quantities, workouts: workouts, restingHR: restingHR)
+    }
+
+    // MARK: - Storj Upload
+
+    private func uploadMerklePayload(
+        payload: MerkleStorjPayload,
+        encryptionKey: EncryptionKey
+    ) async throws -> (treeUri: String, leavesUri: String) {
+        // Upload metadata.json unencrypted
+        let metadataPath = "\(payload.storjPath)/metadata.json"
+        _ = try await api.storeRawData(
+            data: payload.metadataJsonData,
+            path: metadataPath,
+            encrypt: false,
+            walletAddress: encryptionKey.walletAddress,
+            encryptionKey: encryptionKey
+        )
+
+        // Upload tree.json encrypted
+        let treePath = "\(payload.storjPath)/tree.json"
+        let treeResult = try await api.storeRawData(
+            data: payload.treeJsonData,
+            path: treePath,
+            encrypt: true,
+            walletAddress: encryptionKey.walletAddress,
+            encryptionKey: encryptionKey
+        )
+
+        // Upload leaves.json encrypted
+        let leavesPath = "\(payload.storjPath)/leaves.json"
+        let leavesResult = try await api.storeRawData(
+            data: payload.leavesJsonData,
+            path: leavesPath,
+            encrypt: true,
+            walletAddress: encryptionKey.walletAddress,
+            encryptionKey: encryptionKey
+        )
+
+        return (treeResult.storjUri, leavesResult.storjUri)
+    }
+
+    // MARK: - On-Chain Submission
+
+    private func submitGenesisRootOnChain(
+        treeResult: MerkleTreeResult,
+        walletAddress: String
+    ) async throws -> String? {
+        // Guard: only commit once per wallet
+        if let alreadyCommitted = try? await attestation.hasGenesisRoot(address: walletAddress),
+           alreadyCommitted {
+            print("⛓️ [Genesis] Root already committed for \(walletAddress) — skipping")
+            return nil
+        }
+
+        let genesisInput = ZKSyncAttestationService.GenesisRootInput(
+            root:       treeResult.rootPadded,
+            startDayId: treeResult.startDayId,
+            endDayId:   treeResult.endDayId,
+            leafCount:  UInt32(treeResult.leafCount),
+            rootType:   0,   // genesis
+            syncType:   0    // live sync
+        )
+
+        let result = try await attestation.commitGenesisRoot(genesisInput)
+        return result.txHash
+    }
+
+    // MARK: - Helpers
+
+    private func parseWalletAddress(_ address: String) -> Data {
+        // EVM address: "0x" + 20 bytes = 42 chars
+        // Left-pad to 32 bytes for MerkleLeaf wallet field
+        let stripped = address.hasPrefix("0x") ? String(address.dropFirst(2)) : address
+        guard let bytes = Data(hexString: stripped) else {
+            return Data(repeating: 0, count: 32)
+        }
+
+        if bytes.count < 32 {
+            return Data(repeating: 0, count: 32 - bytes.count) + bytes
+        }
+        return bytes.prefix(32)
+    }
+}
+
+// MARK: - Errors
+
+enum GenesisError: LocalizedError {
+    case walletNotConnected
+    case noHealthData
+    case hashingFailed(String)
+    case treeBuildFailed(String)
+    case storjUploadFailed(String)
+    case attestationFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .walletNotConnected:
+            return "Connect your wallet before generating the genesis root"
+        case .noHealthData:
+            return "No health data found in the selected date range"
+        case .hashingFailed(let msg):
+            return "Leaf hashing failed: \(msg)"
+        case .treeBuildFailed(let msg):
+            return "Tree construction failed: \(msg)"
+        case .storjUploadFailed(let msg):
+            return "Storj upload failed: \(msg)"
+        case .attestationFailed(let msg):
+            return "On-chain commitment failed: \(msg)"
+        }
+    }
+}
+
+// MARK: - Data Hex Extension
+
+private extension Data {
+    init?(hexString: String) {
+        let hex = hexString.hasPrefix("0x") ? String(hexString.dropFirst(2)) : hexString
+        guard hex.count % 2 == 0 else { return nil }
+        var bytes: [UInt8] = []
+        var idx = hex.startIndex
+        while idx < hex.endIndex {
+            let next = hex.index(idx, offsetBy: 2)
+            guard let byte = UInt8(hex[idx..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            idx = next
+        }
+        self.init(bytes)
+    }
+}
+
+private extension String {
+    func padLeft(toLength length: Int, with char: Character) -> String {
+        if count >= length { return String(suffix(length)) }
+        return String(repeating: char, count: length - count) + self
+    }
+}

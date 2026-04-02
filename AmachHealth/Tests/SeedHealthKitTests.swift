@@ -28,8 +28,25 @@
 //   • After seeding, launch the app, open Luma chat, and ask:
 //     "How has my recovery been trending this month?"
 //
+//   • Progressive writes (same numbers in the app as a one-shot seed; optional delay
+//     between calendar days for debugging / mimicking daily ingestion):
+//
+//       try await MockDataSeeder().seedProgressively(
+//           days: 60,
+//           endingOn: Date(),
+//           delayBetweenDays: .milliseconds(250)
+//       )
+//
+//   • **Luma memory:** facts and session summaries accrue from chat activity and
+//     message timestamps — not from how HealthKit samples were saved. To exercise
+//     memory over time, use the app on successive days or replay conversations with
+//     realistic ChatMessage.timestamp values (see ChatModels).
+//
 // ── Notes ────────────────────────────────────────────────────────────────────
 //
+//   • Calendar drift: the app always reads “today” from the device clock. After a few
+//     days, re-run this test, or use testSeedRecentHealthKitDays for a quicker top-up
+//     of only the last 14 days (see below).
 //   • Safe to re-run: HealthKit deduplicates by (type, start, end) so exact
 //     duplicate samples from a second run are silently dropped.
 //   • Does NOT affect any production data — Simulator HealthKit is isolated.
@@ -58,5 +75,23 @@ final class SeedHealthKitTests: XCTestCase {
 
         let seeder = MockDataSeeder()
         try await seeder.seed(days: 60)
+    }
+
+    /// Quick refresh: writes ~2 weeks ending **today** so the Dashboard and Luma see
+    /// current-day samples after the simulator calendar has moved on.
+    @MainActor
+    func testSeedRecentHealthKitDays() async throws {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            let onSimulator = ProcessInfo.processInfo.environment["SIMULATOR_UDID"] != nil
+            if onSimulator {
+                XCTFail("SIMULATOR_UDID is set but HealthKit reports unavailable — check entitlements.")
+            } else {
+                throw XCTSkip("HealthKit unavailable — not running on Simulator or device.")
+            }
+            return
+        }
+
+        let seeder = MockDataSeeder()
+        try await seeder.seedRecentDays(14, endingOn: Date())
     }
 }

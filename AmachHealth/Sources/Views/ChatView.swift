@@ -575,6 +575,9 @@ struct LumaMemoryDebugOverlay: View {
 
     let onClose: () -> Void
 
+    @State private var mergeReplayMemory = false
+    @State private var replayStatus: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: AmachSpacing.sm) {
             HStack {
@@ -591,6 +594,43 @@ struct LumaMemoryDebugOverlay: View {
             Text("Facts: \(memoryStore.facts.count) · Summaries: \(memoryStore.summaries.count)")
                 .font(AmachType.tiny)
                 .foregroundStyle(Color.amachTextSecondary)
+
+            VStack(alignment: .leading, spacing: AmachSpacing.xs) {
+                Text("Conversation replay")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextPrimary)
+                Text("Loads \(LumaConversationReplay.replayFilename) from Documents if present; otherwise embedded 3-day sample. Last session = active chat.")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Toggle("Merge memory (dedup)", isOn: $mergeReplayMemory)
+                    .font(AmachType.tiny)
+                    .tint(Color.Amach.AI.p400)
+                Button {
+                    replayStatus = nil
+                    do {
+                        try LumaConversationReplay.applyEmbeddedOrDocuments(mergeMemory: mergeReplayMemory)
+                        replayStatus = "Replay applied."
+                        AmachHaptics.buttonPress()
+                    } catch {
+                        replayStatus = error.localizedDescription
+                    }
+                } label: {
+                    Text("Apply replay to chat + memory")
+                        .font(AmachType.tiny)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.Amach.AI.base)
+                if let replayStatus {
+                    Text(replayStatus)
+                        .font(AmachType.tiny)
+                        .foregroundStyle(replayStatus == "Replay applied." ? Color.amachSuccess : Color.amachDestructive)
+                }
+            }
+            .padding(.top, AmachSpacing.xs)
 
             if let capsule = memoryStore.buildMemoryCapsule() {
                 VStack(alignment: .leading, spacing: 4) {
