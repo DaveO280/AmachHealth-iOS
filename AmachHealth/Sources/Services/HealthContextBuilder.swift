@@ -495,7 +495,15 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "memory", content: formatMemory(mem)))
         }
 
-        // 6. timeline — active meds, conditions, allergies, recent anomalies
+        // 6. today_partial — running totals for today (steps + active cal only, trimmed to stay under context budget)
+        if today.steps > 0 || today.activeCalories > 0 {
+            var parts: [String] = []
+            if today.steps > 0 { parts.append(String(format: "%.0f steps", today.steps)) }
+            if today.activeCalories > 0 { parts.append(String(format: "%.0f active cal", today.activeCalories)) }
+            blocks.append(ContextBlock(type: "today_partial", content: "Today so far: " + parts.joined(separator: ", ")))
+        }
+
+        // 7. timeline — active meds, conditions, allergies, recent anomalies
         let timelineContent = formatTimeline(TimelineService.shared.events)
         if !timelineContent.isEmpty {
             blocks.append(ContextBlock(type: "timeline", content: timelineContent))

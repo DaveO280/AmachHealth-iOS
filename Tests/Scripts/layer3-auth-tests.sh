@@ -270,6 +270,18 @@ else
   fail "Authenticated Luma response too short ($AUTH_LEN chars)"
 fi
 
+# Deflection check — reject canned non-answers even if they're long enough
+DEFLECTION_PATTERN="processing a lot right now|try rephrasing|could you rephrase|i don't have|i don't understand|could you clarify|i'm not sure what you"
+if echo "$AUTH_CONTENT" | grep -qi -E "$DEFLECTION_PATTERN"; then
+  fail "Luma gave a deflecting non-answer (response was not substantive)"
+  echo ""
+  echo "  [DEBUG] Full deflecting response:"
+  echo "$AUTH_CONTENT"
+  echo ""
+else
+  pass "Luma response is substantive (no deflection patterns detected)"
+fi
+
 echo ""
 info "Luma response preview:"
 echo "$AUTH_CONTENT" | head -c 300
