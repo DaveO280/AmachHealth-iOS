@@ -950,7 +950,7 @@ struct HealthStatusPill: View {
             case "optimal":      return .optimal
             case "borderline":   return .borderline
             case "below trend":  return .belowTrend
-            case "critical":     return .critical
+            case "critical":     return .belowTrend
             default:             return .noData
             }
         }
@@ -963,9 +963,9 @@ struct HealthStatusPill: View {
         switch status {
         case .optimal:    return "Optimal"
         case .borderline: return "Borderline"
-        case .belowTrend: return "Below Trend"
-        case .critical:   return "Critical"
-        case .noData:     return "No Data"
+        case .belowTrend: return "Below trend"
+        case .critical:   return "Below trend"
+        case .noData:     return "No data"
         }
     }
 
@@ -974,7 +974,7 @@ struct HealthStatusPill: View {
         case .optimal:    return Color.Amach.Health.optimal
         case .borderline: return Color.Amach.Health.borderline
         case .belowTrend: return Color.Amach.Health.borderline
-        case .critical:   return Color.Amach.Health.critical
+        case .critical:   return Color.Amach.Health.borderline
         case .noData:     return Color.Amach.Health.noData
         }
     }
@@ -987,8 +987,8 @@ struct HealthStatusPill: View {
         case (.borderline, _):     return Color.Amach.Health.borderlineBgL
         case (.belowTrend, .dark): return Color.Amach.Health.borderlineBgD
         case (.belowTrend, _):     return Color.Amach.Health.borderlineBgL
-        case (.critical, .dark):   return Color.Amach.Health.criticalBgD
-        case (.critical, _):       return Color.Amach.Health.criticalBgL
+        case (.critical, .dark):   return Color.Amach.Health.borderlineBgD
+        case (.critical, _):       return Color.Amach.Health.borderlineBgL
         case (.noData, .dark):     return Color.Amach.Health.noDataBgD
         case (.noData, _):         return Color.Amach.Health.noDataBgL
         }
@@ -1002,8 +1002,8 @@ struct HealthStatusPill: View {
         case (.borderline, _):     return Color.Amach.Health.borderlineTextL
         case (.belowTrend, .dark): return Color.Amach.Health.borderlineTextD
         case (.belowTrend, _):     return Color.Amach.Health.borderlineTextL
-        case (.critical, .dark):   return Color.Amach.Health.criticalTextD
-        case (.critical, _):       return Color.Amach.Health.criticalTextL
+        case (.critical, .dark):   return Color.Amach.Health.borderlineTextD
+        case (.critical, _):       return Color.Amach.Health.borderlineTextL
         case (.noData, .dark):     return Color.Amach.Health.noDataTextD
         case (.noData, _):         return Color.Amach.Health.noDataTextL
         }
@@ -1085,7 +1085,7 @@ struct AmachRangeBar: View {
         case .optimal:    return Color.Amach.Health.optimal
         case .borderline: return Color.Amach.Health.borderline
         case .belowTrend: return Color.Amach.Health.borderline
-        case .critical:   return Color.Amach.Health.critical
+        case .critical:   return Color.Amach.Health.borderline
         case .noData:     return Color.Amach.Health.noData
         }
     }

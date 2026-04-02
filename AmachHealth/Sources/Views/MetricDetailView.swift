@@ -74,7 +74,7 @@ extension MetricInfo {
         MetricInfo(id: "heartRate", icon: "heart.fill", label: "Heart Rate",
                    value: String(Int(bpm)), rawValue: bpm, unit: "bpm",
                    color: Color(hex: "F87171"),
-                   status: (bpm >= 60 && bpm <= 80) ? .optimal : (bpm >= 50 && bpm <= 100) ? .borderline : .critical,
+                   status: (bpm >= 60 && bpm <= 80) ? .optimal : (bpm >= 50 && bpm <= 100) ? .borderline : .belowTrend,
                    source: "Apple Watch",
                    normalRangeLow: 60, normalRangeHigh: 80,
                    absoluteMin: 40, absoluteMax: 120)
@@ -84,7 +84,7 @@ extension MetricInfo {
         MetricInfo(id: "hrv", icon: "waveform.path.ecg", label: "HRV",
                    value: String(Int(ms)), rawValue: ms, unit: "ms",
                    color: Color.amachPrimaryBright,
-                   status: ms >= 50 ? .optimal : ms >= 30 ? .borderline : .critical,
+                   status: ms >= 50 ? .optimal : ms >= 30 ? .borderline : .belowTrend,
                    source: "Apple Watch",
                    normalRangeLow: 50, normalRangeHigh: 100,
                    absoluteMin: 0, absoluteMax: 150)
@@ -95,7 +95,7 @@ extension MetricInfo {
         return MetricInfo(id: "sleep", icon: "moon.fill", label: "Sleep",
                    value: formatted, rawValue: hours, unit: "hrs",
                    color: Color(hex: "818CF8"),
-                   status: hours >= 7 ? .optimal : hours >= 6 ? .borderline : .critical,
+                   status: hours >= 7 ? .optimal : hours >= 6 ? .borderline : .belowTrend,
                    source: "Apple Health",
                    normalRangeLow: 7, normalRangeHigh: 9,
                    absoluteMin: 0, absoluteMax: 12)
@@ -139,7 +139,7 @@ extension MetricInfo {
         MetricInfo(id: "restingHeartRate", icon: "heart.text.square.fill", label: "Resting HR",
                    value: bpm > 0 ? String(Int(bpm)) : "—", rawValue: bpm, unit: "bpm",
                    color: Color(hex: "FB7185"),
-                   status: bpm == 0 ? .noData : (bpm >= 50 && bpm <= 70) ? .optimal : (bpm >= 40 && bpm <= 90) ? .borderline : .critical,
+                   status: bpm == 0 ? .noData : (bpm >= 50 && bpm <= 70) ? .optimal : (bpm >= 40 && bpm <= 90) ? .borderline : .belowTrend,
                    source: "Apple Watch",
                    normalRangeLow: 50, normalRangeHigh: 70,
                    absoluteMin: 30, absoluteMax: 110)
@@ -150,7 +150,7 @@ extension MetricInfo {
         return MetricInfo(id: "vo2Max", icon: "lungs.fill", label: "VO₂ Max",
                    value: formatted, rawValue: value, unit: "mL/kg/min",
                    color: Color(hex: "34D399"),
-                   status: value == 0 ? .noData : value >= 45 ? .optimal : value >= 35 ? .borderline : .critical,
+                   status: value == 0 ? .noData : value >= 45 ? .optimal : value >= 35 ? .borderline : .belowTrend,
                    source: "Apple Watch",
                    normalRangeLow: 45, normalRangeHigh: 60,
                    absoluteMin: 20, absoluteMax: 80)
@@ -160,7 +160,7 @@ extension MetricInfo {
         MetricInfo(id: "respiratoryRate", icon: "wind", label: "Resp. Rate",
                    value: bpm > 0 ? String(format: "%.1f", bpm) : "—", rawValue: bpm, unit: "br/min",
                    color: Color(hex: "60A5FA"),
-                   status: bpm == 0 ? .noData : (bpm >= 12 && bpm <= 18) ? .optimal : (bpm >= 10 && bpm <= 22) ? .borderline : .critical,
+                   status: bpm == 0 ? .noData : (bpm >= 12 && bpm <= 18) ? .optimal : (bpm >= 10 && bpm <= 22) ? .borderline : .belowTrend,
                    source: "Apple Watch",
                    normalRangeLow: 12, normalRangeHigh: 18,
                    absoluteMin: 8, absoluteMax: 30)
@@ -186,15 +186,14 @@ extension MetricInfo {
         if let avg = sevenDayAvg, let progress = dayProgress, progress >= 0.10, avg > 0 {
             let expected = avg * progress
             if value >= expected * 0.90 { return .optimal }
-            if value >= expected * 0.60 { return .belowTrend }
-            return .critical
+            return .belowTrend
         }
         // Absolute fallback — used in MetricDetailView period views (full-day averages).
         // Never use .borderline for cumulative metrics: if you haven't finished the day
         // it's below trend; if reviewing a period average it's still below trend not "borderline".
         if value >= absoluteOptimal { return .optimal }
         if value >= absoluteBorderline { return .belowTrend }
-        return .critical
+        return .belowTrend
     }
 }
 
@@ -292,7 +291,7 @@ struct MetricDetailView: View {
         if avg >= (metric.normalRangeLow - buffer) && avg <= (metric.normalRangeHigh + buffer) {
             return .borderline
         }
-        return .critical
+        return .belowTrend
     }
 
     /// Normalized 0–1 position of the period average within the metric's absolute range
@@ -430,7 +429,7 @@ struct MetricDetailView: View {
             case .belowTrend:
                 return ("Your \(metric.label.lowercased()) average is running below your recent trend. Worth keeping an eye on.", Color.Amach.Health.borderline)
             case .critical:
-                return ("Your \(metric.label.lowercased()) average is significantly outside the typical range. Consider discussing with your provider.", Color.Amach.Health.critical)
+                return ("Your \(metric.label.lowercased()) average is running below your recent trend. Worth keeping an eye on.", Color.Amach.Health.borderline)
             case .noData:
                 return ("No data available for this metric.", Color.amachTextSecondary)
             }

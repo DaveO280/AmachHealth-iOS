@@ -442,7 +442,7 @@ struct DashboardView: View {
         case .optimal:    return "Optimal"
         case .borderline: return "Borderline"
         case .belowTrend: return "Below trend"
-        case .critical:   return "Needs attention"
+        case .critical:   return "Below trend"
         case .noData:     return "No data"
         }
     }

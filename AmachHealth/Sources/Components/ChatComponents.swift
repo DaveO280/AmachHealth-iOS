@@ -251,6 +251,53 @@ struct MetricReferenceRow: View {
 
 
 // ============================================================
+// MARK: - CHAT DATE SEPARATOR
+// ============================================================
+//
+// Shown when the calendar day changes between consecutive messages.
+// Labels: "Today", "Yesterday", weekday-only within the current week,
+// otherwise "EEEE, MMM d" (and year when not the current year).
+
+struct ChatDateSeparator: View {
+    let date: Date
+
+    private var label: String {
+        let cal = Calendar.current
+        let now = Date()
+        if cal.isDateInToday(date) { return "Today" }
+        if cal.isDateInYesterday(date) { return "Yesterday" }
+
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        if cal.component(.year, from: date) != cal.component(.year, from: now) {
+            formatter.dateFormat = "EEEE, MMM d, yyyy"
+        } else if cal.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
+            formatter.dateFormat = "EEEE"
+        } else {
+            formatter.dateFormat = "EEEE, MMM d"
+        }
+        return formatter.string(from: date)
+    }
+
+    var body: some View {
+        HStack(spacing: AmachSpacing.sm) {
+            Rectangle()
+                .fill(Color.Amach.AI.base.opacity(0.15))
+                .frame(height: 1)
+            Text(label)
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextTertiary)
+                .fixedSize()
+            Rectangle()
+                .fill(Color.Amach.AI.base.opacity(0.15))
+                .frame(height: 1)
+        }
+        .padding(.vertical, AmachSpacing.xs)
+    }
+}
+
+
+// ============================================================
 // MARK: - PREVIEWS
 // ============================================================
 

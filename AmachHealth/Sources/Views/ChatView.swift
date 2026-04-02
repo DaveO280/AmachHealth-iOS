@@ -473,39 +473,6 @@ struct ChatView: View {
 
 
 // ============================================================
-// MARK: - CHAT DATE SEPARATOR
-// ============================================================
-
-private struct ChatDateSeparator: View {
-    let date: Date
-
-    private var label: String {
-        if Calendar.current.isDateInToday(date) { return "Today" }
-        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM d"
-        return formatter.string(from: date)
-    }
-
-    var body: some View {
-        HStack(spacing: AmachSpacing.sm) {
-            Rectangle()
-                .fill(Color.Amach.AI.base.opacity(0.15))
-                .frame(height: 1)
-            Text(label)
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachTextTertiary)
-                .fixedSize()
-            Rectangle()
-                .fill(Color.Amach.AI.base.opacity(0.15))
-                .frame(height: 1)
-        }
-        .padding(.vertical, AmachSpacing.xs)
-    }
-}
-
-
-// ============================================================
 // MARK: - CHAT HISTORY VIEW
 // ============================================================
 

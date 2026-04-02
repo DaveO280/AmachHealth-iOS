@@ -287,7 +287,13 @@ struct LumaSheetView: View {
                             .transition(.opacity)
                     } else {
                         Group {
-                            ForEach(visibleMessages) { msg in
+                            ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { index, msg in
+                                if index == 0 || !Calendar.current.isDate(
+                                    visibleMessages[index - 1].timestamp,
+                                    inSameDayAs: msg.timestamp
+                                ) {
+                                    ChatDateSeparator(date: msg.timestamp)
+                                }
                                 LumaMessageBubble(message: msg)
                                     .id(msg.id)
                             }

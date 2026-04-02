@@ -15,7 +15,7 @@ import SwiftUI
         .task { @MainActor in MockData.needsAttentionUser() }
 }
 
-#Preview("Metric Detail — Steps: Critical 🔴") {
+#Preview("Metric Detail — Steps: Below trend 🔴") {
     MetricDetailView(metric: .steps(3240))
         .withMockEnvironment()
         .task { @MainActor in MockData.needsAttentionUser() }
@@ -33,7 +33,7 @@ import SwiftUI
         .task { @MainActor in MockData.athleteUser() }
 }
 
-#Preview("Metric Detail — HRV: Critical 🔴") {
+#Preview("Metric Detail — HRV: Below trend 🔴") {
     MetricDetailView(metric: .hrv(24))
         .withMockEnvironment()
         .task { @MainActor in MockData.needsAttentionUser() }
