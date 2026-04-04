@@ -33,6 +33,13 @@ final class ZKSyncAttestationService: ObservableObject {
     private let hasProfileSelector = "a787c80b"
     private let verifyAttestationSelector = "c3c4ee76"
 
+    // MerkleCommitment contract — ZKsync Era Sepolia
+    // keccak256("commitGenesisRoot(bytes32,bytes32,uint32,uint32,uint32,uint8,uint8)") → 5a8b10ca
+    // keccak256("hasGenesisRoot(address)") → d1b05adb
+    private let merkleCommitmentAddress   = "0x2385cFF536C738C133EC4779441A591732aC7FbA"
+    private let commitGenesisRootSelector = "5a8b10ca"
+    private let hasGenesisRootSelector    = "d1b05adb"
+
     private init() {}
 
     // MARK: - Public API
@@ -67,16 +74,71 @@ final class ZKSyncAttestationService: ObservableObject {
         let txHash: String
     }
 
-    /// Check whether a genesis root has already been committed for this wallet.
+    /// Read hasGenesisRoot(address) from the MerkleCommitment contract via eth_call.
     func hasGenesisRoot(address: String) async throws -> Bool {
-        // TODO: implement on-chain read (callHasGenesisRoot via eth_call)
-        return false
+        let paddedAddress = padLeft(hexStrip(address), toBytes: 32)
+        let calldata = "0x" + hasGenesisRootSelector + paddedAddress
+
+        let result = try await ethCall(to: merkleCommitmentAddress, data: calldata)
+
+        // Return is a single bool padded to 32 bytes — last nibble = 1 means true
+        guard result.count >= 66 else { return false }
+        return result.hasSuffix("1")
     }
 
-    /// Commit a Merkle genesis root to the on-chain registry.
+    /// ABI-encode and submit commitGenesisRoot() to the MerkleCommitment contract.
+    ///
+    /// Function: commitGenesisRoot(bytes32,bytes32,uint32,uint32,uint32,uint8,uint8)
+    /// Selector: 5a8b10ca
+    /// Calldata: 4 + 7×32 = 228 bytes total
     func commitGenesisRoot(_ input: GenesisRootInput) async throws -> GenesisRootResult {
-        // TODO: ABI-encode and submit commitGenesisRoot() call once contract is deployed
-        throw AttestationError.notImplemented("commitGenesisRoot not yet wired to contract")
+        let wallet = WalletService.shared
+        guard wallet.isConnected, let address = wallet.address else {
+            throw AttestationError.walletNotConnected
+        }
+
+        print("⛓️ [Genesis] Committing root for \(address)")
+        print("⛓️ [Genesis] root=\(input.root.prefix(18))… leaves=\(input.leafCount) days=\(input.startDayId)–\(input.endDayId)")
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        let calldata = encodeCommitGenesisRoot(input)
+        print("⛓️ [Genesis] calldata=\(calldata.prefix(18))… (\(calldata.count) chars)")
+
+        #if canImport(PrivySDK)
+        let txHash = try await sendTransaction(
+            from: address,
+            to: merkleCommitmentAddress,
+            data: calldata
+        )
+        print("⛓️ [Genesis] ✅ root committed: \(txHash)")
+        return GenesisRootResult(txHash: txHash)
+        #else
+        throw AttestationError.privyNotAvailable
+        #endif
+    }
+
+    /// ABI-encode commitGenesisRoot(bytes32,bytes32,uint32,uint32,uint32,uint8,uint8).
+    /// Each param is right-justified in a 32-byte slot (standard ABI encoding for fixed types).
+    ///   slot 0: root        (bytes32 — the Merkle root, no padding needed)
+    ///   slot 1: prevRoot    (bytes32 — zero for genesis)
+    ///   slot 2: startDayId  (uint32)
+    ///   slot 3: endDayId    (uint32)
+    ///   slot 4: leafCount   (uint32)
+    ///   slot 5: rootType    (uint8 — 0 = genesis)
+    ///   slot 6: syncType    (uint8 — 0 = live)
+    private func encodeCommitGenesisRoot(_ input: GenesisRootInput) -> String {
+        let root      = padLeft(hexStrip(input.root), toBytes: 32)
+        let prevRoot  = padLeft("0", toBytes: 32)
+        let startDay  = padLeft(String(input.startDayId, radix: 16), toBytes: 32)
+        let endDay    = padLeft(String(input.endDayId,   radix: 16), toBytes: 32)
+        let leafCount = padLeft(String(input.leafCount,  radix: 16), toBytes: 32)
+        let rootType  = padLeft(String(input.rootType,   radix: 16), toBytes: 32)
+        let syncType  = padLeft(String(input.syncType,   radix: 16), toBytes: 32)
+
+        return "0x" + commitGenesisRootSelector
+            + root + prevRoot + startDay + endDay + leafCount + rootType + syncType
     }
 
     /// Submit a createAttestation tx to the V4 contract.
