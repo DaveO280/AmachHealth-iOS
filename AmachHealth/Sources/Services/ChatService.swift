@@ -841,3 +841,14 @@ final class ChatService: ObservableObject {
         }
     }
 }
+
+#if DEBUG
+extension ChatService {
+    /// DEBUG: Replace active + recent sessions from a replay fixture (preserves message timestamps).
+    func debugApplyReplaySessions(current: ChatSession, recent: [ChatSession]) {
+        currentSession = current
+        recentSessions = recent
+        saveToDisk()
+    }
+}
+#endif

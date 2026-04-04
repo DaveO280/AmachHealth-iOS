@@ -383,6 +383,10 @@ struct HealthSyncView: View {
                 )
             }
             .disabled(!canSync)
+
+            #if DEBUG
+            merkleGenesisDebugCard
+            #endif
         }
     }
 
@@ -401,6 +405,90 @@ struct HealthSyncView: View {
         .presentationDetents([.medium])
         .presentationBackground(Color.amachSurface)
     }
+
+    // MARK: - Merkle Genesis Debug
+
+    #if DEBUG
+    @StateObject private var merkleService = MerkleGenesisService.shared
+
+    private var merkleGenesisDebugCard: some View {
+        VStack(spacing: 12) {
+            Button {
+                Task {
+                    do {
+                        _ = try await merkleService.generateGenesisRoot()
+                    } catch {
+                        print("Merkle genesis error: \(error)")
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "tree.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Merkle Genesis Root")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.amachPrimary.opacity(0.2))
+                .foregroundStyle(Color.amachPrimaryBright)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.amachPrimaryBright.opacity(0.3), lineWidth: 1)
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(merkleService.progress.message)
+                        .font(.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                    Spacer()
+                    Text("\(Int(merkleService.progress.progressFraction * 100))%")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.amachPrimaryBright)
+                }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.amachPrimary.opacity(0.12))
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.amachPrimaryBright)
+                            .frame(width: geo.size.width * merkleService.progress.progressFraction)
+                            .animation(.easeInOut(duration: 0.3), value: merkleService.progress.progressFraction)
+                    }
+                }
+                .frame(height: 4)
+
+                if let result = merkleService.lastResult {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let txHash = result.onChainTxHash {
+                            Text("TX Hash: \(shortHash(txHash))")
+                                .font(AmachType.dataMono)
+                                .foregroundStyle(Color.amachPrimaryBright)
+                        }
+                        Text("Root: \(result.root.prefix(16))…")
+                            .font(AmachType.dataMono)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                }
+            }
+            .padding(10)
+            .background(Color.amachSurface.opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .padding(10)
+        .background(Color.amachBg.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.amachPrimaryBright.opacity(0.15), lineWidth: 1)
+        )
+    }
+    #endif
 
     // MARK: - Storage Link
 

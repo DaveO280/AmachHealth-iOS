@@ -161,6 +161,18 @@ struct TrendPoint: Identifiable {
     let id = UUID()
     let date: Date
     let value: Double
+
+    /// Shifts every sample by the same time interval so the latest calendar day
+    /// aligns with `newestDate` (start-of-day). Use for static JSON/CSV fixtures
+    /// so charts and “last 7 days” logic stay valid as the real clock advances.
+    static func rebaseToNewestDay(_ points: [TrendPoint], newestDate: Date = Date(), calendar: Calendar = .current) -> [TrendPoint] {
+        guard let last = points.max(by: { $0.date < $1.date }) else { return points }
+        let newestStart = calendar.startOfDay(for: newestDate)
+        let lastStart = calendar.startOfDay(for: last.date)
+        let delta = newestStart.timeIntervalSince(lastStart)
+        guard delta != 0 else { return points }
+        return points.map { TrendPoint(date: $0.date.addingTimeInterval(delta), value: $0.value) }
+    }
 }
 
 struct SleepStageTrendPoint: Identifiable {

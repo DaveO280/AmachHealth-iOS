@@ -17,6 +17,15 @@ import HealthKit
 ///   • Days 15–17  — HRV ↓22 ms, RHR ↑82 bpm  (overtraining/illness signal)
 ///   • Day  30     — Steps 22,000               (unusual activity spike)
 ///   • Days 45–46  — Sleep 4.5 hrs              (poor sleep cluster)
+///
+/// **Bulk vs progressive:** HealthKit aggregates use each sample’s `start`/`end` time, not
+/// the order samples were saved. A one-shot `seed` and `seedProgressively` with the same
+/// `days` / `endingOn` produce the **same** numbers in the app. Progressive mode helps if you
+/// want to pause between days, attach breakpoints, or mirror “one day written at a time.”
+///
+/// **Luma memory / chat:** Long-term memory (`ConversationMemoryStore`) grows from real
+/// (or scripted) chat sessions and their timestamps — not from HealthKit writes. Exercise
+/// memory by chatting over multiple days or by replaying fixtures with backdated messages.
 @MainActor
 final class MockDataSeeder {
 
@@ -25,38 +34,92 @@ final class MockDataSeeder {
 
     // MARK: - Public
 
-    /// Seeds `days` days of data ending on `anchor` (defaults to today).
-    func seed(days: Int = 60, endingOn anchor: Date = Date()) async throws {
+    /// Writes `days` of history one calendar day at a time, optionally sleeping between days.
+    ///
+    /// - Parameters:
+    ///   - delayBetweenDays: e.g. `.milliseconds(200)` to slow the write pattern for debugging.
+    ///     Use `.zero` for the same end state as `seed` as fast as HealthKit allows.
+    func seedProgressively(
+        days: Int = 60,
+        endingOn anchor: Date = Date(),
+        delayBetweenDays: Duration = .zero
+    ) async throws {
+        guard days > 0 else { return }
         guard HKHealthStore.isHealthDataAvailable() else {
             print("⚠️  HealthKit not available — must run on Simulator or device.")
             return
         }
 
         try await requestAuthorization()
-        print("🌱 Seeding \(days) days of HealthKit data…")
+        if delayBetweenDays > .zero {
+            print("🌱 Progressive seed: \(days) day(s), delay between days = \(delayBetweenDays)…")
+        } else {
+            print("🌱 Seeding \(days) days of HealthKit data…")
+        }
+
+        let endDay = calendar.startOfDay(for: anchor)
+        var totalSaved = 0
+
+        for offset in 0..<days {
+            let date = calendar.date(byAdding: .day, value: -(days - 1 - offset), to: endDay)!
+            let samples = buildDaySamples(date: date, dayIndex: offset, totalDays: days)
+            try await saveSamplesBatched(samples)
+            totalSaved += samples.count
+
+            if delayBetweenDays > .zero, offset < days - 1 {
+                try await Task.sleep(for: delayBetweenDays)
+            }
+        }
+
+        if delayBetweenDays > .zero {
+            print("✅ Progressive seed complete: \(totalSaved) samples across \(days) days.")
+        } else {
+            print("✅ Seeded \(totalSaved) samples across \(days) days.")
+        }
+    }
+
+    /// Seeds only the last `dayCount` days ending on `anchor` (defaults to today).
+    ///
+    /// Use when the Simulator already has history but the real calendar moved forward
+    /// and “today” is empty: faster than re-running a full 60-day `seed`, and avoids
+    /// depending on duplicate-save deduping for every historical day.
+    func seedRecentDays(_ dayCount: Int = 14, endingOn anchor: Date = Date()) async throws {
+        guard dayCount > 0 else { return }
+        guard HKHealthStore.isHealthDataAvailable() else {
+            print("⚠️  HealthKit not available — must run on Simulator or device.")
+            return
+        }
+
+        try await requestAuthorization()
+        print("🌱 Seeding the last \(dayCount) day(s) of HealthKit data (ending \(anchor))…")
 
         let endDay = calendar.startOfDay(for: anchor)
         var allSamples: [HKSample] = []
 
-        for offset in 0..<days {
-            // offset 0 = oldest day, offset (days-1) = anchor day
-            let date = calendar.date(byAdding: .day, value: -(days - 1 - offset), to: endDay)!
-            allSamples.append(contentsOf: buildDaySamples(date: date, dayIndex: offset, totalDays: days))
+        for offset in 0..<dayCount {
+            let date = calendar.date(byAdding: .day, value: -(dayCount - 1 - offset), to: endDay)!
+            allSamples.append(contentsOf: buildDaySamples(date: date, dayIndex: offset, totalDays: dayCount))
         }
 
-        // Batch-save to avoid overloading HealthKit in one call.
-        let batchSize = 80
-        var saved = 0
-        for batchStart in stride(from: 0, to: allSamples.count, by: batchSize) {
-            let slice = Array(allSamples[batchStart..<min(batchStart + batchSize, allSamples.count)])
-            try await store.save(slice)
-            saved += slice.count
-        }
+        try await saveSamplesBatched(allSamples)
 
-        print("✅ Seeded \(saved) samples across \(days) days.")
+        print("✅ Seeded \(allSamples.count) samples for the last \(dayCount) day(s).")
+    }
+
+    /// Seeds `days` days of data ending on `anchor` (defaults to today).
+    func seed(days: Int = 60, endingOn anchor: Date = Date()) async throws {
+        try await seedProgressively(days: days, endingOn: anchor, delayBetweenDays: .zero)
     }
 
     // MARK: - Authorization
+
+    private func saveSamplesBatched(_ allSamples: [HKSample]) async throws {
+        let batchSize = 80
+        for batchStart in stride(from: 0, to: allSamples.count, by: batchSize) {
+            let slice = Array(allSamples[batchStart..<min(batchStart + batchSize, allSamples.count)])
+            try await store.save(slice)
+        }
+    }
 
     private func requestAuthorization() async throws {
         let writeTypes: Set<HKSampleType> = [

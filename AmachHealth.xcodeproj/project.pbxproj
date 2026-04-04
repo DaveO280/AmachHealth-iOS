@@ -83,6 +83,13 @@
 		FF000000000000000000020B /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010B /* MockURLSession.swift */; };
 		FF000000000000000000020C /* MockWalletService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010C /* MockWalletService.swift */; };
 		FF000000000000000000020D /* MockDataSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010D /* MockDataSeeder.swift */; };
+		GG0100000000000000000002 /* LumaConversationReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = GG0100000000000000000001 /* LumaConversationReplay.swift */; };
+		GG0100000000000000000004 /* ConversationReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = GG0100000000000000000003 /* ConversationReplayTests.swift */; };
+		B7A6E2F7772B422AB767472F /* MerkleGenesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03E68B1971C94CCC9451E11F /* MerkleGenesisService.swift */; };
+		D53C13D7A54F4DDEA83D03FE /* MerkleTreeBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79574FCB749142349FF1DA95 /* MerkleTreeBuilder.swift */; };
+		2695798C73E44C3B8B641457 /* LeafHashingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */; };
+		55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D2720462134929AF0C687C /* MerkleNormalizationService.swift */; };
+		083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A493F7F7694A57A538C757 /* MerkleLeaf.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -165,6 +172,13 @@
 		FF000000000000000000010B /* MockURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockURLSession.swift; path = AmachHealth/Tests/Helpers/MockURLSession.swift; sourceTree = SOURCE_ROOT; };
 		FF000000000000000000010C /* MockWalletService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockWalletService.swift; path = AmachHealth/Tests/Helpers/MockWalletService.swift; sourceTree = SOURCE_ROOT; };
 		FF000000000000000000010D /* MockDataSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockDataSeeder.swift; path = AmachHealth/Tests/MockDataSeeder.swift; sourceTree = SOURCE_ROOT; };
+		GG0100000000000000000001 /* LumaConversationReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaConversationReplay.swift; path = AmachHealth/Sources/Services/LumaConversationReplay.swift; sourceTree = SOURCE_ROOT; };
+		GG0100000000000000000003 /* ConversationReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConversationReplayTests.swift; path = AmachHealth/Tests/ConversationReplayTests.swift; sourceTree = SOURCE_ROOT; };
+		03E68B1971C94CCC9451E11F /* MerkleGenesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleGenesisService.swift; path = AmachHealth/Sources/Services/MerkleGenesisService.swift; sourceTree = SOURCE_ROOT; };
+		79574FCB749142349FF1DA95 /* MerkleTreeBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleTreeBuilder.swift; path = AmachHealth/Sources/Services/MerkleTreeBuilder.swift; sourceTree = SOURCE_ROOT; };
+		7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LeafHashingService.swift; path = AmachHealth/Sources/Services/LeafHashingService.swift; sourceTree = SOURCE_ROOT; };
+		56D2720462134929AF0C687C /* MerkleNormalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleNormalizationService.swift; path = AmachHealth/Sources/Services/MerkleNormalizationService.swift; sourceTree = SOURCE_ROOT; };
+		19A493F7F7694A57A538C757 /* MerkleLeaf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeaf.swift; path = AmachHealth/Sources/Models/MerkleLeaf.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -231,6 +245,7 @@
 				FF0000000000000000000102 /* AppStateTests.swift */,
 				FF0000000000000000000103 /* ChatServiceIntegrationTests.swift */,
 				FF0000000000000000000104 /* ChatServiceTests.swift */,
+				GG0100000000000000000003 /* ConversationReplayTests.swift */,
 				FF0000000000000000000105 /* DesignTokenTests.swift */,
 				FF0000000000000000000106 /* HealthKitMappingTests.swift */,
 				FF0000000000000000000107 /* HealthMetricProofTests.swift */,
@@ -319,6 +334,7 @@
 				AA000000000000000000010F /* HealthMemoryModels.swift */,
 				DD0000000000000000000001 /* HealthMetricProof.swift */,
 				AA0000000000000000000126 /* TimelineModels.swift */,
+					19A493F7F7694A57A538C757 /* MerkleLeaf.swift */,
 			);
 			name = Models;
 			sourceTree = "<group>";
@@ -346,6 +362,7 @@
 				AA0000000000000000000112 /* AnomalyDetector.swift */,
 				AA0000000000000000000113 /* ChatService.swift */,
 				EE0000000000000000000003 /* ChatService+Testing.swift */,
+				GG0100000000000000000001 /* LumaConversationReplay.swift */,
 				AA000000000000000000012C /* ChatIntentClassifier.swift */,
 				AA0000000000000000000114 /* DashboardService.swift */,
 				CC0000000000000000000001 /* LabContextService.swift */,
@@ -358,7 +375,12 @@
 				AA0000000000000000000127 /* TimelineService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
 				EE0000000000000000000002 /* WalletServiceProtocol.swift */,
-				EE0000000000000000000004 /* ZKSyncAttestationService.swift */,
+				
+					03E68B1971C94CCC9451E11F /* MerkleGenesisService.swift */,
+					79574FCB749142349FF1DA95 /* MerkleTreeBuilder.swift */,
+					7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */,
+					56D2720462134929AF0C687C /* MerkleNormalizationService.swift */,
+					EE0000000000000000000004 /* ZKSyncAttestationService.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -513,6 +535,7 @@
 				AA0000000000000000000211 /* PreviewHelpers.swift in Sources */,
 				AA0000000000000000000212 /* AnomalyDetector.swift in Sources */,
 				AA0000000000000000000213 /* ChatService.swift in Sources */,
+				GG0100000000000000000002 /* LumaConversationReplay.swift in Sources */,
 				AA0000000000000000000214 /* DashboardService.swift in Sources */,
 				CC0000000000000000000002 /* LabContextService.swift in Sources */,
 				AA0000000000000000000215 /* HealthDataSyncService.swift in Sources */,
@@ -536,7 +559,13 @@
 				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
 				AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */,
 				AA000000000000000000022C /* ChatIntentClassifier.swift in Sources */,
-				DD0000000000000000000011 /* HealthMetricProof.swift in Sources */,
+				
+					B7A6E2F7772B422AB767472F /* MerkleGenesisService.swift in Sources */,
+					D53C13D7A54F4DDEA83D03FE /* MerkleTreeBuilder.swift in Sources */,
+					2695798C73E44C3B8B641457 /* LeafHashingService.swift in Sources */,
+					55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */,
+					083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */,
+					DD0000000000000000000011 /* HealthMetricProof.swift in Sources */,
 				DD0000000000000000000012 /* HealthMetricProofService.swift in Sources */,
 				DD0000000000000000000013 /* ProofGeneratorView.swift in Sources */,
 				DD0000000000000000000014 /* ProofDetailView.swift in Sources */,
@@ -559,6 +588,7 @@
 				FF0000000000000000000202 /* AppStateTests.swift in Sources */,
 				FF0000000000000000000203 /* ChatServiceIntegrationTests.swift in Sources */,
 				FF0000000000000000000204 /* ChatServiceTests.swift in Sources */,
+				GG0100000000000000000004 /* ConversationReplayTests.swift in Sources */,
 				FF0000000000000000000205 /* DesignTokenTests.swift in Sources */,
 				FF0000000000000000000206 /* HealthKitMappingTests.swift in Sources */,
 				FF0000000000000000000207 /* HealthMetricProofTests.swift in Sources */,

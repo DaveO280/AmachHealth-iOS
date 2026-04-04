@@ -505,6 +505,20 @@ final class ConversationMemoryStore: ObservableObject {
         saveToDisk()
     }
 
+    #if DEBUG
+    /// DEBUG: Apply a replay payload with original dates (replace all, or merge like a Storj pull).
+    func debugApplyReplayMemory(_ payload: ConversationMemoryStorjPayload, mergeIntoExisting: Bool) {
+        if mergeIntoExisting {
+            mergeRemoteMemory(payload)
+        } else {
+            facts = payload.facts
+            summaries = payload.summaries
+            applyRetentionCaps()
+            saveToDisk()
+        }
+    }
+    #endif
+
     private static func factMergeKey(_ fact: CriticalFact) -> String {
         "\(fact.category.rawValue):\(normalizeFactValue(fact.value))"
     }
