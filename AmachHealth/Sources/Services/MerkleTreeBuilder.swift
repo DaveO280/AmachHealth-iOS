@@ -72,8 +72,12 @@ final class MerkleTreeBuilder: ObservableObject {
     private let zkScriptBase: String
 
     private init() {
+        #if os(macOS)
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         zkScriptBase = "\(home)/Projects/AmachHealth-iOS/zk"
+        #else
+        zkScriptBase = ""
+        #endif
     }
 
     // MARK: - Build Genesis Tree
@@ -252,6 +256,7 @@ final class MerkleTreeBuilder: ObservableObject {
     }
 
     private func runNodeScript(script: String, args: [String]) async throws -> String {
+        #if os(macOS)
         return try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -278,6 +283,9 @@ final class MerkleTreeBuilder: ObservableObject {
                 continuation.resume(throwing: error)
             }
         }
+        #else
+        throw MerkleTreeError.buildFailed("Node.js tree build is not available on iOS — run genesis pipeline on Mac/CI")
+        #endif
     }
 }
 

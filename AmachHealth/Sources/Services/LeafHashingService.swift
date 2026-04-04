@@ -38,9 +38,12 @@ final class LeafHashingService: ObservableObject {
     // Path to the zk/ directory (relative to the app bundle)
     // In production this should point to the installed zk toolchain.
     private var zkScriptPath: String {
-        // Default: sibling to the iOS project
+        #if os(macOS)
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/Projects/AmachHealth-iOS/zk"
+        #else
+        return ""
+        #endif
     }
 
     private init() {}
@@ -152,6 +155,7 @@ final class LeafHashingService: ObservableObject {
     // MARK: - Script Runner
 
     private func runNodeScript(script: String, args: [String]) async throws -> String {
+        #if os(macOS)
         let scriptPath = "\(zkScriptPath)/scripts/\(script)"
 
         guard FileManager.default.fileExists(atPath: scriptPath) else {
@@ -184,6 +188,9 @@ final class LeafHashingService: ObservableObject {
                 continuation.resume(throwing: error)
             }
         }
+        #else
+        throw LeafHashingError.scriptFailed("Node.js Poseidon hashing is not available on iOS — run genesis pipeline on Mac/CI")
+        #endif
     }
 }
 
