@@ -51,6 +51,34 @@ final class ZKSyncAttestationService: ObservableObject {
         let txHash: String
     }
 
+    // MARK: - Genesis Root (Merkle pipeline)
+
+    /// Input for committing a Merkle genesis root on-chain.
+    struct GenesisRootInput {
+        let root: String        // 0x-prefixed 32-byte hex
+        let startDayId: UInt32
+        let endDayId: UInt32
+        let leafCount: UInt32
+        let rootType: UInt8     // 0 = genesis
+        let syncType: UInt8     // 0 = live
+    }
+
+    struct GenesisRootResult {
+        let txHash: String
+    }
+
+    /// Check whether a genesis root has already been committed for this wallet.
+    func hasGenesisRoot(address: String) async throws -> Bool {
+        // TODO: implement on-chain read (callHasGenesisRoot via eth_call)
+        return false
+    }
+
+    /// Commit a Merkle genesis root to the on-chain registry.
+    func commitGenesisRoot(_ input: GenesisRootInput) async throws -> GenesisRootResult {
+        // TODO: ABI-encode and submit commitGenesisRoot() call once contract is deployed
+        throw AttestationError.notImplemented("commitGenesisRoot not yet wired to contract")
+    }
+
     /// Submit a createAttestation tx to the V4 contract.
     /// Returns the transaction hash on success.
     func createAttestation(_ input: AttestationInput) async throws -> AttestationResult {
@@ -223,6 +251,7 @@ enum AttestationError: LocalizedError {
     case privyNotAvailable
     case rpcError(String)
     case transactionFailed(String)
+    case notImplemented(String)
 
     var errorDescription: String? {
         switch self {
@@ -236,6 +265,8 @@ enum AttestationError: LocalizedError {
             return "Blockchain error: \(msg)"
         case .transactionFailed(let msg):
             return "Transaction failed: \(msg)"
+        case .notImplemented(let msg):
+            return "Not implemented: \(msg)"
         }
     }
 }

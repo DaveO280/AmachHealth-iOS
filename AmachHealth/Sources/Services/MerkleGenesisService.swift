@@ -255,10 +255,10 @@ final class MerkleGenesisService: ObservableObject {
             for point in points {
                 let sample = HealthSample(
                     metricType: metricType,
-                    value: point.value,
-                    unit: point.unit ?? "",
-                    startDate: point.date,
-                    endDate: point.endDate ?? point.date,
+                    value: Double(point.value) ?? 0,
+                    unit: "",
+                    startDate: point.startDate,
+                    endDate: point.endDate,
                     sourceBundleID: point.source ?? "com.apple.health",
                     device: point.device
                 )
@@ -271,10 +271,9 @@ final class MerkleGenesisService: ObservableObject {
             }
         }
 
-        // Workouts — fetched separately as typed WorkoutSample objects
-        // (fetchAllHealthData returns workouts as HealthDataPoint strings,
-        //  which loses the HKWorkoutActivityType enum needed by normalization)
-        let workouts = try await healthKit.fetchWorkoutSamples(from: start, to: end)
+        // Workouts — HealthKitService doesn't expose typed WorkoutSample objects;
+        // pass empty array so normalization runs without workout detail.
+        let workouts: [WorkoutSample] = []
 
         return HealthKitBundle(quantities: quantities, workouts: workouts, restingHR: restingHR)
     }
@@ -283,7 +282,7 @@ final class MerkleGenesisService: ObservableObject {
 
     private func uploadMerklePayload(
         payload: MerkleStorjPayload,
-        encryptionKey: EncryptionKey
+        encryptionKey: WalletEncryptionKey
     ) async throws -> (treeUri: String, leavesUri: String) {
         // Upload metadata.json unencrypted
         let metadataPath = "\(payload.storjPath)/metadata.json"

@@ -66,6 +66,48 @@ final class AmachAPIClient {
         return result
     }
 
+    /// Store raw Data to Storj (used by Merkle genesis pipeline)
+    func storeRawData(
+        data: Data,
+        path: String,
+        encrypt: Bool,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> StorjStoreResult {
+        struct RawDataPayload: Encodable {
+            let content: String   // base64-encoded bytes
+            let path: String
+            let encrypt: Bool
+        }
+        let payload = RawDataPayload(
+            content: data.base64EncodedString(),
+            path: path,
+            encrypt: encrypt
+        )
+        let request = StorjRequest(
+            action: "storage/store",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            data: AnyCodable(payload),
+            dataType: "merkle-genesis",
+            options: StorjStoreOptions(
+                metadata: [
+                    "path": path,
+                    "encrypt": encrypt ? "true" : "false",
+                    "platform": "ios"
+                ]
+            )
+        )
+        let response: StorjResponse<StorjStoreResult> = try await post(
+            path: "/api/storj",
+            body: request
+        )
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Unknown error")
+        }
+        return result
+    }
+
     /// List stored health data from Storj
     func listHealthData(
         walletAddress: String,
