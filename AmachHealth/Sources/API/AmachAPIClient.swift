@@ -727,6 +727,70 @@ final class AmachAPIClient {
         )
     }
 
+    // MARK: - ZK Coverage (Dev)
+
+    func generateGenesisRoot(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        leaves: [MerkleGenesisLeafRequest]
+    ) async throws -> MerkleGenesisResponse {
+        struct GenesisRequest: Encodable {
+            let walletAddress: String
+            let leaves: [MerkleGenesisLeafRequest]
+            let encryptionKey: WalletEncryptionKey
+        }
+        return try await post(
+            path: "/api/merkle/genesis",
+            body: GenesisRequest(
+                walletAddress: walletAddress,
+                leaves: leaves,
+                encryptionKey: encryptionKey
+            )
+        )
+    }
+
+    func generateCoverageProof(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        startDayId: UInt32,
+        endDayId: UInt32,
+        minDays: UInt32
+    ) async throws -> CoverageProofGenerateResponse {
+        struct CoverageRequest: Encodable {
+            let walletAddress: String
+            let startDayId: UInt32
+            let endDayId: UInt32
+            let minDays: UInt32
+            let encryptionKey: WalletEncryptionKey
+        }
+        return try await post(
+            path: "/api/proofs/coverage/generate",
+            body: CoverageRequest(
+                walletAddress: walletAddress,
+                startDayId: startDayId,
+                endDayId: endDayId,
+                minDays: minDays,
+                encryptionKey: encryptionKey
+            )
+        )
+    }
+
+    func verifyCoverageProof(
+        proof: CoverageProof
+    ) async throws -> CoverageProofVerifyResponse {
+        struct VerifyCoverageRequest: Encodable {
+            let proof: CoverageProofPayload
+            let publicSignals: [String]
+        }
+        return try await post(
+            path: "/api/proofs/coverage/verify",
+            body: VerifyCoverageRequest(
+                proof: proof.proof,
+                publicSignals: proof.publicSignals
+            )
+        )
+    }
+
     // MARK: - Feedback
 
     /// Submit a Luma response rating to /api/feedback.
@@ -1220,6 +1284,68 @@ struct AttestationInfo: Decodable, Identifiable {
 
 struct ErrorResponse: Decodable {
     let error: String
+}
+
+// MARK: - ZK Coverage Types
+
+struct MerkleGenesisLeafRequest: Codable {
+    let dayId: UInt32
+    let steps: UInt32
+    let activeEnergy: UInt32
+    let exerciseMinutes: UInt16
+    let hrvAvg: UInt16
+    let restingHR: UInt16
+    let sleepMinutes: UInt16
+    let stepDayCount: UInt8
+    let energyDayCount: UInt8
+    let exerciseDayCount: UInt8
+    let hrvDayCount: UInt8
+    let restingHrDayCount: UInt8
+    let sleepDayCount: UInt8
+    let dataFlags: UInt16
+    let timezone: Int16
+    let sourceHash: String
+}
+
+struct MerkleGenesisResponse: Decodable {
+    let root: String
+    let rootPadded: String
+    let startDayId: UInt32
+    let endDayId: UInt32
+    let leafCount: Int
+    let treeDepth: Int
+    let storjPaths: GenesisStorjPaths
+}
+
+struct GenesisStorjPaths: Decodable {
+    let metadata: String
+    let tree: String
+    let leaves: String
+}
+
+struct CoverageProofPayload: Codable {
+    let pi_a: [String]
+    let pi_b: [[String]]
+    let pi_c: [String]
+    let protocol: String?
+    let curve: String?
+}
+
+struct CoverageProof: Codable {
+    let proof: CoverageProofPayload
+    let publicSignals: [String]
+    let proofHash: String
+}
+
+struct CoverageProofGenerateResponse: Decodable {
+    let proof: CoverageProofPayload
+    let publicSignals: [String]
+    let proofHash: String
+    let verified: Bool
+}
+
+struct CoverageProofVerifyResponse: Decodable {
+    let verified: Bool
 }
 
 // MARK: - Payload Types

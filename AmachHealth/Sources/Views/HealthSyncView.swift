@@ -410,6 +410,7 @@ struct HealthSyncView: View {
 
     #if DEBUG
     @StateObject private var merkleService = MerkleGenesisService.shared
+    @State private var coverageStatus: String?
 
     private var merkleGenesisDebugCard: some View {
         VStack(spacing: 12) {
@@ -654,6 +655,58 @@ struct HealthSyncView: View {
                                 .stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1)
                         )
                 }
+
+            Button {
+                Task {
+                    do {
+                        guard let key = wallet.encryptionKey, let address = wallet.address else {
+                            coverageStatus = "Connect wallet first"
+                            return
+                        }
+                        let generated = try await AmachAPIClient.shared.generateCoverageProof(
+                            walletAddress: address,
+                            encryptionKey: key,
+                            startDayId: 1,
+                            endDayId: 36500,
+                            minDays: 20
+                        )
+                        let verify = try await AmachAPIClient.shared.verifyCoverageProof(
+                            proof: CoverageProof(
+                                proof: generated.proof,
+                                publicSignals: generated.publicSignals,
+                                proofHash: generated.proofHash
+                            )
+                        )
+                        coverageStatus = verify.verified
+                            ? "Coverage proof verified"
+                            : "Coverage proof invalid"
+                    } catch {
+                        coverageStatus = "Coverage proof failed: \(error.localizedDescription)"
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Generate Coverage Proof")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.amachPrimary.opacity(0.16))
+                .foregroundStyle(Color.amachPrimaryBright)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.amachPrimaryBright.opacity(0.25), lineWidth: 1)
+                )
+            }
+
+            if let coverageStatus {
+                Text(coverageStatus)
+                    .font(.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
             }
         }
         .padding(18)
