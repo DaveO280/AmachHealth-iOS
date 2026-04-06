@@ -381,14 +381,29 @@ final class AmachAPIClient {
 
     // MARK: - Health Summary API
 
-    /// Get health summary for AI context
+    /// Get health summary for AI context.
+    ///
+    /// Converts aggregated `DailySummary` data (keyed by ISO date string) into the
+    /// `Record<string, HealthSample[]>` shape the backend expects, then calls
+    /// `/api/health/summary` to generate per-metric stats and trend analysis.
+    ///
+    /// - Parameters:
+    ///   - walletAddress: User's wallet address for auth.
+    ///   - encryptionKey: Derived encryption key.
+    ///   - dailySummaries: Date-keyed map of aggregated daily health data from HealthKit.
+    ///   - period: Aggregation window — "week" (≤7 days), "month" (≤31 days), or "month".
     func getHealthSummary(
         walletAddress: String,
-        encryptionKey: WalletEncryptionKey
+        encryptionKey: WalletEncryptionKey,
+        dailySummaries: [String: DailySummary],
+        period: String = "week"
     ) async throws -> HealthSummary {
+        let data = Self.buildHealthSampleData(from: dailySummaries)
         let request = HealthSummaryRequest(
             userAddress: walletAddress,
-            encryptionKey: encryptionKey
+            encryptionKey: encryptionKey,
+            data: data,
+            period: period
         )
 
         let response: HealthSummaryResponse = try await post(
@@ -401,6 +416,55 @@ final class AmachAPIClient {
         }
 
         return summary
+    }
+
+    /// Converts `[date: DailySummary]` to `[metricType: [WebHealthSample]]` for the backend.
+    /// Each daily aggregate becomes one `WebHealthSample` per metric type, dated at midnight UTC.
+    static func buildHealthSampleData(
+        from dailySummaries: [String: DailySummary]
+    ) -> [String: [WebHealthSample]] {
+        var metricSamples: [String: [WebHealthSample]] = [:]
+
+        let sortedDays = dailySummaries.keys.sorted()
+        for dateString in sortedDays {
+            guard let daily = dailySummaries[dateString] else { continue }
+            let startDate = dateString + "T00:00:00Z"
+
+            // Scalar metrics from the aggregated MetricSummary
+            for (metricType, summary) in daily.metrics {
+                // Use avg for rate metrics, total for cumulative (steps, calories)
+                let value: Double
+                let isCumulative = metricType.contains("stepCount")
+                    || metricType.contains("EnergyBurned")
+                    || metricType.contains("Distance")
+                    || metricType.contains("FlightsClimbed")
+                if isCumulative {
+                    value = summary.total ?? summary.avg ?? 0
+                } else {
+                    value = summary.avg ?? summary.total ?? 0
+                }
+                let sample = WebHealthSample(
+                    startDate: startDate,
+                    value: value,
+                    unit: WebHealthSample.unit(for: metricType),
+                    type: metricType
+                )
+                metricSamples[metricType, default: []].append(sample)
+            }
+
+            // Sleep — send total sleep minutes as a sleepAnalysis sample
+            if let sleep = daily.sleep, sleep.total > 0 {
+                let sleepSample = WebHealthSample(
+                    startDate: dateString + "T22:00:00Z",
+                    value: Double(sleep.total),
+                    unit: "min",
+                    type: "sleepAnalysis"
+                )
+                metricSamples["sleepAnalysis", default: []].append(sleepSample)
+            }
+        }
+
+        return metricSamples
     }
 
     // MARK: - AI Chat (request/response)
@@ -820,6 +884,34 @@ struct StorjStoreOptions: Encodable {
 struct HealthSummaryRequest: Encodable {
     let userAddress: String
     let encryptionKey: WalletEncryptionKey
+    let data: [String: [WebHealthSample]]
+    let period: String
+}
+
+/// A single health measurement sample — matches the web backend's `HealthSample` type.
+/// Each metric key in `HealthSummaryRequest.data` maps to an array of these.
+struct WebHealthSample: Encodable {
+    let startDate: String   // ISO-8601 e.g. "2026-04-01T00:00:00Z"
+    let value: Double
+    let unit: String
+    let type: String
+
+    /// Canonical unit string for a given HealthKit metric type identifier.
+    static func unit(for metricType: String) -> String {
+        switch metricType {
+        case "heartRate", "restingHeartRate", "walkingHeartRateAverage": return "bpm"
+        case "heartRateVariability": return "ms"
+        case "stepCount": return "count"
+        case "activeEnergyBurned", "basalEnergyBurned": return "kcal"
+        case "oxygenSaturation", "bodyFatPercentage": return "%"
+        case "respiratoryRate": return "breaths/min"
+        case "bodyMass": return "kg"
+        case "height": return "m"
+        case "sleepAnalysis": return "min"
+        case "mindfulSession": return "min"
+        default: return "units"
+        }
+    }
 }
 
 struct ProfileReadRequest: Encodable {
@@ -957,8 +1049,24 @@ struct StorjListItem: Decodable, Identifiable {
 
 struct HealthSummaryResponse: Decodable {
     let success: Bool
-    let summary: HealthSummary?
+    let period: String?
+    let generatedAt: String?
+    let summaries: [MetricSummaryResult]?
+    let overallScore: Double?
+    let metricsCount: Int?
     let error: String?
+
+    /// Convenience accessor — builds a `HealthSummary` from the flat response fields.
+    var summary: HealthSummary? {
+        guard success else { return nil }
+        return HealthSummary(
+            period: period,
+            generatedAt: generatedAt,
+            summaries: summaries,
+            overallScore: overallScore,
+            metricsCount: metricsCount ?? 0
+        )
+    }
 }
 
 struct ProfileReadResponse: Decodable {
@@ -1029,15 +1137,38 @@ struct RemoteDexaBoneDensity: Decodable {
 }
 
 struct HealthSummary: Decodable {
-    let lastUpdated: Date?
+    let period: String?
+    let generatedAt: String?
+    let summaries: [MetricSummaryResult]?
+    let overallScore: Double?
     let metricsCount: Int
-    let dateRange: DateRange?
-    let dailyAverages: [String: Double]?
 
-    struct DateRange: Decodable {
-        let start: String
-        let end: String
+    // MARK: Convenience helpers
+
+    func average(for metric: String) -> Double? {
+        summaries?.first(where: { $0.metric == metric })?.stats?.average
     }
+
+    func trend(for metric: String) -> String? {
+        summaries?.first(where: { $0.metric == metric })?.trend
+    }
+}
+
+struct MetricSummaryResult: Decodable {
+    let metric: String
+    let period: String?
+    let stats: MetricStats?
+    let trend: String?
+    let unit: String?
+}
+
+struct MetricStats: Decodable {
+    let average: Double?
+    let min: Double?
+    let max: Double?
+    let latest: Double?
+    let count: Int?
+    let sum: Double?
 }
 
 struct AttestationResponse: Decodable {
