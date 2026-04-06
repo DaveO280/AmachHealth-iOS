@@ -52,7 +52,9 @@ protocol AmachAPIClientProtocol {
     // MARK: - Health Summary
     func getHealthSummary(
         walletAddress: String,
-        encryptionKey: WalletEncryptionKey
+        encryptionKey: WalletEncryptionKey,
+        dailySummaries: [String: DailySummary],
+        period: String
     ) async throws -> HealthSummary
 
     // MARK: - Profile
@@ -66,6 +68,19 @@ protocol AmachAPIClientProtocol {
 // Swift protocols don't support default values directly, so we provide
 // them via an extension to match AmachAPIClient's concrete defaults.
 extension AmachAPIClientProtocol {
+    func getHealthSummary(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        dailySummaries: [String: DailySummary]
+    ) async throws -> HealthSummary {
+        try await getHealthSummary(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dailySummaries: dailySummaries,
+            period: "week"
+        )
+    }
+
     func sendChatMessage(
         _ message: String,
         history: [AIChatHistoryMessage],
