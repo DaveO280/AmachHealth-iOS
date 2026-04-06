@@ -37,7 +37,7 @@ final class WalletService: ObservableObject {
     // Privy config — set your App ID and Client ID from the Privy Dashboard.
     // The Client ID is created under App Settings → Clients → "iOS" client type.
     private let privyAppId = "cmiev4g03026zl80cpoyjccwu"
-    private let privyClientId = "n/a"
+    private let privyClientId = "cmiev4g03026zl80cpoyjccwu"
 
     #if canImport(PrivySDK)
     private var privy: (any Privy)?
