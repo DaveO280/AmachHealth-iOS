@@ -1327,8 +1327,16 @@ struct CoverageProofPayload: Codable {
     let pi_a: [String]
     let pi_b: [[String]]
     let pi_c: [String]
-    let protocol: String?
+    let protocolName: String?
     let curve: String?
+
+    enum CodingKeys: String, CodingKey {
+        case pi_a
+        case pi_b
+        case pi_c
+        case protocolName = "protocol"
+        case curve
+    }
 }
 
 struct CoverageProof: Codable {
