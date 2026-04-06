@@ -95,8 +95,6 @@ final class MerkleGenesisService: ObservableObject {
     private let wallet = WalletService.shared
     private let api = AmachAPIClient.shared
     private let normalization: MerkleNormalizationService
-    private let hasher = LeafHashingService.shared
-    private let treeBuilder = MerkleTreeBuilder.shared
     private let attestation = ZKSyncAttestationService.shared
 
     private init() {
@@ -156,42 +154,49 @@ final class MerkleGenesisService: ObservableObject {
         progress = .normalizing(progress: 1.0)
         print("🌿 [Genesis] Normalized \(leaves.count) leaves")
 
-        // ─── Step 3: Poseidon hash each leaf ─────────────────────────
-        progress = .hashing(progress: 0)
-        let hashedLeaves = try await hasher.hashLeaves(leaves)
-        progress = .hashing(progress: 1.0)
-        print("🔐 [Genesis] Hashed \(hashedLeaves.count) leaves")
-
-        // ─── Step 4: Build Merkle tree ────────────────────────────────
-        progress = .buildingTree(progress: 0)
-        let treeResult = try await treeBuilder.buildGenesisTree(from: hashedLeaves)
-        progress = .buildingTree(progress: 1.0)
-        print("🌳 [Genesis] Built tree — root: \(treeResult.root.prefix(16))… depth: \(treeResult.treeDepth)")
-
-        // ─── Step 5: Upload to Storj ──────────────────────────────────
-        progress = .uploadingToStorj
-
-        let payload = try treeBuilder.buildStorjPayload(
-            tree: treeResult,
-            hashedLeaves: hashedLeaves,
-            walletAddress: walletAddress
-        )
-
-        var treeStorjUri: String?
-        var leavesStorjUri: String?
-
-        do {
-            let (treeUri, leavesUri) = try await uploadMerklePayload(
-                payload: payload,
-                encryptionKey: encryptionKey
+        // ─── Step 3-5: Server-side hash + tree + Storj ────────────────
+        progress = .hashing(progress: 0.2)
+        let requestLeaves = leaves.map { leaf in
+            MerkleGenesisLeafRequest(
+                dayId: leaf.dayId,
+                steps: leaf.steps,
+                activeEnergy: leaf.activeEnergy,
+                exerciseMinutes: leaf.exerciseMins,
+                hrvAvg: leaf.hrv,
+                restingHR: leaf.restingHR,
+                sleepMinutes: leaf.sleepMins,
+                stepDayCount: 1,
+                energyDayCount: 1,
+                exerciseDayCount: leaf.workoutCount > 0 ? 1 : 0,
+                hrvDayCount: leaf.hrvPresent ? 1 : 0,
+                restingHrDayCount: leaf.restingHRPresent ? 1 : 0,
+                sleepDayCount: leaf.sleepMins > 0 ? 1 : 0,
+                dataFlags: leaf.dataFlags,
+                timezone: Int16(TimeZone.current.secondsFromGMT() / 60),
+                sourceHash: leaf.sourceHash.hexString()
             )
-            treeStorjUri = treeUri
-            leavesStorjUri = leavesUri
-            print("📦 [Genesis] Uploaded to Storj: \(treeUri)")
-        } catch {
-            // Non-fatal: continue without Storj (on-chain commitment is the primary)
-            print("⚠️ [Genesis] Storj upload failed: \(error.localizedDescription) — continuing")
         }
+        progress = .buildingTree(progress: 0.5)
+        let remote = try await api.generateGenesisRoot(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            leaves: requestLeaves
+        )
+        progress = .uploadingToStorj
+        let treeResult = MerkleTreeResult(
+            root: remote.root,
+            rootPadded: remote.rootPadded,
+            leafCount: remote.leafCount,
+            treeDepth: remote.treeDepth,
+            treeSize: 0,
+            startDayId: remote.startDayId,
+            endDayId: remote.endDayId,
+            generatedAt: Date(),
+            tree: [],
+            leafHashes: []
+        )
+        let treeStorjUri: String? = remote.storjPaths.tree
+        let leavesStorjUri: String? = remote.storjPaths.leaves
 
         // ─── Step 6: Commit root on-chain ─────────────────────────────
         progress = .submittingOnChain
@@ -276,45 +281,6 @@ final class MerkleGenesisService: ObservableObject {
         let workouts: [WorkoutSample] = []
 
         return HealthKitBundle(quantities: quantities, workouts: workouts, restingHR: restingHR)
-    }
-
-    // MARK: - Storj Upload
-
-    private func uploadMerklePayload(
-        payload: MerkleStorjPayload,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> (treeUri: String, leavesUri: String) {
-        // Upload metadata.json unencrypted
-        let metadataPath = "\(payload.storjPath)/metadata.json"
-        _ = try await api.storeRawData(
-            data: payload.metadataJsonData,
-            path: metadataPath,
-            encrypt: false,
-            walletAddress: encryptionKey.walletAddress,
-            encryptionKey: encryptionKey
-        )
-
-        // Upload tree.json encrypted
-        let treePath = "\(payload.storjPath)/tree.json"
-        let treeResult = try await api.storeRawData(
-            data: payload.treeJsonData,
-            path: treePath,
-            encrypt: true,
-            walletAddress: encryptionKey.walletAddress,
-            encryptionKey: encryptionKey
-        )
-
-        // Upload leaves.json encrypted
-        let leavesPath = "\(payload.storjPath)/leaves.json"
-        let leavesResult = try await api.storeRawData(
-            data: payload.leavesJsonData,
-            path: leavesPath,
-            encrypt: true,
-            walletAddress: encryptionKey.walletAddress,
-            encryptionKey: encryptionKey
-        )
-
-        return (treeResult.storjUri, leavesResult.storjUri)
     }
 
     // MARK: - On-Chain Submission
@@ -403,6 +369,10 @@ private extension Data {
             idx = next
         }
         self.init(bytes)
+    }
+
+    func hexString() -> String {
+        map { String(format: "%02hhx", $0) }.joined()
     }
 }
 
