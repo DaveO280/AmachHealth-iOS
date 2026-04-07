@@ -454,18 +454,24 @@ struct HealthSyncView: View {
                             coverageStatus = "Connect wallet first"
                             return
                         }
-                        // Use day range from genesis result; fall back to wide window.
-                        let genesisResult = merkleService.lastResult
-                        let startDay: Int = genesisResult != nil ? Int(genesisResult!.startDayId) : 1
-                        let endDay: Int   = genesisResult != nil ? Int(genesisResult!.endDayId)   : 36500
+                        // Align window with last genesis result when available.
+                        let startDayId: UInt32
+                        let endDayId: UInt32
+                        if let g = merkleService.lastResult {
+                            startDayId = g.startDayId
+                            endDayId = g.endDayId
+                        } else {
+                            startDayId = 1
+                            endDayId = 36500
+                        }
 
                         coverageStatus = "Generating proof…"
                         let generated = try await AmachAPIClient.shared.generateCoverageProof(
                             walletAddress: address,
                             encryptionKey: key,
-                            startDayId: startDay,
-                            endDayId: endDay,
-                            minDays: 20
+                            startDayId: startDayId,
+                            endDayId: endDayId,
+                            minDays: UInt32(20)
                         )
 
                         guard generated.verified else {
