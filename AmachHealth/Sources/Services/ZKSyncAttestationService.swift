@@ -40,6 +40,22 @@ final class ZKSyncAttestationService: ObservableObject {
     private let commitGenesisRootSelector = "5a8b10ca"
     private let hasGenesisRootSelector    = "d1b05adb"
 
+    // CoverageVerifier contract — ZKsync Era Sepolia (immutable Groth16 verifier)
+    // Used only for the pre-flight eth_call check; does not store state.
+    // keccak256("verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[4])") → 5fe8c13b
+    private let coverageVerifierAddress  = "0x58a856a2b11817f8B5E9fd96F797dDD48E57D884"
+    private let verifyProofSelector      = "5fe8c13b"
+
+    // CoverageRegistry contract — ZKsync Era Sepolia
+    // Calls the verifier and persists CoverageRecord on-chain per wallet.
+    // keccak256("submitProof(uint256[2],uint256[2][2],uint256[2],uint256[4])") → 86197d63
+    // keccak256("hasCoverageProof(address)")   → 70786fc1
+    // keccak256("getCoverageRecord(address)")  → 544c9591
+    private let coverageRegistryAddress     = "0x8ce1bBeda99D629b1357133175E349990257EFda"
+    private let submitProofSelector         = "86197d63"
+    private let hasCoverageProofSelector    = "70786fc1"
+    private let getCoverageRecordSelector   = "544c9591"
+
     private init() {}
 
     // MARK: - Public API
@@ -72,6 +88,108 @@ final class ZKSyncAttestationService: ObservableObject {
 
     struct GenesisRootResult {
         let txHash: String
+    }
+
+    // MARK: - Coverage Proof
+
+    /// Groth16 proof in Solidity ABI format, matching `SolidityProof` on the backend.
+    struct CoverageProofInput {
+        let a: [String]           // [pi_a[0], pi_a[1]] — 2 field elements
+        let b: [[String]]         // [[pi_b[0][1], pi_b[0][0]], [pi_b[1][1], pi_b[1][0]]] — G2 coord-swapped
+        let c: [String]           // [pi_c[0], pi_c[1]] — 2 field elements
+        let publicSignals: [String]  // 4 public signals (root, startDayId, endDayId, minDays)
+    }
+
+    struct CoverageProofResult {
+        let txHash: String
+        let onChainVerified: Bool  // return value of verifyProof()
+    }
+
+    /// Returns true if the user has a verified coverage record stored in the registry.
+    func hasCoverageProof(address: String) async throws -> Bool {
+        guard coverageRegistryAddress != "0x0000000000000000000000000000000000000000" else {
+            return false
+        }
+        let paddedAddress = padLeft(hexStrip(address), toBytes: 32)
+        let calldata = "0x" + hasCoverageProofSelector + paddedAddress
+        let result = try await ethCall(to: coverageRegistryAddress, data: calldata)
+        guard result.count >= 66 else { return false }
+        return result.hasSuffix("1")
+    }
+
+    /// Submit a coverage Groth16 proof to the CoverageRegistry.
+    ///
+    /// Flow:
+    ///   1. eth_call → CoverageVerifier.verifyProof() — free pre-check, saves gas on bad proofs
+    ///   2. eth_sendTransaction → CoverageRegistry.submitProof() — verifies + stores record on-chain
+    func submitCoverageProof(_ input: CoverageProofInput) async throws -> CoverageProofResult {
+        guard coverageRegistryAddress != "0x0000000000000000000000000000000000000000" else {
+            throw AttestationError.notImplemented("CoverageRegistry not yet deployed — run scripts/deploy-coverage-registry.js and update coverageRegistryAddress")
+        }
+
+        let wallet = WalletService.shared
+        guard wallet.isConnected, let address = wallet.address else {
+            throw AttestationError.walletNotConnected
+        }
+
+        guard input.a.count == 2,
+              input.b.count == 2, input.b[0].count == 2, input.b[1].count == 2,
+              input.c.count == 2,
+              input.publicSignals.count == 4 else {
+            throw AttestationError.transactionFailed("Invalid proof shape — expected a[2], b[2][2], c[2], signals[4]")
+        }
+
+        print("⛓️ [Coverage] Submitting proof for \(address)")
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        // Pre-flight: call verifyProof() on the raw verifier (view function, free).
+        let verifyCalldata = encodeCoverageCalldata(selector: verifyProofSelector, input: input)
+        let callResult = try await ethCall(to: coverageVerifierAddress, data: verifyCalldata)
+        guard callResult.count >= 66 && callResult.hasSuffix("1") else {
+            throw AttestationError.transactionFailed("Proof rejected by on-chain verifier — publicSignals or proof mismatch")
+        }
+
+        // Submit to registry: submitProof() verifies + stores CoverageRecord.
+        let submitCalldata = encodeCoverageCalldata(selector: submitProofSelector, input: input)
+
+        #if canImport(PrivySDK)
+        let txHash = try await sendTransaction(
+            from: address,
+            to: coverageRegistryAddress,
+            data: submitCalldata
+        )
+        print("⛓️ [Coverage] ✅ proof stored in registry: \(txHash)")
+        return CoverageProofResult(txHash: txHash, onChainVerified: true)
+        #else
+        throw AttestationError.privyNotAvailable
+        #endif
+    }
+
+    /// ABI-encode a coverage proof call with the given 4-byte selector.
+    /// Used for both verifyProof() (pre-check) and submitProof() (registry tx).
+    /// All parameters are fixed-size → encoded inline, no offsets.
+    /// Total calldata: 4 (selector) + 10×32 = 324 bytes.
+    private func encodeCoverageCalldata(selector: String, input: CoverageProofInput) -> String {
+        let pA0  = fieldElementSlot(input.a[0])
+        let pA1  = fieldElementSlot(input.a[1])
+        let pB00 = fieldElementSlot(input.b[0][0])
+        let pB01 = fieldElementSlot(input.b[0][1])
+        let pB10 = fieldElementSlot(input.b[1][0])
+        let pB11 = fieldElementSlot(input.b[1][1])
+        let pC0  = fieldElementSlot(input.c[0])
+        let pC1  = fieldElementSlot(input.c[1])
+        let s0   = fieldElementSlot(input.publicSignals[0])
+        let s1   = fieldElementSlot(input.publicSignals[1])
+        let s2   = fieldElementSlot(input.publicSignals[2])
+        let s3   = fieldElementSlot(input.publicSignals[3])
+
+        return "0x" + selector
+            + pA0 + pA1
+            + pB00 + pB01 + pB10 + pB11
+            + pC0 + pC1
+            + s0 + s1 + s2 + s3
     }
 
     /// Read hasGenesisRoot(address) from the MerkleCommitment contract via eth_call.
@@ -329,6 +447,35 @@ final class ZKSyncAttestationService: ObservableObject {
             return String(hex.suffix(targetLength))
         }
         return String(repeating: "0", count: targetLength - hex.count) + hex
+    }
+
+    /// Convert a field element (decimal or 0x-hex string) to a 32-byte ABI slot.
+    ///
+    /// snarkJS returns proof coordinates and public signals as decimal strings that
+    /// can be up to 254 bits — too large for Swift's native integer types.
+    /// This uses long division by 16 to convert without a BigInt library.
+    private func fieldElementSlot(_ value: String) -> String {
+        if value.hasPrefix("0x") {
+            return padLeft(String(value.dropFirst(2)), toBytes: 32)
+        }
+        var digits = value.filter(\.isNumber)
+        if digits.isEmpty { return padLeft("0", toBytes: 32) }
+
+        // Long division by 16 to produce hex digits from most-significant first.
+        var hexResult = ""
+        while digits != "0" && !digits.isEmpty {
+            var quotient = ""
+            var remainder = 0
+            for ch in digits {
+                let d = remainder * 10 + Int(String(ch))!
+                let q = d / 16
+                remainder = d % 16
+                if !quotient.isEmpty || q > 0 { quotient.append(contentsOf: String(q)) }
+            }
+            hexResult = String(format: "%x", remainder) + hexResult
+            digits = quotient.isEmpty ? "0" : quotient
+        }
+        return padLeft(hexResult.isEmpty ? "0" : hexResult, toBytes: 32)
     }
 }
 
