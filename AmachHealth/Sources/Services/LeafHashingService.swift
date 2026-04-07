@@ -85,7 +85,7 @@ final class LeafHashingService: ObservableObject {
         hashingProgress = 0.2
 
         // Run Node.js hash script
-        let result = try await runNodeScript(
+        _ = try await runNodeScript(
             script: "hash_leaves_batch.js",
             args: [inputFile.path, outputFile.path]
         )

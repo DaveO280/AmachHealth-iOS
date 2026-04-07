@@ -447,13 +447,31 @@ struct HealthSyncView: View {
                             coverageStatus = "Connect wallet first"
                             return
                         }
+                        // Align window with last genesis result when available.
+                        let startDayId: UInt32
+                        let endDayId: UInt32
+                        if let g = merkleService.lastResult {
+                            startDayId = g.startDayId
+                            endDayId = g.endDayId
+                        } else {
+                            startDayId = 1
+                            endDayId = 36500
+                        }
+
+                        coverageStatus = "Generating proof…"
                         let generated = try await AmachAPIClient.shared.generateCoverageProof(
                             walletAddress: address,
                             encryptionKey: key,
-                            startDayId: UInt32(1),
-                            endDayId: UInt32(36500),
+                            startDayId: startDayId,
+                            endDayId: endDayId,
                             minDays: UInt32(20)
                         )
+
+                        guard generated.verified else {
+                            coverageStatus = "Coverage proof invalid (backend)"
+                            return
+                        }
+
                         let verify = try await AmachAPIClient.shared.verifyCoverageProof(
                             proof: CoverageProof(
                                 proof: generated.proof,
