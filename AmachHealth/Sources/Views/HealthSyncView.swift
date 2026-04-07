@@ -411,7 +411,12 @@ struct HealthSyncView: View {
     @State private var hasGenesis: Bool? = nil  // nil = unchecked
 
     private var genesisAndCoverageCard: some View {
-        VStack(spacing: 12) {
+        let genesisConfirmed: Bool = hasGenesis == true
+        let genesisIcon     = genesisConfirmed ? "checkmark.circle.fill" : "tree.fill"
+        let genesisLabel    = genesisConfirmed ? "Genesis Root ✓" : "Create Merkle Genesis Root"
+        let genesisBgOpacity: Double = genesisConfirmed ? 0.1 : 0.2
+
+        return VStack(spacing: 12) {
 
             // Step 1 — Genesis Root
             Button {
@@ -425,14 +430,14 @@ struct HealthSyncView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: hasGenesis == true ? "checkmark.circle.fill" : "tree.fill")
+                    Image(systemName: genesisIcon)
                         .font(.system(size: 16, weight: .semibold))
-                    Text(hasGenesis == true ? "Genesis Root ✓" : "Create Merkle Genesis Root")
+                    Text(genesisLabel)
                         .font(.headline)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.amachPrimary.opacity(hasGenesis == true ? 0.1 : 0.2))
+                .background(Color.amachPrimary.opacity(genesisBgOpacity))
                 .foregroundStyle(Color.amachPrimaryBright)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
@@ -493,15 +498,15 @@ struct HealthSyncView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.amachPrimary.opacity(hasGenesis == true ? 0.16 : 0.06))
-                .foregroundStyle(hasGenesis == true ? Color.amachPrimaryBright : Color.amachTextSecondary)
+                .background(Color.amachPrimary.opacity(genesisConfirmed ? 0.16 : 0.06))
+                .foregroundStyle(genesisConfirmed ? Color.amachPrimaryBright : Color.amachTextSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.amachPrimaryBright.opacity(hasGenesis == true ? 0.25 : 0.1), lineWidth: 1)
+                        .stroke(Color.amachPrimaryBright.opacity(genesisConfirmed ? 0.25 : 0.1), lineWidth: 1)
                 )
             }
-            .disabled(hasGenesis != true)
+            .disabled(!genesisConfirmed)
 
             if let coverageStatus {
                 Text(coverageStatus)
