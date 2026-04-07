@@ -450,8 +450,9 @@ struct HealthSyncView: View {
                             return
                         }
                         // Use day range from genesis result; fall back to wide window.
-                        let startDay = merkleService.lastResult.map { Int($0.startDayId) } ?? 1
-                        let endDay   = merkleService.lastResult.map { Int($0.endDayId)   } ?? 36500
+                        let genesisResult = merkleService.lastResult
+                        let startDay: Int = genesisResult != nil ? Int(genesisResult!.startDayId) : 1
+                        let endDay: Int   = genesisResult != nil ? Int(genesisResult!.endDayId)   : 36500
 
                         coverageStatus = "Generating proof…"
                         let generated = try await AmachAPIClient.shared.generateCoverageProof(
