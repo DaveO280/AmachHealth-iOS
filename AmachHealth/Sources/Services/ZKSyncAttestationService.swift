@@ -51,8 +51,7 @@ final class ZKSyncAttestationService: ObservableObject {
     // keccak256("submitProof(uint256[2],uint256[2][2],uint256[2],uint256[4])") → 86197d63
     // keccak256("hasCoverageProof(address)")   → 70786fc1
     // keccak256("getCoverageRecord(address)")  → 544c9591
-    // Placeholder: update after running scripts/deploy-coverage-registry.js
-    private let coverageRegistryAddress     = "0x0000000000000000000000000000000000000000"
+    private let coverageRegistryAddress     = "0x8ce1bBeda99D629b1357133175E349990257EFda"
     private let submitProofSelector         = "86197d63"
     private let hasCoverageProofSelector    = "70786fc1"
     private let getCoverageRecordSelector   = "544c9591"
