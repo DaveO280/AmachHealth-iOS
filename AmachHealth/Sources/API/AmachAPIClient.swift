@@ -1323,20 +1323,15 @@ struct GenesisStorjPaths: Decodable {
     let leaves: String
 }
 
+/// Solidity/EVM ABI proof format returned by the backend's groth16 endpoint.
+/// Matches `SolidityProof` in `devZkCoverageService.ts`.
 struct CoverageProofPayload: Codable {
-    let pi_a: [String]
-    let pi_b: [[String]]
-    let pi_c: [String]
-    let protocolName: String?
-    let curve: String?
-
-    enum CodingKeys: String, CodingKey {
-        case pi_a
-        case pi_b
-        case pi_c
-        case protocolName = "protocol"
-        case curve
-    }
+    /// G1 point (2 field elements)
+    let a: [String]
+    /// G2 point (2 × 2 field elements, coordinates already swapped for EVM)
+    let b: [[String]]
+    /// G1 point (2 field elements)
+    let c: [String]
 }
 
 struct CoverageProof: Codable {
