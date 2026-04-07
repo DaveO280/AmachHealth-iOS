@@ -237,6 +237,33 @@ final class ZKSyncAttestationService: ObservableObject {
         #endif
     }
 
+    /// Submit pre-encoded MerkleCommitment calldata (e.g. `commitMerkleRootWithLeaves` from the API).
+    func commitMerkleCommitment(calldata: String) async throws -> GenesisRootResult {
+        let wallet = WalletService.shared
+        guard wallet.isConnected, let address = wallet.address else {
+            throw AttestationError.walletNotConnected
+        }
+
+        guard calldata.hasPrefix("0x"), calldata.count >= 10 else {
+            throw AttestationError.notImplemented("Invalid Merkle commitment calldata")
+        }
+
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        #if canImport(PrivySDK)
+        let txHash = try await sendTransaction(
+            from: address,
+            to: merkleCommitmentAddress,
+            data: calldata
+        )
+        print("⛓️ [Genesis] ✅ Merkle commitment tx: \(txHash)")
+        return GenesisRootResult(txHash: txHash)
+        #else
+        throw AttestationError.privyNotAvailable
+        #endif
+    }
+
     /// ABI-encode commitGenesisRoot(bytes32,bytes32,uint32,uint32,uint32,uint8,uint8).
     /// Each param is right-justified in a 32-byte slot (standard ABI encoding for fixed types).
     ///   slot 0: root        (bytes32 — the Merkle root, no padding needed)
