@@ -447,6 +447,7 @@ struct HealthSyncView: View {
                             coverageStatus = "Connect wallet first"
                             return
                         }
+                        coverageStatus = "Generating proof…"
                         let generated = try await AmachAPIClient.shared.generateCoverageProof(
                             walletAddress: address,
                             encryptionKey: key,
@@ -454,16 +455,24 @@ struct HealthSyncView: View {
                             endDayId: 36500,
                             minDays: 20
                         )
-                        let verify = try await AmachAPIClient.shared.verifyCoverageProof(
-                            proof: CoverageProof(
-                                proof: generated.proof,
-                                publicSignals: generated.publicSignals,
-                                proofHash: generated.proofHash
+
+                        guard generated.verified else {
+                            coverageStatus = "Coverage proof invalid (backend)"
+                            return
+                        }
+
+                        coverageStatus = "Submitting proof on-chain…"
+                        let onChain = try await ZKSyncAttestationService.shared.submitCoverageProof(
+                            ZKSyncAttestationService.CoverageProofInput(
+                                a: generated.proof.a,
+                                b: generated.proof.b,
+                                c: generated.proof.c,
+                                publicSignals: generated.publicSignals
                             )
                         )
-                        coverageStatus = verify.verified
-                            ? "Coverage proof verified"
-                            : "Coverage proof invalid"
+                        coverageStatus = onChain.onChainVerified
+                            ? "Coverage proof verified on-chain ✓"
+                            : "Coverage proof submitted (verification pending)"
                     } catch {
                         coverageStatus = "Coverage proof failed: \(error.localizedDescription)"
                     }
