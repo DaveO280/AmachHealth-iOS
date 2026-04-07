@@ -384,9 +384,7 @@ struct HealthSyncView: View {
             }
             .disabled(!canSync)
 
-            #if DEBUG
-            merkleGenesisDebugCard
-            #endif
+            genesisAndCoverageCard
         }
     }
 
@@ -406,32 +404,35 @@ struct HealthSyncView: View {
         .presentationBackground(Color.amachSurface)
     }
 
-    // MARK: - Merkle Genesis Debug
+    // MARK: - Genesis + Coverage Proof
 
-    #if DEBUG
     @StateObject private var merkleService = MerkleGenesisService.shared
     @State private var coverageStatus: String?
+    @State private var hasGenesis: Bool? = nil  // nil = unchecked
 
-    private var merkleGenesisDebugCard: some View {
+    private var genesisAndCoverageCard: some View {
         VStack(spacing: 12) {
+
+            // Step 1 — Genesis Root
             Button {
                 Task {
                     do {
-                        _ = try await merkleService.generateGenesisRoot()
+                        let result = try await merkleService.generateGenesisRoot()
+                        hasGenesis = result.onChainTxHash != nil || result.leafCount > 0
                     } catch {
-                        print("Merkle genesis error: \(error)")
+                        coverageStatus = "Genesis failed: \(error.localizedDescription)"
                     }
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "tree.fill")
+                    Image(systemName: hasGenesis == true ? "checkmark.circle.fill" : "tree.fill")
                         .font(.system(size: 16, weight: .semibold))
-                    Text("Merkle Genesis Root")
+                    Text(hasGenesis == true ? "Genesis Root ✓" : "Create Merkle Genesis Root")
                         .font(.headline)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.amachPrimary.opacity(0.2))
+                .background(Color.amachPrimary.opacity(hasGenesis == true ? 0.1 : 0.2))
                 .foregroundStyle(Color.amachPrimaryBright)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
@@ -440,6 +441,7 @@ struct HealthSyncView: View {
                 )
             }
 
+            // Step 2 — Coverage Proof (only enabled once genesis exists)
             Button {
                 Task {
                     do {
@@ -447,12 +449,16 @@ struct HealthSyncView: View {
                             coverageStatus = "Connect wallet first"
                             return
                         }
+                        // Use day range from genesis result; fall back to wide window.
+                        let startDay = merkleService.lastResult.map { Int($0.startDayId) } ?? 1
+                        let endDay   = merkleService.lastResult.map { Int($0.endDayId)   } ?? 36500
+
                         coverageStatus = "Generating proof…"
                         let generated = try await AmachAPIClient.shared.generateCoverageProof(
                             walletAddress: address,
                             encryptionKey: key,
-                            startDayId: 1,
-                            endDayId: 36500,
+                            startDayId: startDay,
+                            endDayId: endDay,
                             minDays: 20
                         )
 
@@ -461,7 +467,7 @@ struct HealthSyncView: View {
                             return
                         }
 
-                        coverageStatus = "Submitting proof on-chain…"
+                        coverageStatus = "Submitting to registry…"
                         let onChain = try await ZKSyncAttestationService.shared.submitCoverageProof(
                             ZKSyncAttestationService.CoverageProofInput(
                                 a: generated.proof.a,
@@ -471,8 +477,8 @@ struct HealthSyncView: View {
                             )
                         )
                         coverageStatus = onChain.onChainVerified
-                            ? "Coverage proof verified on-chain ✓"
-                            : "Coverage proof submitted (verification pending)"
+                            ? "Coverage proof stored on-chain ✓"
+                            : "Coverage proof submitted (pending)"
                     } catch {
                         coverageStatus = "Coverage proof failed: \(error.localizedDescription)"
                     }
@@ -486,14 +492,15 @@ struct HealthSyncView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.amachPrimary.opacity(0.16))
-                .foregroundStyle(Color.amachPrimaryBright)
+                .background(Color.amachPrimary.opacity(hasGenesis == true ? 0.16 : 0.06))
+                .foregroundStyle(hasGenesis == true ? Color.amachPrimaryBright : Color.amachTextSecondary)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.amachPrimaryBright.opacity(0.25), lineWidth: 1)
+                        .stroke(Color.amachPrimaryBright.opacity(hasGenesis == true ? 0.25 : 0.1), lineWidth: 1)
                 )
             }
+            .disabled(hasGenesis != true)
 
             if let coverageStatus {
                 Text(coverageStatus)
@@ -501,16 +508,19 @@ struct HealthSyncView: View {
                     .foregroundStyle(Color.amachTextSecondary)
             }
 
+            // Progress bar + result
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(merkleService.progress.message)
                         .font(.caption)
                         .foregroundStyle(Color.amachTextSecondary)
                     Spacer()
-                    Text("\(Int(merkleService.progress.progressFraction * 100))%")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.amachPrimaryBright)
+                    if merkleService.progress != .idle && merkleService.progress != .complete {
+                        Text("\(Int(merkleService.progress.progressFraction * 100))%")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.amachPrimaryBright)
+                    }
                 }
 
                 GeometryReader { geo in
@@ -526,13 +536,13 @@ struct HealthSyncView: View {
                 .frame(height: 4)
 
                 if let result = merkleService.lastResult {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
                         if let txHash = result.onChainTxHash {
-                            Text("TX Hash: \(shortHash(txHash))")
+                            Text("TX: \(shortHash(txHash))")
                                 .font(AmachType.dataMono)
                                 .foregroundStyle(Color.amachPrimaryBright)
                         }
-                        Text("Root: \(result.root.prefix(16))…")
+                        Text("Days \(result.startDayId)–\(result.endDayId) · \(result.leafCount) leaves")
                             .font(AmachType.dataMono)
                             .foregroundStyle(Color.amachTextSecondary)
                     }
@@ -549,8 +559,12 @@ struct HealthSyncView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.amachPrimaryBright.opacity(0.15), lineWidth: 1)
         )
+        .task {
+            // Check on-chain genesis state when view appears.
+            guard let address = wallet.address else { return }
+            hasGenesis = (try? await ZKSyncAttestationService.shared.hasGenesisRoot(address: address)) ?? false
+        }
     }
-    #endif
 
     // MARK: - Storage Link
 
