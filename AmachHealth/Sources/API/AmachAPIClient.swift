@@ -1315,6 +1315,14 @@ struct MerkleGenesisResponse: Decodable {
     let leafCount: Int
     let treeDepth: Int
     let storjPaths: GenesisStorjPaths
+    /// Sorted ascending; optional for older API responses.
+    let leafDayIds: [UInt32]?
+    let leafHashesAsHex: [String]?
+    /// Server-built `commitMerkleRootWithLeaves` calldata (Lane A); sign/send as `data`.
+    let onChainCommitCalldata: String?
+    let merkleCommitKind: String?
+    let leavesDigestPreview: String?
+    let onChainSkipReason: String?
 }
 
 struct GenesisStorjPaths: Decodable {
@@ -1350,6 +1358,22 @@ struct CoverageProofGenerateResponse: Decodable {
     let publicSignals: [String]
     let proofHash: String
     let verified: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case proof
+        case publicSignals
+        case proofHash
+        case verified
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        proof = try container.decode(CoverageProofPayload.self, forKey: .proof)
+        publicSignals = try container.decode([String].self, forKey: .publicSignals)
+        // Be tolerant of older backend payloads that omitted proofHash/verified.
+        proofHash = try container.decodeIfPresent(String.self, forKey: .proofHash) ?? ""
+        verified = try container.decodeIfPresent(Bool.self, forKey: .verified) ?? true
+    }
 }
 
 struct CoverageProofVerifyResponse: Decodable {

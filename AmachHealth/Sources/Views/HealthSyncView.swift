@@ -450,9 +450,9 @@ struct HealthSyncView: View {
                         let generated = try await AmachAPIClient.shared.generateCoverageProof(
                             walletAddress: address,
                             encryptionKey: key,
-                            startDayId: 1,
-                            endDayId: 36500,
-                            minDays: 20
+                            startDayId: UInt32(1),
+                            endDayId: UInt32(36500),
+                            minDays: UInt32(20)
                         )
                         let verify = try await AmachAPIClient.shared.verifyCoverageProof(
                             proof: CoverageProof(

@@ -205,7 +205,8 @@ final class MerkleGenesisService: ObservableObject {
         do {
             onChainTxHash = try await submitGenesisRootOnChain(
                 treeResult: treeResult,
-                walletAddress: walletAddress
+                walletAddress: walletAddress,
+                remote: remote
             )
             print("⛓️ [Genesis] On-chain root committed: \(onChainTxHash ?? "no hash")")
         } catch {
@@ -287,9 +288,24 @@ final class MerkleGenesisService: ObservableObject {
 
     private func submitGenesisRootOnChain(
         treeResult: MerkleTreeResult,
-        walletAddress: String
+        walletAddress: String,
+        remote: MerkleGenesisResponse
     ) async throws -> String? {
-        // Guard: only commit once per wallet
+        if let calldata = remote.onChainCommitCalldata, !calldata.isEmpty {
+            let result = try await attestation.commitMerkleCommitment(calldata: calldata)
+            return result.txHash
+        }
+
+        if remote.merkleCommitKind == "skip" {
+            let reason = remote.onChainSkipReason ?? ""
+            if reason.contains("chain read failed") {
+                print("⚠️ [Genesis] Lane A calldata unavailable (\(reason)) — trying legacy commit")
+            } else {
+                print("⛓️ [Genesis] On-chain skipped: \(reason.isEmpty ? "no tx needed" : reason)")
+                return nil
+            }
+        }
+
         if let alreadyCommitted = try? await attestation.hasGenesisRoot(address: walletAddress),
            alreadyCommitted {
             print("⛓️ [Genesis] Root already committed for \(walletAddress) — skipping")
