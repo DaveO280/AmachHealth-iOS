@@ -863,7 +863,17 @@ final class AmachAPIClient {
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(R.self, from: data)
+        do {
+            return try decoder.decode(R.self, from: data)
+        } catch {
+            #if DEBUG
+            if let body = String(data: data.prefix(1000), encoding: .utf8) {
+                print("📡 [API] Decode error: \(error)")
+                print("📡 [API] Response body: \(body)")
+            }
+            #endif
+            throw error
+        }
     }
 
     private func labRecordMetadata(for record: LabRecord, dataType: String) -> [String: String] {
@@ -1332,7 +1342,8 @@ struct GenesisStorjPaths: Decodable {
 }
 
 /// Solidity/EVM ABI proof format returned by the backend's groth16 endpoint.
-/// Matches `SolidityProof` in `devZkCoverageService.ts`.
+/// Accepts both Solidity format (`a`, `b`, `c`) and raw snarkjs format
+/// (`pi_a`, `pi_b`, `pi_c`), converting the latter on the fly.
 struct CoverageProofPayload: Codable {
     /// G1 point (2 field elements)
     let a: [String]
@@ -1340,6 +1351,45 @@ struct CoverageProofPayload: Codable {
     let b: [[String]]
     /// G1 point (2 field elements)
     let c: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case a, b, c
+        case pi_a, pi_b, pi_c
+    }
+
+    init(a: [String], b: [[String]], c: [String]) {
+        self.a = a
+        self.b = b
+        self.c = c
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Try Solidity format first, fall back to snarkjs format
+        if let a = try? container.decode([String].self, forKey: .a) {
+            self.a = a
+            self.b = try container.decode([[String]].self, forKey: .b)
+            self.c = try container.decode([String].self, forKey: .c)
+        } else {
+            let piA = try container.decode([String].self, forKey: .pi_a)
+            let piB = try container.decode([[String]].self, forKey: .pi_b)
+            let piC = try container.decode([String].self, forKey: .pi_c)
+            // Convert snarkjs → Solidity: trim homogeneous coordinate, swap b indices for EVM
+            self.a = Array(piA.prefix(2))
+            self.b = [
+                [piB[0][1], piB[0][0]],
+                [piB[1][1], piB[1][0]]
+            ]
+            self.c = Array(piC.prefix(2))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(a, forKey: .a)
+        try container.encode(b, forKey: .b)
+        try container.encode(c, forKey: .c)
+    }
 }
 
 struct CoverageProof: Codable {
