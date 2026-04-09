@@ -14,11 +14,12 @@ final class TimelineService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
-    private let api = AmachAPIClient.shared
+    private let storjService: StorjTimelineService
     private let wallet = WalletService.shared
     private let cacheKey = "amach_timeline_events"
 
-    private init() {
+    private init(storjService: StorjTimelineService = .shared) {
+        self.storjService = storjService
         events = loadFromCache()
     }
 
@@ -65,15 +66,15 @@ final class TimelineService: ObservableObject {
         saveToCache(events)
 
         do {
-            let storeResult = try await api.storeTimelineEvent(
-                event: event,
+            let storeResult = try await storjService.saveEvent(
+                event,
                 walletAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
             timelineDebug("Stored timeline event \(event.id) at \(storeResult.storjUri)")
 
             var storedEvent = event
-            if let attestation = try? await api.createAttestation(
+            if let attestation = try? await AmachAPIClient.shared.createAttestation(
                 storjUri: storeResult.storjUri,
                 dataType: "timeline-event",
                 action: "store",
@@ -103,15 +104,15 @@ final class TimelineService: ObservableObject {
         replaceLocalEvent(with: event)
 
         do {
-            let storeResult = try await api.storeTimelineEvent(
-                event: event,
+            let storeResult = try await storjService.saveEvent(
+                event,
                 walletAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
             timelineDebug("Updated timeline event \(event.id) at \(storeResult.storjUri)")
 
             var storedEvent = event
-            if let attestation = try? await api.createAttestation(
+            if let attestation = try? await AmachAPIClient.shared.createAttestation(
                 storjUri: storeResult.storjUri,
                 dataType: "timeline-event",
                 action: "update",
@@ -125,6 +126,38 @@ final class TimelineService: ObservableObject {
             replaceLocalEvent(with: storedEvent)
         } catch {
             timelineDebug("Failed to update timeline event \(event.id): \(error.localizedDescription)")
+            self.error = error.localizedDescription
+            throw error
+        }
+    }
+
+    func deleteEvent(
+        id: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws {
+        error = nil
+        // Optimistic local removal
+        let removed = events.filter { $0.id == id }
+        events.removeAll { $0.id == id }
+        saveToCache(events)
+        timelineDebug("Optimistically removed timeline event \(id) from local state")
+
+        do {
+            try await storjService.deleteEvent(
+                id: id,
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey
+            )
+            timelineDebug("Deleted timeline event \(id) from Storj")
+        } catch {
+            // Rollback: re-insert the removed event
+            if let event = removed.first {
+                events.insert(event, at: 0)
+                events.sort { $0.timestamp > $1.timestamp }
+                saveToCache(events)
+            }
+            timelineDebug("Failed to delete timeline event \(id): \(error.localizedDescription)")
             self.error = error.localizedDescription
             throw error
         }
@@ -176,7 +209,7 @@ final class TimelineService: ObservableObject {
     ) async throws -> [TimelineEvent] {
         do {
             timelineDebug("Attempting Storj timeline load with current encryption key")
-            return try await api.listTimelineEvents(
+            return try await storjService.fetchEvents(
                 walletAddress: walletAddress,
                 encryptionKey: encryptionKey
             )
@@ -189,7 +222,7 @@ final class TimelineService: ObservableObject {
 
             timelineDebug("Retrying timeline load after forcing encryption key refresh")
             let refreshedKey = try await wallet.ensureEncryptionKey(forceRefresh: true)
-            return try await api.listTimelineEvents(
+            return try await storjService.fetchEvents(
                 walletAddress: walletAddress,
                 encryptionKey: refreshedKey
             )

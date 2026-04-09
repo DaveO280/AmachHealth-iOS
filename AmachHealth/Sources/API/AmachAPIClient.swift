@@ -189,6 +189,7 @@ final class AmachAPIClient {
             dataType: "timeline-event",
             options: StorjStoreOptions(
                 metadata: [
+                    "eventId": event.id,
                     "eventType": event.eventType.rawValue,
                     "timestamp": ISO8601DateFormatter().string(from: event.timestamp),
                     "platform": "ios"
@@ -243,6 +244,77 @@ final class AmachAPIClient {
 
         timelineAPIDebug("Returning \(events.count) decoded timeline events (skipped \(items.count - events.count))")
         return events.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    /// Delete a single timeline event from Storj by its event ID.
+    /// Finds the Storj object via `metadata["eventId"]` (fast path) or by
+    /// decoding each item as a fallback for legacy events. Idempotent —
+    /// succeeds silently if the event is not found.
+    func deleteTimelineEvent(
+        eventId: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws {
+        timelineAPIDebug("Deleting timeline event \(eventId) for \(walletAddress)")
+        let items = try await listHealthData(
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            dataType: "timeline-event"
+        )
+
+        // Fast path: match by eventId stored in metadata
+        if let item = items.first(where: { $0.metadata?["eventId"] == eventId }) {
+            timelineAPIDebug("Found timeline event \(eventId) via metadata, deleting \(item.uri)")
+            try await deleteStorjObject(
+                uri: item.uri,
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey
+            )
+            return
+        }
+
+        // Fallback: decode each item (legacy events without eventId in metadata)
+        for item in items {
+            guard let event = try? await retrieveStoredData(
+                storjUri: item.uri,
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey,
+                as: TimelineEvent.self
+            ), event.id == eventId else { continue }
+
+            timelineAPIDebug("Found timeline event \(eventId) via decode, deleting \(item.uri)")
+            try await deleteStorjObject(
+                uri: item.uri,
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey
+            )
+            return
+        }
+
+        timelineAPIDebug("Timeline event \(eventId) not found on Storj — treating as already deleted")
+    }
+
+    private func deleteStorjObject(
+        uri: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws {
+        // Reuse StorjRetrieveRequest shape — same fields, different action
+        let request = StorjRetrieveRequest(
+            action: "storage/delete",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            storjUri: uri
+        )
+        struct DeleteResult: Decodable {
+            let deleted: Bool?
+        }
+        let response: StorjResponse<DeleteResult> = try await post(path: "/api/storj", body: request)
+        guard response.success else {
+            timelineAPIDebug("Storj delete failed for \(uri): \(response.error ?? "unknown error")")
+            throw APIError.requestFailed(response.error ?? "Timeline delete failed")
+        }
+        timelineAPIDebug("Storj delete succeeded for \(uri)")
     }
 
     func listLabRecords(
@@ -813,7 +885,7 @@ final class AmachAPIClient {
 
     // MARK: - Private Methods
 
-    private func post<T: Encodable, R: Decodable>(
+    func post<T: Encodable, R: Decodable>(
         path: String,
         body: T
     ) async throws -> R {

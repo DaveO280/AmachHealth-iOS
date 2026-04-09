@@ -98,6 +98,9 @@
 		PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000006 /* UploadPDFReportSheet.swift */; };
 		PDF000000000000000000017 /* MockPDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000007 /* MockPDFReports.swift */; };
 		PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000008 /* PDFReportParserTests.swift */; };
+		PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000009 /* PDFReportStressTests.swift */; };
+		STL000000000000000000001 /* StorjTimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000011 /* StorjTimelineService.swift */; };
+		STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000012 /* StorjTimelineServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -195,6 +198,9 @@
 		PDF000000000000000000006 /* UploadPDFReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadPDFReportSheet.swift; path = AmachHealth/Sources/Views/UploadPDFReportSheet.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000007 /* MockPDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockPDFReports.swift; path = AmachHealth/Tests/MockPDFReports.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000008 /* PDFReportParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParserTests.swift; path = AmachHealth/Tests/PDFReportParserTests.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000009 /* PDFReportStressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportStressTests.swift; path = AmachHealth/Tests/PDFReportStressTests.swift; sourceTree = SOURCE_ROOT; };
+		STL000000000000000000011 /* StorjTimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjTimelineService.swift; path = AmachHealth/Sources/Services/StorjTimelineService.swift; sourceTree = SOURCE_ROOT; };
+		STL000000000000000000012 /* StorjTimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjTimelineServiceTests.swift; path = AmachHealth/Tests/StorjTimelineServiceTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -271,6 +277,8 @@
 				FF0000000000000000000450 /* Helpers */,
 				PDF000000000000000000007 /* MockPDFReports.swift */,
 				PDF000000000000000000008 /* PDFReportParserTests.swift */,
+				PDF000000000000000000009 /* PDFReportStressTests.swift */,
+				STL000000000000000000012 /* StorjTimelineServiceTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -393,6 +401,7 @@
 				DD0000000000000000000002 /* HealthMetricProofService.swift */,
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
 				AA0000000000000000000127 /* TimelineService.swift */,
+				STL000000000000000000011 /* StorjTimelineService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
 				EE0000000000000000000002 /* WalletServiceProtocol.swift */,
 				
@@ -567,6 +576,7 @@
 				AA0000000000000000000217 /* HealthMemoryStore.swift in Sources */,
 				AA0000000000000000000218 /* LumaProactiveService.swift in Sources */,
 				AA0000000000000000000227 /* TimelineService.swift in Sources */,
+				STL000000000000000000001 /* StorjTimelineService.swift in Sources */,
 				AA0000000000000000000219 /* WalletService.swift in Sources */,
 				AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */,
 				AA000000000000000000021A /* ChatView.swift in Sources */,
@@ -630,6 +640,8 @@
 				FF000000000000000000020D /* MockDataSeeder.swift in Sources */,
 				PDF000000000000000000017 /* MockPDFReports.swift in Sources */,
 				PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */,
+				PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */,
+				STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
