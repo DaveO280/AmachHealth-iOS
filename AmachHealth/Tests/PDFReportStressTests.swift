@@ -129,6 +129,7 @@ final class ParserRobustnessTests: XCTestCase {
         let metric = result.metrics.first { $0.name.lowercased().contains("hba1c") || $0.name.lowercased().contains("a1c") }
         XCTAssertNotNil(metric)
         XCTAssertEqual(metric?.unit, "%")
+        XCTAssertEqual(metric?.referenceRange, "< 5.7")   // spaced form must survive capture + trim
     }
 
     // MARK: Reference range with < and > prefixes

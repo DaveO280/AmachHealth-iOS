@@ -70,6 +70,7 @@
 		EE0000000000000000000012 /* WalletServiceProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000002 /* WalletServiceProtocol.swift */; };
 		EE0000000000000000000013 /* ChatService+Testing.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000003 /* ChatService+Testing.swift */; };
 		EE0000000000000000000014 /* ZKSyncAttestationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000004 /* ZKSyncAttestationService.swift */; };
+		EE0000000000000000000015 /* Keccak256.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000005 /* Keccak256.swift */; };
 		FF0000000000000000000201 /* APIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000101 /* APIClientTests.swift */; };
 		FF0000000000000000000202 /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000102 /* AppStateTests.swift */; };
 		FF0000000000000000000203 /* ChatServiceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000103 /* ChatServiceIntegrationTests.swift */; };
@@ -112,6 +113,7 @@
 		EE0000000000000000000002 /* WalletServiceProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletServiceProtocol.swift; path = AmachHealth/Sources/Services/WalletServiceProtocol.swift; sourceTree = SOURCE_ROOT; };
 		EE0000000000000000000003 /* ChatService+Testing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ChatService+Testing.swift"; path = "AmachHealth/Sources/Services/ChatService+Testing.swift"; sourceTree = SOURCE_ROOT; };
 		EE0000000000000000000004 /* ZKSyncAttestationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ZKSyncAttestationService.swift; path = AmachHealth/Sources/Services/ZKSyncAttestationService.swift; sourceTree = SOURCE_ROOT; };
+		EE0000000000000000000005 /* Keccak256.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Keccak256.swift; path = AmachHealth/Sources/Services/Keccak256.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000102 /* AmachHealthApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachHealthApp.swift; path = AmachHealth/Sources/App/AmachHealthApp.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000103 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppState.swift; path = AmachHealth/Sources/App/AppState.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000104 /* BrandComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BrandComponents.swift; path = AmachHealth/Sources/Components/BrandComponents.swift; sourceTree = SOURCE_ROOT; };
@@ -410,6 +412,7 @@
 					7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */,
 					56D2720462134929AF0C687C /* MerkleNormalizationService.swift */,
 					EE0000000000000000000004 /* ZKSyncAttestationService.swift */,
+				EE0000000000000000000005 /* Keccak256.swift */,
 				PDF000000000000000000002 /* PDFReportParser.swift */,
 				PDF000000000000000000003 /* FhirConverter.swift */,
 				PDF000000000000000000004 /* PDFUploadService.swift */,
@@ -547,6 +550,7 @@
 				EE0000000000000000000012 /* WalletServiceProtocol.swift in Sources */,
 				EE0000000000000000000013 /* ChatService+Testing.swift in Sources */,
 				EE0000000000000000000014 /* ZKSyncAttestationService.swift in Sources */,
+				EE0000000000000000000015 /* Keccak256.swift in Sources */,
 				AA0000000000000000000202 /* AmachHealthApp.swift in Sources */,
 				AA0000000000000000000203 /* AppState.swift in Sources */,
 				AA0000000000000000000204 /* BrandComponents.swift in Sources */,

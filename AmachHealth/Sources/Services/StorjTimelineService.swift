@@ -6,15 +6,12 @@
 // (caching, merge, attestation) in TimelineService and pure Storj
 // transport here.
 //
-// After each successful Storj upload, registerEventOnChain() submits
-// addHealthEventV2() to the SecureHealthProfileV3 contract so the
-// website's readHealthTimeline() can discover the event via its
-// eventStorjUri / eventContentHash accessors.
+// After every successful Storj upload, saveEvent fires a non-blocking
+// on-chain registration via addHealthEventWithStorj on SecureHealthProfileV3.
 //
 // TimelineService delegates all Storj calls here; tests inject a mock
 // that conforms to TimelineAPIProtocol.
 
-import CryptoKit
 import Foundation
 
 // MARK: - Protocol
@@ -55,13 +52,6 @@ final class StorjTimelineService {
         self.api = api
     }
 
-    // MARK: - Chain constants (SecureHealthProfileV3, zkSync Era Sepolia)
-
-    private static let chainId = 300
-    private static let contractAddress = "0x2A8015613623A6A8D369BcDC2bd6DD202230785a"
-    /// keccak256("addHealthEventV2(bytes32,string,bytes32,bytes32)") → first 4 bytes
-    private static let addHealthEventV2Selector = "1c7eec3d"
-
     // MARK: - Public interface
 
     /// Download all timeline events stored for `walletAddress`.
@@ -89,16 +79,13 @@ final class StorjTimelineService {
             walletAddress: walletAddress,
             encryptionKey: encryptionKey
         )
-        // Fire chain registration without blocking the caller; errors are non-fatal.
-        let capturedResult = result
-        let capturedEvent = event
+        // Fire-and-forget — on-chain failures must not block or fail the Storj upload.
         Task {
-            await self.registerEventOnChain(
-                storjUri: capturedResult.storjUri,
-                contentHash: capturedResult.contentHash,
-                event: capturedEvent,
-                walletAddress: walletAddress
-            )
+            do {
+                try await registerOnChain(event: event, result: result)
+            } catch {
+                print("⛓️ [Timeline] On-chain registration failed (non-critical): \(error.localizedDescription)")
+            }
         }
         return result
     }
@@ -157,135 +144,133 @@ final class StorjTimelineService {
         }
     }
 
-    // MARK: - On-chain registration
+    // MARK: - On-chain Registration
 
-    /// Submit addHealthEventV2() to SecureHealthProfileV3 so the website's
-    /// readHealthTimeline() can see events uploaded from iOS.
+    /// SecureHealthProfileV3 UUPS proxy on ZKsync Era Sepolia.
+    private let contractAddress = "0x2A8015613623A6A8D369BcDC2bd6DD202230785a"
+    private let chainId = 300  // ZKsync Era Sepolia
+
+    /// Pre-compute the 4-byte selector for addHealthEventWithStorj(bytes32,uint256,string,bytes32).
+    /// keccak256("addHealthEventWithStorj(bytes32,uint256,string,bytes32)")[0:4]
+    private lazy var addHealthEventWithStorjSelector: String = {
+        let sig = "addHealthEventWithStorj(bytes32,uint256,string,bytes32)"
+        let hash = Keccak256.hash(Array(sig.utf8))
+        return hash.prefix(4).map { String(format: "%02x", $0) }.joined()
+    }()
+
+    /// Register a timeline event on-chain after a successful Storj upload.
     ///
-    /// ABI: addHealthEventV2(bytes32 searchTag, string storjUri, bytes32 contentHash, bytes32 eventHash)
-    /// Selector: 1c7eec3d
+    /// Encoding:
+    ///   searchTag   = keccak256(keccak256(eventType UTF-8) ++ storjUri bytes ++ contentHash bytes32)
+    ///   timestamp   = Unix seconds (UInt64)
+    ///   calldata    = addHealthEventWithStorj(searchTag, timestamp, storjUri, contentHash)
     ///
-    /// - searchTag: SHA256(eventType.rawValue UTF-8) as bytes32
-    /// - eventHash: SHA256(searchTag_bytes32 ‖ storjUri_utf8 ‖ contentHash_bytes32) as bytes32
-    ///   (SHA256 used in place of keccak256, which is unavailable in CryptoKit;
-    ///    the contract stores this value as-is and does not verify it on read)
-    @MainActor
-    private func registerEventOnChain(
-        storjUri: String,
-        contentHash: String,
-        event: TimelineEvent,
-        walletAddress: String
-    ) async {
+    /// The string parameter uses standard ABI dynamic encoding (offset in head, data in tail).
+    private func registerOnChain(event: TimelineEvent, result: StorjStoreResult) async throws {
+        // Wallet must be connected; non-connected is a silent skip, not an error.
         let wallet = WalletService.shared
-        guard wallet.isConnected else {
+        guard await wallet.isConnected else {
             print("⛓️ [Timeline] Wallet not connected — skipping on-chain registration")
             return
         }
 
-        // Normalise contentHash: strip 0x, must be 64 hex chars (32 bytes)
-        let contentHashRaw = contentHash.hasPrefix("0x") ? String(contentHash.dropFirst(2)) : contentHash
-        guard contentHashRaw.count == 64 else {
-            print("⛓️ [Timeline] Invalid contentHash length \(contentHashRaw.count) — skipping")
-            return
-        }
+        // contentHash bytes: try to decode as 32-byte hex; fall back to hashing the string.
+        let contentHashBytes = hexTo32Bytes(result.contentHash)
+            ?? Keccak256.hash(Array(result.contentHash.utf8))
 
-        // searchTag = SHA256(eventType UTF-8) as bytes32 hex
-        let searchTagDigest = SHA256.hash(data: Data(event.eventType.rawValue.utf8))
-        let searchTagHex = searchTagDigest.map { String(format: "%02x", $0) }.joined()
+        // searchTag = keccak256(keccak256(eventType UTF-8) ++ storjUri bytes ++ contentHash bytes32)
+        let innerHash = Keccak256.hash(Array(event.eventType.rawValue.utf8))
+        var packed = [UInt8]()
+        packed.append(contentsOf: innerHash)                       // 32 bytes (bytes32)
+        packed.append(contentsOf: Array(result.storjUri.utf8))    // variable (string, no padding for encodePacked)
+        packed.append(contentsOf: contentHashBytes)                // 32 bytes (bytes32)
+        let searchTagBytes = Keccak256.hash(packed)
 
-        // eventHash = SHA256(searchTag_bytes32 || storjUri_utf8 || contentHash_bytes32)
-        var packed = Data()
-        packed.append(contentsOf: Self.hexToBytes(searchTagHex))   // 32 bytes
-        packed.append(Data(storjUri.utf8))                          // variable
-        packed.append(contentsOf: Self.hexToBytes(contentHashRaw))  // 32 bytes
-        let eventHashDigest = SHA256.hash(data: packed)
-        let eventHashHex = eventHashDigest.map { String(format: "%02x", $0) }.joined()
+        let timestamp = UInt64(event.timestamp.timeIntervalSince1970)
 
-        let calldata = Self.encodeAddHealthEventV2(
-            searchTag: searchTagHex,
-            storjUri: storjUri,
-            contentHash: contentHashRaw,
-            eventHash: eventHashHex
+        let calldata = encodeAddHealthEventWithStorj(
+            searchTag: searchTagBytes,
+            timestamp: timestamp,
+            storjUri: result.storjUri,
+            contentHash: contentHashBytes
         )
 
-        print("⛓️ [Timeline] Registering event \(event.id) on-chain…")
-        print("⛓️ [Timeline] searchTag=\(searchTagHex.prefix(16))… storjUri=\(storjUri.prefix(40))…")
-
-        do {
-            let txHash = try await wallet.sendTransaction(
-                to: Self.contractAddress,
-                data: calldata,
-                chainId: Self.chainId
-            )
-            print("⛓️ [Timeline] ✅ registered on-chain: \(txHash)")
-        } catch {
-            print("⛓️ [Timeline] ⚠️ on-chain registration failed (non-blocking): \(error.localizedDescription)")
-        }
+        print("⛓️ [Timeline] Registering event \(event.id) on-chain (type=\(event.eventType.rawValue))")
+        let txHash = try await wallet.sendTransaction(to: contractAddress, data: calldata, chainId: chainId)
+        print("⛓️ [Timeline] ✅ Registered: \(txHash)")
     }
 
-    // MARK: - ABI encoding helpers
+    // MARK: - ABI Encoding
 
-    /// ABI-encode addHealthEventV2(bytes32, string, bytes32, bytes32).
+    /// ABI-encode addHealthEventWithStorj(bytes32, uint256, string, bytes32).
     ///
-    /// Layout (selector excluded):
-    ///   head slot 0 (offset   0): searchTag  — bytes32, static
-    ///   head slot 1 (offset  32): offset to storjUri tail = 128 (0x80) — uint256
-    ///   head slot 2 (offset  64): contentHash — bytes32, static
-    ///   head slot 3 (offset  96): eventHash   — bytes32, static
-    ///   tail slot 4 (offset 128): length of storjUri string — uint256
-    ///   tail slot 5+ (offset 160): storjUri UTF-8 bytes, right-padded to 32-byte multiple
-    private static func encodeAddHealthEventV2(
-        searchTag: String,   // 64 hex chars, no 0x prefix
+    /// Layout (after 4-byte selector):
+    ///   [0 ..31]  searchTag                         (bytes32, static)
+    ///   [32..63]  timestamp                          (uint256, static)
+    ///   [64..95]  offset to storjUri data = 128     (uint256, dynamic head)
+    ///   [96..127] contentHash                        (bytes32, static)
+    ///   [128..159] length of storjUri                (uint256, tail)
+    ///   [160..]   storjUri UTF-8 bytes, zero-padded to 32-byte boundary
+    private func encodeAddHealthEventWithStorj(
+        searchTag: [UInt8],
+        timestamp: UInt64,
         storjUri: String,
-        contentHash: String, // 64 hex chars, no 0x prefix
-        eventHash: String    // 64 hex chars, no 0x prefix
+        contentHash: [UInt8]
     ) -> String {
-        let uriBytes = Data(storjUri.utf8)
-        let uriLen = uriBytes.count
+        let uriBytes = Array(storjUri.utf8)
 
-        // Length slot: storjUri byte count, left-padded to 32 bytes
-        let lenSlot = padLeft(String(uriLen, radix: 16), toBytes: 32)
+        // Head slots
+        let searchTagSlot   = slot32(searchTag)
+        let timestampSlot   = padLeftHex(String(timestamp, radix: 16), toBytes: 32)
+        let offsetSlot      = padLeftHex(String(128, radix: 16), toBytes: 32)  // 128 = 4 × 32
+        let contentHashSlot = slot32(contentHash)
 
-        // storjUri bytes, right-padded to next 32-byte boundary
-        let uriHex = uriBytes.map { String(format: "%02x", $0) }.joined()
-        let pad = uriLen % 32 == 0 ? 0 : 32 - (uriLen % 32)
-        let paddedUriHex = uriHex + String(repeating: "0", count: pad * 2)
+        // Tail: length + data (right-padded to 32-byte boundary)
+        let lengthSlot = padLeftHex(String(uriBytes.count, radix: 16), toBytes: 32)
+        var paddedUri = uriBytes
+        let rem = uriBytes.count % 32
+        if rem != 0 { paddedUri.append(contentsOf: [UInt8](repeating: 0, count: 32 - rem)) }
+        let uriHex = paddedUri.map { String(format: "%02x", $0) }.joined()
 
-        // head slot 1: offset to tail = 4 slots × 32 bytes = 128 = 0x80
-        let offsetSlot = padLeft("80", toBytes: 32)
-
-        return "0x" + addHealthEventV2Selector
-            + padLeft(searchTag, toBytes: 32)    // slot 0
-            + offsetSlot                          // slot 1
-            + padLeft(contentHash, toBytes: 32)   // slot 2
-            + padLeft(eventHash, toBytes: 32)     // slot 3
-            + lenSlot                             // tail: length
-            + paddedUriHex                        // tail: uri bytes
+        return "0x" + addHealthEventWithStorjSelector
+            + searchTagSlot + timestampSlot + offsetSlot + contentHashSlot
+            + lengthSlot + uriHex
     }
 
-    /// Left-pad a hex string to `toBytes` bytes (each byte = 2 hex chars).
-    private static func padLeft(_ hex: String, toBytes: Int) -> String {
+    // MARK: - Hex Utilities
+
+    /// Encode `bytes` (up to 32) as a right-justified 32-byte ABI slot.
+    private func slot32(_ bytes: [UInt8]) -> String {
+        let hex = bytes.prefix(32).map { String(format: "%02x", $0) }.joined()
+        return padLeftHex(hex, toBytes: 32)
+    }
+
+    /// Left-pad a hex string to `toBytes` bytes (= 2×toBytes hex chars).
+    private func padLeftHex(_ hex: String, toBytes: Int) -> String {
         let target = toBytes * 2
-        if hex.count >= target { return String(hex.suffix(target)) }
+        guard hex.count < target else { return String(hex.suffix(target)) }
         return String(repeating: "0", count: target - hex.count) + hex
     }
 
-    /// Convert a lowercase hex string (no 0x prefix) to a [UInt8] array.
-    private static func hexToBytes(_ hex: String) -> [UInt8] {
-        var bytes: [UInt8] = []
-        bytes.reserveCapacity(hex.count / 2)
-        var i = hex.startIndex
-        while i < hex.endIndex {
-            let j = hex.index(i, offsetBy: 2)
-            bytes.append(UInt8(hex[i..<j], radix: 16) ?? 0)
-            i = j
+    /// Decode a 0x-prefixed or bare 64-char hex string into 32 bytes.
+    /// Returns nil if the string is not exactly 32 bytes of valid hex.
+    private func hexTo32Bytes(_ hex: String) -> [UInt8]? {
+        let stripped = hex.hasPrefix("0x") ? String(hex.dropFirst(2)) : hex
+        guard stripped.count == 64 else { return nil }
+        var result = [UInt8]()
+        result.reserveCapacity(32)
+        var i = stripped.startIndex
+        for _ in 0..<32 {
+            let end = stripped.index(i, offsetBy: 2)
+            guard let byte = UInt8(stripped[i..<end], radix: 16) else { return nil }
+            result.append(byte)
+            i = end
         }
-        return bytes
+        return result
     }
 }
 
 // MARK: - AmachAPIClient conformance
-
 
 /// AmachAPIClient already has storeTimelineEvent and listTimelineEvents;
 /// deleteTimelineEvent is implemented in AmachAPIClient.swift.
