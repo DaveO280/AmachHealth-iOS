@@ -68,7 +68,7 @@ final class ParserRobustnessTests: XCTestCase {
         Quest Diagnostics
         Date of Service: 11/14/2025
         DIABETES PANEL
-        A1C                               5.2         <5.7          %              Normal
+        A1C                               5.2         < 5.7         %              Normal
         """
         let result = PDFReportParser.parseBloodworkText(text)
         let metric = result.metrics.first { $0.name.lowercased().contains("a1c") }
@@ -81,7 +81,7 @@ final class ParserRobustnessTests: XCTestCase {
         Quest Diagnostics
         Date of Service: 11/14/2025
         DIABETES PANEL
-        Hemoglobin A1c                    5.2         <5.7          %              Normal
+        Hemoglobin A1c                    5.2         < 5.7         %              Normal
         """
         let result = PDFReportParser.parseBloodworkText(text)
         let metric = result.metrics.first { $0.name.lowercased().contains("hemoglobin") || $0.name.lowercased().contains("a1c") }
@@ -123,7 +123,7 @@ final class ParserRobustnessTests: XCTestCase {
         LabCorp
         Date of Service: 05/10/2025
         DIABETES PANEL
-        HbA1c                             5.4         <5.7          %              Normal
+        HbA1c                             5.4         < 5.7         %              Normal
         """
         let result = PDFReportParser.parseBloodworkText(text)
         let metric = result.metrics.first { $0.name.lowercased().contains("hba1c") || $0.name.lowercased().contains("a1c") }
@@ -826,7 +826,7 @@ final class LargePayloadTests: XCTestCase {
             "Growth Hormone   0.6   0.0-10.0   ng/mL   Normal",
         ]
         let otherLines: [String] = [
-            "HbA1c   5.2   <5.7   %   Normal",
+            "HbA1c   5.2   < 5.7   %   Normal",
             "Insulin Fasting   4.8   2.6-24.9   uIU/mL   Normal",
             "C-Peptide   1.4   0.8-3.5   ng/mL   Normal",
             "hs-CRP   0.4   <1.0   mg/L   Normal",

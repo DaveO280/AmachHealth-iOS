@@ -92,7 +92,7 @@ enum PDFReportParser {
         // Pattern D: Simple "Marker Name: 94 mg/dL"
         let metricPatterns: [(pattern: NSRegularExpression, nameGroup: Int, valueGroup: Int, unitGroup: Int, refGroup: Int, flagGroup: Int)] = [
             // A: name  value  ref_range  unit  flag (Quest style)
-            (try! NSRegularExpression(pattern: #"^(.+?)\s{2,}(\d+\.?\d*)\s{2,}([\d\.\-<>]+)\s{2,}([\w\/\%µ]+)\s*(H|L|HH|LL|High|Low|Normal|Critical)?\s*$"#), 1, 2, 4, 3, 5),
+            (try! NSRegularExpression(pattern: #"^(.+?)\s{2,}(\d+\.?\d*)\s{2,}([\d\.\-<>\s]+)\s{2,}([\w\/\%µ]+)\s*(H|L|HH|LL|High|Low|Normal|Critical)?\s*$"#), 1, 2, 4, 3, 5),
             // B: name  value  unit  [ref_range]
             (try! NSRegularExpression(pattern: #"^(.+?)\s{2,}(\d+\.?\d*)\s+([\w\/\%µmgdLuUI]+)\s+[\[\(]([\d\.\-<>]+)[\]\)]\s*(H|L|HH|LL|High|Low|Normal|Critical)?\s*$"#), 1, 2, 3, 4, 5),
             // C: name  value  unit (no ref range)
@@ -148,7 +148,7 @@ enum PDFReportParser {
                 guard !name.isEmpty, name.count >= 2 else { continue }
 
                 let unit = unitGroup > 0 ? substring(trimmed, range: match.range(at: unitGroup)) : nil
-                let ref = refGroup > 0 ? substring(trimmed, range: match.range(at: refGroup)) : nil
+                let ref = refGroup > 0 ? substring(trimmed, range: match.range(at: refGroup))?.trimmingCharacters(in: .whitespaces) : nil
                 let flagRaw = flagGroup > 0 ? substring(trimmed, range: match.range(at: flagGroup)) : nil
                 let flag = normalizeFlag(flagRaw)
 

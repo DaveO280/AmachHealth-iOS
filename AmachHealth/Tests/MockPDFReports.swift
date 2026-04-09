@@ -114,7 +114,7 @@ enum MockPDFReports {
 
         DIABETES PANEL
         Glucose                           94          65-99         mg/dL          Normal
-        HbA1c                             5.2         <5.7          %              Normal
+        HbA1c                             5.2         < 5.7         %              Normal
         Insulin, Fasting                  4.8         2.6-24.9      uIU/mL         Normal
 
         THYROID PANEL
