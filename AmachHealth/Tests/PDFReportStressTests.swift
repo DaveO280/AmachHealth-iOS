@@ -1056,3 +1056,98 @@ final class ErrorPathTests: XCTestCase {
         XCTAssertEqual(r1.reportDate, r3.reportDate)
     }
 }
+
+// MARK: - 7. Lunar Prodigy / FitTrace DEXA
+
+final class LunarProdigyDexaTests: XCTestCase {
+
+    // Shared fixture — mirrors MockPDFReports.mockDexaPDFText() exactly
+    private let lunarText = MockPDFReports.mockDexaPDFText()
+
+    func test_lunar_prodigy_detected_as_dexa() {
+        let result = PDFReportParser.parseText(lunarText, filename: "body_comp.pdf")
+        if case .dexa = result { /* pass */ } else {
+            XCTFail("Lunar Prodigy text should be classified as dexa, got \(String(describing: result))")
+        }
+    }
+
+    func test_lunar_prodigy_source_is_ge_lunar() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        XCTAssertEqual(result.source, "GE Lunar")
+    }
+
+    func test_lunar_prodigy_scan_date_parsed() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        XCTAssertEqual(result.scanDate, "2025-03-21")
+    }
+
+    func test_lunar_prodigy_six_regions_parsed() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        XCTAssertEqual(result.regions.count, 6, "Expected left arm, right arm, trunk, pelvis, left leg, right leg")
+    }
+
+    func test_lunar_prodigy_arm_context_left_right() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        let names = result.regions.map(\.region)
+        XCTAssertTrue(names.contains("left arm"),  "Should have left arm (Arms group context)")
+        XCTAssertTrue(names.contains("right arm"), "Should have right arm (Arms group context)")
+    }
+
+    func test_lunar_prodigy_leg_context_left_right() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        let names = result.regions.map(\.region)
+        XCTAssertTrue(names.contains("left leg"),  "Should have left leg (Legs group context)")
+        XCTAssertTrue(names.contains("right leg"), "Should have right leg (Legs group context)")
+    }
+
+    func test_lunar_prodigy_total_fat_percent_computed_from_lbs() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        // 31.6 / 185.4 * 100 = 17.044...
+        XCTAssertNotNil(result.totalBodyFatPercent)
+        XCTAssertEqual(result.totalBodyFatPercent ?? 0, 17.04, accuracy: 0.1)
+    }
+
+    func test_lunar_prodigy_lean_mass_converted_to_kg() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        // 148.7 lbs * 0.453592 = 67.47 kg
+        XCTAssertNotNil(result.totalLeanMassKg)
+        XCTAssertEqual(result.totalLeanMassKg ?? 0, 67.47, accuracy: 0.5)
+    }
+
+    func test_lunar_prodigy_region_fat_percent_from_lbs_ratio() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        guard let leftArm = result.regions.first(where: { $0.region == "left arm" }) else {
+            XCTFail("left arm region not found"); return
+        }
+        // 1.5 / 9.6 * 100 = 15.625
+        XCTAssertEqual(leftArm.bodyFatPercent ?? 0, 15.6, accuracy: 0.2)
+    }
+
+    func test_lunar_prodigy_region_lean_mass_in_kg() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        guard let leftLeg = result.regions.first(where: { $0.region == "left leg" }) else {
+            XCTFail("left leg region not found"); return
+        }
+        // 27.2 lbs * 0.453592 = 12.34 kg
+        XCTAssertEqual(leftLeg.leanMassKg ?? 0, 12.34, accuracy: 0.1)
+    }
+
+    func test_lunar_prodigy_visceral_fat_area_parsed() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        XCTAssertEqual(result.visceralFatAreaCm2 ?? 0, 45.2, accuracy: 0.1)
+        XCTAssertNil(result.visceralFatRating,    "Lunar Prodigy has no visceral fat rating")
+        XCTAssertNil(result.visceralFatVolumeCm3, "Lunar Prodigy has no visceral fat volume")
+    }
+
+    func test_lunar_prodigy_bmd_parsed() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        XCTAssertEqual(result.boneDensityTotal?.bmd ?? 0, 1.22, accuracy: 0.01)
+        XCTAssertEqual(result.boneDensityTotal?.tScore ?? 0, 0.4, accuracy: 0.05)
+        XCTAssertEqual(result.boneDensityTotal?.zScore ?? 0, 0.6, accuracy: 0.05)
+    }
+
+    func test_lunar_prodigy_android_gynoid_nil() {
+        let result = PDFReportParser.parseDexaText(lunarText)
+        XCTAssertNil(result.androidGynoidRatio, "Lunar Prodigy format has no android/gynoid ratio")
+    }
+}

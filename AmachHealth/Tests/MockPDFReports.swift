@@ -64,26 +64,28 @@ enum MockPDFReports {
     }
 
     static func mockDexaReport() -> DexaReportData {
+        // GE Healthcare Lunar Prodigy format — lbs-based, segmental table
+        // Values match mockDexaPDFText() (Total row: 185.4 / 31.6 / 148.7 lbs)
         DexaReportData(
             type: "dexa",
-            source: "Hologic",
-            scanDate: "2025-09-22",
-            totalBodyFatPercent: 18.4,
-            totalLeanMassKg: 67.2,
-            visceralFatRating: 1.2,
-            visceralFatAreaCm2: 42.8,
-            visceralFatVolumeCm3: 312.4,
-            boneDensityTotal: DexaBoneDensityTotal(bmd: 1.28, tScore: 0.6, zScore: 0.8),
-            androidGynoidRatio: 0.84,
+            source: "GE Lunar",
+            scanDate: "2025-03-21",
+            totalBodyFatPercent: 17.0,   // 31.6 / 185.4 × 100
+            totalLeanMassKg: 67.5,        // 148.7 lbs × 0.453592
+            visceralFatRating: nil,
+            visceralFatAreaCm2: 45.2,
+            visceralFatVolumeCm3: nil,
+            boneDensityTotal: DexaBoneDensityTotal(bmd: 1.22, tScore: 0.4, zScore: 0.6),
+            androidGynoidRatio: nil,
             regions: [
-                DexaRegionMetrics(region: "left arm",  bodyFatPercent: 14.2, leanMassKg: 3.8, fatMassKg: 0.64, boneDensityGPerCm2: 0.82, tScore: 0.1, zScore: 0.2),
-                DexaRegionMetrics(region: "right arm", bodyFatPercent: 13.8, leanMassKg: 3.9, fatMassKg: 0.62, boneDensityGPerCm2: 0.84, tScore: 0.2, zScore: 0.3),
-                DexaRegionMetrics(region: "trunk",     bodyFatPercent: 16.1, leanMassKg: 32.4, fatMassKg: 6.22, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
-                DexaRegionMetrics(region: "left leg",  bodyFatPercent: 20.4, leanMassKg: 12.1, fatMassKg: 3.12, boneDensityGPerCm2: 1.14, tScore: 0.5, zScore: 0.7),
-                DexaRegionMetrics(region: "right leg", bodyFatPercent: 21.0, leanMassKg: 12.3, fatMassKg: 3.26, boneDensityGPerCm2: 1.16, tScore: 0.6, zScore: 0.8),
-                DexaRegionMetrics(region: "pelvis",    bodyFatPercent: 22.8, leanMassKg: 7.4, fatMassKg: 2.20, boneDensityGPerCm2: 1.42, tScore: 1.1, zScore: 1.2),
+                DexaRegionMetrics(region: "left arm",  bodyFatPercent: 15.6, leanMassKg: 3.58, fatMassKg: 0.68, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
+                DexaRegionMetrics(region: "right arm", bodyFatPercent: 15.8, leanMassKg: 3.72, fatMassKg: 0.73, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
+                DexaRegionMetrics(region: "trunk",     bodyFatPercent: 15.6, leanMassKg: 29.65, fatMassKg: 5.62, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
+                DexaRegionMetrics(region: "left leg",  bodyFatPercent: 20.2, leanMassKg: 12.34, fatMassKg: 3.22, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
+                DexaRegionMetrics(region: "right leg", bodyFatPercent: 20.6, leanMassKg: 12.56, fatMassKg: 3.36, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
+                DexaRegionMetrics(region: "pelvis",    bodyFatPercent: 18.6, leanMassKg: 7.30,  fatMassKg: 1.72, boneDensityGPerCm2: nil, tScore: nil, zScore: nil),
             ],
-            notes: ["Hologic Horizon A", "Operator: R. Gonzalez DXA RT"],
+            notes: ["GE Healthcare Lunar Prodigy", "Total Body Tissue Quantitation"],
             rawText: mockDexaPDFText(),
             confidence: 0.92
         )
@@ -143,47 +145,31 @@ enum MockPDFReports {
 
     static func mockDexaPDFText() -> String {
         """
-        Hologic
-        DEXA Body Composition Report
-        Scan Date: 09/22/2025
+        GE Healthcare
+        Lunar Prodigy
+        Body Composition / BMD Report
+        Total Body Tissue Quantitation
+
+        Scan Date: 03/21/2025
         Facility: Advanced Imaging Center
 
-        TOTAL BODY COMPOSITION
-        Body Fat Percent: 18.4 %
-        Lean Mass (kg): 67.2
-        Total BMD: 1.28 g/cm2
-        T-score: 0.6
-        Z-score: 0.8
+        Region         Total(lbs)  Fat(lbs)  Lean(lbs)  Area(cm2)  BMC(g)
+        Arms
+          Left              9.6       1.5        7.9       213.2     95.4
+          Right            10.1       1.6        8.2       218.5     98.7
+        Legs
+          Left             35.2       7.1       27.2       531.0    284.1
+          Right            36.0       7.4       27.7       540.2    290.3
+        Trunk             79.3      12.4       65.4      1032.5    612.8
+        Pelvis            20.4       3.8       16.1       198.4    210.3
+        Total            185.4      31.6      148.7      2345.6   1498.2
 
-        VISCERAL FAT
-        Visceral Fat Rating: 1.2
-        Visceral Fat Area: 42.8 cm2
-        Visceral Fat Volume: 312.4 cm3
-        Android/Gynoid Ratio: 0.84
+        Visceral Fat Area: 45.2 cm2
 
-        Left Arm
-        14.2   3.8   0.64   0.82
-
-        Right Arm
-        13.8   3.9   0.62   0.84
-
-        Trunk
-        16.1   32.4  6.22
-
-        Left Leg
-        20.4   12.1  3.12   1.14
-
-        Right Leg
-        21.0   12.3  3.26   1.16
-
-        Pelvis
-        22.8   7.4   2.20   1.42
-
-        BONE DENSITY BY REGION
-        Lumbar Spine L1-L4 BMD: 1.42 g/cm2  T-score: 1.1  Z-score: 1.2
-
-        Operator: R. Gonzalez DXA RT
-        Device: Hologic Horizon A
+        BMD Results
+        Region             BMD(g/cm2)   T-score   Z-score
+        Total Body            1.22        0.4       0.6
+        Lumbar L1-L4          1.38        0.9       1.1
         """
     }
 
