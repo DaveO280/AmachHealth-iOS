@@ -295,7 +295,7 @@ struct UploadPDFReportSheet: View {
             AmachHaptics.success()
         } catch {
             uploadService.state = .error(error.localizedDescription)
-            AmachHaptics.notify(.error)
+            AmachHaptics.error()
         }
     }
 }

@@ -15,6 +15,7 @@
 
 import Foundation
 import PDFKit
+@testable import AmachHealth
 
 // MARK: - Report data
 

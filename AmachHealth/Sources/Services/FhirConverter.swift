@@ -464,8 +464,8 @@ enum FhirConverter {
             NormalizedMetric(name: $0.name, value: $0.value, valueText: $0.valueText,
                              unit: $0.unit, referenceRange: $0.referenceRange, flag: $0.flag, panel: $0.panel)
         }.sorted { a, b in
-            let ak = "\(a.panel ?? "")|\(a.name)|\(a.unit ?? "")|\(a.value.map(String.init) ?? "")|\(a.referenceRange ?? "")|\(a.flag ?? "")"
-            let bk = "\(b.panel ?? "")|\(b.name)|\(b.unit ?? "")|\(b.value.map(String.init) ?? "")|\(b.referenceRange ?? "")|\(b.flag ?? "")"
+            let ak = "\(a.panel ?? "")|\(a.name)|\(a.unit ?? "")|\(a.value.map { "\($0)" } ?? "")|\(a.referenceRange ?? "")|\(a.flag ?? "")"
+            let bk = "\(b.panel ?? "")|\(b.name)|\(b.unit ?? "")|\(b.value.map { "\($0)" } ?? "")|\(b.referenceRange ?? "")|\(b.flag ?? "")"
             return ak < bk
         }
         struct NormalizedReport: Encodable {

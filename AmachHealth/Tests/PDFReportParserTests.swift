@@ -71,7 +71,7 @@ final class BloodworkParserTests: XCTestCase {
     func test_extracts_hba1c() {
         let metric = parsed.metrics.first { $0.name.lowercased() == "hba1c" }
         XCTAssertNotNil(metric)
-        XCTAssertEqual(metric?.value, 5.2, accuracy: 0.01)
+        XCTAssertEqual(metric?.value ?? 0, 5.2, accuracy: 0.01)
         XCTAssertEqual(metric?.unit, "%")
     }
 
@@ -84,7 +84,7 @@ final class BloodworkParserTests: XCTestCase {
     func test_extracts_tsh() {
         let metric = parsed.metrics.first { $0.name.lowercased() == "tsh" }
         XCTAssertNotNil(metric)
-        XCTAssertEqual(metric?.value, 1.82, accuracy: 0.001)
+        XCTAssertEqual(metric?.value ?? 0, 1.82, accuracy: 0.001)
         XCTAssertEqual(metric?.unit, "mIU/L")
     }
 
@@ -145,7 +145,7 @@ final class DexaParserTests: XCTestCase {
     }
 
     func test_extracts_body_fat_percent() {
-        XCTAssertEqual(parsed.totalBodyFatPercent, 18.4, accuracy: 0.1)
+        XCTAssertEqual(parsed.totalBodyFatPercent ?? 0, 18.4, accuracy: 0.1)
     }
 
     func test_extracts_lean_mass() {
@@ -159,19 +159,19 @@ final class DexaParserTests: XCTestCase {
 
     func test_extracts_bmd() {
         XCTAssertNotNil(parsed.boneDensityTotal, "Bone density total should be extracted")
-        XCTAssertEqual(parsed.boneDensityTotal?.bmd, 1.28, accuracy: 0.01)
+        XCTAssertEqual(parsed.boneDensityTotal?.bmd ?? 0, 1.28, accuracy: 0.01)
     }
 
     func test_extracts_t_score() {
-        XCTAssertEqual(parsed.boneDensityTotal?.tScore, 0.6, accuracy: 0.1)
+        XCTAssertEqual(parsed.boneDensityTotal?.tScore ?? 0, 0.6, accuracy: 0.1)
     }
 
     func test_extracts_z_score() {
-        XCTAssertEqual(parsed.boneDensityTotal?.zScore, 0.8, accuracy: 0.1)
+        XCTAssertEqual(parsed.boneDensityTotal?.zScore ?? 0, 0.8, accuracy: 0.1)
     }
 
     func test_extracts_visceral_fat_rating() {
-        XCTAssertEqual(parsed.visceralFatRating, 1.2, accuracy: 0.1)
+        XCTAssertEqual(parsed.visceralFatRating ?? 0, 1.2, accuracy: 0.1)
     }
 
     func test_extracts_visceral_fat_area() {
@@ -179,7 +179,7 @@ final class DexaParserTests: XCTestCase {
     }
 
     func test_extracts_android_gynoid_ratio() {
-        XCTAssertEqual(parsed.androidGynoidRatio, 0.84, accuracy: 0.01)
+        XCTAssertEqual(parsed.androidGynoidRatio ?? 0, 0.84, accuracy: 0.01)
     }
 
     func test_detects_source_hologic() {
@@ -224,7 +224,7 @@ final class BloodworkFhirRoundTripTests: XCTestCase {
         let report = MockPDFReports.mockBloodworkReport()
         let fhir = FhirConverter.convertBloodworkToFhir(report)
         let glucoseObs = fhir.contained?.first {
-            $0.code.coding.first?.display?.lowercased() == "glucose"
+            $0.code.coding.first?.display.lowercased() == "glucose"
         }
         XCTAssertNotNil(glucoseObs, "Glucose observation should exist")
         XCTAssertEqual(glucoseObs?.valueQuantity?.value, 94)
@@ -248,7 +248,7 @@ final class BloodworkFhirRoundTripTests: XCTestCase {
         let report = MockPDFReports.mockBloodworkReport()
         let fhir = FhirConverter.convertBloodworkToFhir(report)
         let glucoseObs = fhir.contained?.first {
-            $0.code.coding.first?.display?.lowercased() == "glucose"
+            $0.code.coding.first?.display.lowercased() == "glucose"
         }
         XCTAssertEqual(glucoseObs?.referenceRange?.first?.text, "65-99")
     }
@@ -295,7 +295,7 @@ final class DexaFhirRoundTripTests: XCTestCase {
         let fhir = FhirConverter.convertDexaToFhir(report)
         let fatObs = fhir.contained?.first { $0.code.coding.first?.code == "41982-7" && $0.component == nil }
         XCTAssertNotNil(fatObs, "Total body fat observation should exist")
-        XCTAssertEqual(fatObs?.valueQuantity?.value, 18.4, accuracy: 0.01)
+        XCTAssertEqual(fatObs?.valueQuantity?.value ?? 0, 18.4, accuracy: 0.01)
     }
 
     func test_round_trip_preserves_fat_percent() {
@@ -303,7 +303,7 @@ final class DexaFhirRoundTripTests: XCTestCase {
         let fhir = FhirConverter.convertDexaToFhir(original)
         let decoded = FhirConverter.convertFhirToDexa(fhir)
         XCTAssertNotNil(decoded)
-        XCTAssertEqual(decoded?.totalBodyFatPercent, original.totalBodyFatPercent,
+        XCTAssertEqual(decoded?.totalBodyFatPercent ?? 0, original.totalBodyFatPercent ?? 0,
                        accuracy: 0.01)
     }
 
@@ -311,7 +311,7 @@ final class DexaFhirRoundTripTests: XCTestCase {
         let original = MockPDFReports.mockDexaReport()
         let fhir = FhirConverter.convertDexaToFhir(original)
         let decoded = FhirConverter.convertFhirToDexa(fhir)
-        XCTAssertEqual(decoded?.totalLeanMassKg, original.totalLeanMassKg,
+        XCTAssertEqual(decoded?.totalLeanMassKg ?? 0, original.totalLeanMassKg ?? 0,
                        accuracy: 0.01)
     }
 
@@ -319,7 +319,7 @@ final class DexaFhirRoundTripTests: XCTestCase {
         let original = MockPDFReports.mockDexaReport()
         let fhir = FhirConverter.convertDexaToFhir(original)
         let decoded = FhirConverter.convertFhirToDexa(fhir)
-        XCTAssertEqual(decoded?.androidGynoidRatio, original.androidGynoidRatio,
+        XCTAssertEqual(decoded?.androidGynoidRatio ?? 0, original.androidGynoidRatio ?? 0,
                        accuracy: 0.001)
     }
 
@@ -335,9 +335,9 @@ final class DexaFhirRoundTripTests: XCTestCase {
         let original = MockPDFReports.mockDexaReport()
         let fhir = FhirConverter.convertDexaToFhir(original)
         let decoded = FhirConverter.convertFhirToDexa(fhir)
-        XCTAssertEqual(decoded?.boneDensityTotal?.bmd, original.boneDensityTotal?.bmd,
+        XCTAssertEqual(decoded?.boneDensityTotal?.bmd ?? 0, original.boneDensityTotal?.bmd ?? 0,
                        accuracy: 0.001)
-        XCTAssertEqual(decoded?.boneDensityTotal?.tScore, original.boneDensityTotal?.tScore,
+        XCTAssertEqual(decoded?.boneDensityTotal?.tScore ?? 0, original.boneDensityTotal?.tScore ?? 0,
                        accuracy: 0.001)
     }
 
