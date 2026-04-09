@@ -66,8 +66,9 @@ enum PDFReportParser {
         var reportDate: String?
         var currentPanel: String?
 
-        // Date pattern: various formats
+        // Date pattern: various formats (ISO YYYY-MM-DD checked first)
         let datePatterns = [
+            #"(?:Date of Service|Collection Date|Report Date|Date)[:\s]+(\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2})"#,
             #"(?:Date of Service|Collection Date|Report Date|Date)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
             #"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})"#,
         ]
