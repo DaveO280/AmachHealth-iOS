@@ -37,17 +37,27 @@ final class CompletenessScoreTests: XCTestCase {
         "HKQuantityTypeIdentifierRestingHeartRate",
         "HKQuantityTypeIdentifierActiveEnergyBurned",
         "HKQuantityTypeIdentifierAppleExerciseTime",
-        "HKQuantityTypeIdentifierOxygenSaturation",
+        "HKQuantityTypeIdentifierVO2Max",
         "HKCategoryTypeIdentifierSleepAnalysis",
         "HKQuantityTypeIdentifierRespiratoryRate"
+    ]
+
+    // 5 non-core metrics — adds otherScore=10 to reach gold (50+10+20=80)
+    private let nonCoreMetrics: [String] = [
+        "HKQuantityTypeIdentifierBodyMass",
+        "HKQuantityTypeIdentifierBodyFatPercentage",
+        "HKQuantityTypeIdentifierDistanceWalkingRunning",
+        "HKQuantityTypeIdentifierFlightsClimbed",
+        "HKQuantityTypeIdentifierOxygenSaturation"
     ]
 
     // ── Tier thresholds ──────────────────────────────────────
 
     func test_gold_tier_requires_score_80_and_core_complete() {
+        // 9 core (coreScore=50) + 5 non-core (otherScore=10) + 90 days (daysScore=20) = 80
         let service = HealthKitService.shared
         let result = service.calculateCompleteness(
-            metricsPresent: allCoreMetrics,
+            metricsPresent: allCoreMetrics + nonCoreMetrics,
             startDate: start90,
             endDate: end
         )

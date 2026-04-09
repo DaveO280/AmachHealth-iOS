@@ -220,7 +220,7 @@ final class AppStateToastTests: XCTestCase {
 
 final class AppStateOnboardingTests: XCTestCase {
 
-    private let key = "amach.onboardingComplete"
+    private let key = "onboardingComplete"
 
     override func setUp() {
         super.setUp()
