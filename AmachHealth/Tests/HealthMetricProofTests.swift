@@ -151,8 +151,10 @@ final class HealthMetricProofModelTests: XCTestCase {
             comparisonStartISO: "2025-02-01T00:00:00Z",
             comparisonEndISO: "2025-02-28T00:00:00Z"
         )
-        XCTAssertFalse(partial.hasComparisonWindow)
+        // baselineEndISO is nil → primary window incomplete
         XCTAssertFalse(partial.hasPrimaryWindow)
+        // Both comparison bounds are present → comparison window IS complete
+        XCTAssertTrue(partial.hasComparisonWindow)
 
         let full = ProofComparisonOptions(
             baselineStartISO: "2025-01-01T00:00:00Z",

@@ -128,6 +128,7 @@ final class ChatService: ObservableObject {
             updateRollingSummaryIfNeeded()
         } catch {
             self.error = error.localizedDescription
+            self.lastFailedMessage = trimmed
         }
 
         isSending = false

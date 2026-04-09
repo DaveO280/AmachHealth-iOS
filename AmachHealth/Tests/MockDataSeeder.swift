@@ -127,7 +127,7 @@ final class MockDataSeeder {
             HKQuantityType(.heartRate),
             HKQuantityType(.restingHeartRate),
             HKQuantityType(.heartRateVariabilitySDNN),
-            HKQuantityType(.appleExerciseTime),
+            // appleExerciseTime is system-written (Apple Watch) — apps cannot share it
             HKQuantityType(.activeEnergyBurned),
             HKQuantityType(.bodyMass),
             HKQuantityType(.respiratoryRate),
@@ -175,9 +175,7 @@ final class MockDataSeeder {
         let energy = clamp((isWeekday ? 480.0 : 360.0) + n * 200.0, 150, 900)
         samples.append(qty(.activeEnergyBurned, value: energy, unit: .kilocalorie(), at: noon(date)))
 
-        // ── Exercise minutes (0–75/day; 3–4 active days/week) ────────────────────
-        let exMins = isActiveDay ? clamp(42.0 + n * 22.0, 15, 75) : clamp(n * 5.0 + 3.0, 0, 10)
-        samples.append(qty(.appleExerciseTime, value: exMins, unit: .minute(), at: noon(date)))
+        // appleExerciseTime is system-written (Apple Watch only) — cannot be saved by apps
 
         // ── Weight (80→78 kg slow downward trend) ────────────────────────────────
         let weight = clamp(80.0 - t * 2.0 + n * 0.3, 77.0, 81.0)

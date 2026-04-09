@@ -9,6 +9,7 @@ struct TimelineView: View {
 
     @State private var showingAddEvent = false
     @State private var editingEvent: TimelineEvent? = nil
+    @State private var deletingEvent: TimelineEvent? = nil
     @State private var filter: TimelineFilter = .all
 
     var body: some View {
@@ -42,9 +43,11 @@ struct TimelineView: View {
                                             .textCase(.uppercase)
 
                                         ForEach(groupedEvents[day] ?? []) { event in
-                                            TimelineEventCard(event: event) {
-                                                editingEvent = event
-                                            }
+                                            TimelineEventCard(
+                                                event: event,
+                                                onEdit: { editingEvent = event },
+                                                onDelete: event.isAnomaly ? nil : { deletingEvent = event }
+                                            )
                                         }
                                     }
                                 }
@@ -85,6 +88,42 @@ struct TimelineView: View {
                     .environmentObject(timeline)
                     .presentationBackground(Color.amachSurface)
             }
+            .confirmationDialog(
+                "Delete Event",
+                isPresented: .init(
+                    get: { deletingEvent != nil },
+                    set: { if !$0 { deletingEvent = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let event = deletingEvent {
+                        deletingEvent = nil
+                        Task { await performDelete(event: event) }
+                    }
+                }
+                Button("Cancel", role: .cancel) { deletingEvent = nil }
+            } message: {
+                if let event = deletingEvent {
+                    Text("\"\(event.titleText)\" will be removed from your timeline and Storj.")
+                }
+            }
+        }
+    }
+
+    private func performDelete(event: TimelineEvent) async {
+        guard wallet.isConnected else { return }
+        do {
+            let encryptionKey = try await wallet.ensureEncryptionKey()
+            try await timeline.deleteEvent(
+                id: event.id,
+                walletAddress: encryptionKey.walletAddress,
+                encryptionKey: encryptionKey
+            )
+            AmachHaptics.success()
+        } catch {
+            timeline.error = error.localizedDescription
+            AmachHaptics.error()
         }
     }
 
@@ -267,10 +306,12 @@ private extension TimelineView {
 private struct TimelineEventCard: View {
     let event: TimelineEvent
     let onEdit: (() -> Void)?
+    let onDelete: (() -> Void)?
 
-    init(event: TimelineEvent, onEdit: (() -> Void)? = nil) {
+    init(event: TimelineEvent, onEdit: (() -> Void)? = nil, onDelete: (() -> Void)? = nil) {
         self.event = event
         self.onEdit = onEdit
+        self.onDelete = onDelete
     }
 
     var body: some View {
@@ -314,20 +355,38 @@ private struct TimelineEventCard: View {
                         .font(AmachType.tiny)
                         .foregroundStyle(Color.amachTextSecondary)
 
-                    if !event.isAnomaly, let onEdit {
-                        Button {
-                            AmachHaptics.cardTap()
-                            onEdit()
-                        } label: {
-                            Image(systemName: "pencil")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color.amachTextSecondary)
-                                .frame(width: 28, height: 28)
-                                .background(Color.amachPrimary.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: AmachRadius.xs))
+                    if !event.isAnomaly {
+                        if let onEdit {
+                            Button {
+                                AmachHaptics.cardTap()
+                                onEdit()
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.amachTextSecondary)
+                                    .frame(width: 28, height: 28)
+                                    .background(Color.amachPrimary.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: AmachRadius.xs))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Edit event")
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Edit event")
+
+                        if let onDelete {
+                            Button {
+                                AmachHaptics.buttonPress()
+                                onDelete()
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Color.amachDestructive.opacity(0.7))
+                                    .frame(width: 28, height: 28)
+                                    .background(Color.amachDestructive.opacity(0.06))
+                                    .clipShape(RoundedRectangle(cornerRadius: AmachRadius.xs))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Delete event")
+                        }
                     }
                 }
             }

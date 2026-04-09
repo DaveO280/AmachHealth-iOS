@@ -13,6 +13,7 @@ struct HealthSyncView: View {
     @State private var showingDatePicker = false
     @State private var showingConnectWallet = false
     @State private var showingUploadLabData = false
+    @State private var showingImportPDF = false
     @State private var syncStartDate = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
     @State private var labItems: [StorjListItem] = []
     @State private var isLoadingLabRecords = false
@@ -62,6 +63,14 @@ struct HealthSyncView: View {
             }
             .sheet(isPresented: $showingUploadLabData) {
                 UploadLabDataSheet {
+                    await loadLabRecords()
+                }
+                .environmentObject(wallet)
+                .presentationDetents([.large])
+                .presentationBackground(Color.amachSurface)
+            }
+            .sheet(isPresented: $showingImportPDF) {
+                UploadPDFReportSheet {
                     await loadLabRecords()
                 }
                 .environmentObject(wallet)
@@ -629,16 +638,31 @@ struct HealthSyncView: View {
 
                 Spacer()
 
-                Button("Upload") {
-                    showingUploadLabData = true
+                HStack(spacing: 8) {
+                    Button {
+                        showingImportPDF = true
+                    } label: {
+                        Label("Import PDF", systemImage: "doc.badge.plus")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color.amachPrimary.opacity(0.15))
+                    .foregroundStyle(Color.amachPrimaryBright)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1))
+
+                    Button("Upload") {
+                        showingUploadLabData = true
+                    }
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.amachPrimary.opacity(0.15))
+                    .foregroundStyle(Color.amachPrimaryBright)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1))
                 }
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.amachPrimary.opacity(0.15))
-                .foregroundStyle(Color.amachPrimaryBright)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1))
             }
 
             if isLoadingLabRecords {

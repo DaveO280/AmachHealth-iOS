@@ -149,7 +149,9 @@ final class MockAmachAPIClient: AmachAPIClientProtocol {
 
     func getHealthSummary(
         walletAddress: String,
-        encryptionKey: WalletEncryptionKey
+        encryptionKey: WalletEncryptionKey,
+        dailySummaries: [String: DailySummary],
+        period: String
     ) async throws -> HealthSummary {
         getHealthSummaryCallCount += 1
         if let error = config.healthSummaryError { throw error }
@@ -178,12 +180,12 @@ extension AIChatResponse {
 
 extension HealthSummary {
     static func fixture() -> HealthSummary {
-        HealthSummary(
-            lastUpdated: Date(timeIntervalSince1970: 1_700_000_000),
-            metricsCount: 35,
-            dateRange: HealthSummary.DateRange(start: "2024-01-01", end: "2024-12-31"),
-            dailyAverages: ["heartRate": 62.4, "steps": 8200.0, "hrv": 45.0]
-        )
+        // Decode from JSON to avoid needing a public memberwise initializer
+        // (HealthSummary is Decodable-only with auto-synthesized init)
+        let json = #"{"metricsCount":35,"period":"week"}"#
+        let data = json.data(using: .utf8)!
+        return (try? JSONDecoder().decode(HealthSummary.self, from: data))
+            ?? (try! JSONDecoder().decode(HealthSummary.self, from: #"{"metricsCount":0}"#.data(using: .utf8)!))
     }
 }
 
