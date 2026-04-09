@@ -226,10 +226,24 @@ enum PDFReportParser {
         else if lower.contains("ge lunar") || lower.contains("ge healthcare") { source = "GE Lunar" }
         else if lower.contains("norland") { source = "Norland" }
 
-        // Date
-        if let dateMatch = firstRegexMatch(in: text,
-            pattern: #"(?:Scan Date|Date|Performed)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#) {
-            scanDate = normalizeDate(dateMatch)
+        // Date — use scan-specific labels to avoid matching "Date of Birth"
+        let genericScanDateLabels = [
+            #"(?:Scan\s+Date|Exam\s+Date|Study\s+Date|Date\s+of\s+(?:Exam|Scan|Study))[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
+            #"Performed[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
+        ]
+        for p in genericScanDateLabels {
+            if let d = firstRegexMatch(in: text, pattern: p) { scanDate = normalizeDate(d); break }
+        }
+        if scanDate == nil,
+           let regex = try? NSRegularExpression(pattern: #"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})"#,
+                                                options: .caseInsensitive) {
+            let ms = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            for m in ms {
+                if let ds = substring(text, range: m.range(at: 1)) {
+                    let norm = normalizeDate(ds)
+                    if (Int(norm.prefix(4)) ?? 0) >= 2000 { scanDate = norm; break }
+                }
+            }
         }
 
         // Region order: Total Body, Trunk, Arms, Legs, Pelvis, Spine, Head, Left/Right Arm, Left/Right Leg
@@ -379,9 +393,16 @@ enum PDFReportParser {
 
     /// Parse a GE Healthcare Lunar Prodigy or FitTrace DEXA PDF.
     ///
-    /// Segmental table columns: Total(lbs) | Fat(lbs) | Lean(lbs) | Area | BMC
+    /// Handles two common column orders:
+    ///   A) Total(lbs) | Fat(lbs) | Lean(lbs) | Area | BMC   (older Prodigy)
+    ///   B) %Fat | Fat(lbs) | Lean(lbs) | Total(lbs) | Area | BMC  (FitTrace / newer)
+    ///
+    /// Column order is detected automatically: if v1 < 100 AND treating v1 as total
+    /// would yield fat% > 100, we reinterpret v1 as %Fat.
+    ///
     /// Row context: "Arms" / "Legs" heading lines make Left/Right rows context-dependent.
-    /// Unit conversion: all masses lbs → kg (× 0.453592); %Fat = Fat/Total × 100.
+    /// Full region labels ("Left Arm", "R. Leg") are also recognised directly.
+    /// Unit conversion: all masses lbs → kg (× 0.453592).
     private static func parseLunarProdigyDexaText(_ text: String) -> DexaReportData {
         let lines = text.components(separatedBy: .newlines)
         let lower = text.lowercased()
@@ -390,44 +411,93 @@ enum PDFReportParser {
         var scanDate: String?
         var totalMassLbs: Double?
         var totalFatLbs:  Double?
+        var totalFatPct:  Double?   // directly provided %Fat for total row
         var totalLeanLbs: Double?
         var visceralFatAreaCm2: Double?
         var boneDensityBMD: Double?
         var boneTScore: Double?
         var boneZScore: Double?
         var currentGroup: String?  // "arms" | "legs"
-        var regionRows: [(name: String, totalLbs: Double, fatLbs: Double, leanLbs: Double)] = []
+        // totalLbs is optional because in column-order-B we don't capture the 4th column
+        var regionRows: [(name: String, totalLbs: Double?, fatLbs: Double, leanLbs: Double, fatPct: Double?)] = []
 
-        // Scan date
-        if let d = firstRegexMatch(in: text,
-            pattern: #"(?:Scan Date|Date|Performed)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#) {
-            scanDate = normalizeDate(d)
+        // ── Scan date ──────────────────────────────────────────────────────────
+        // Prefer explicit scan-specific labels so we never pick up Date of Birth.
+        let scanDateLabels = [
+            #"(?:Scan\s+Date|Exam\s+Date|Study\s+Date|Date\s+of\s+(?:Exam|Scan|Study))[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
+            #"Performed[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
+        ]
+        for p in scanDateLabels {
+            if let d = firstRegexMatch(in: text, pattern: p) { scanDate = normalizeDate(d); break }
+        }
+        // Fallback: walk all MM/DD/YYYY dates, take the first with year ≥ 2000
+        // (birth dates like 01/01/1981 are excluded).
+        if scanDate == nil,
+           let regex = try? NSRegularExpression(pattern: #"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})"#,
+                                                options: .caseInsensitive) {
+            let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            for m in matches {
+                if let ds = substring(text, range: m.range(at: 1)) {
+                    let norm = normalizeDate(ds)
+                    if (Int(norm.prefix(4)) ?? 0) >= 2000 { scanDate = norm; break }
+                }
+            }
         }
 
-        // Visceral fat area (cm2)
-        if let v = firstRegexDouble(in: lower,
-            pattern: #"visceral\s+fat\s+area[:\s]+(\d+\.?\d*)\s*cm"#) {
-            visceralFatAreaCm2 = v
+        // ── Visceral fat area ──────────────────────────────────────────────────
+        let vfPatterns = [
+            #"visceral\s+fat\s+area[:\s]+(\d+\.?\d*)\s*cm"#,
+            #"visceral\s+(?:adipose\s+)?tissue[:\s]+(\d+\.?\d*)\s*cm"#,
+            #"\bvat[:\s]+(\d+\.?\d*)\s*cm"#,
+        ]
+        for p in vfPatterns {
+            if let v = firstRegexDouble(in: lower, pattern: p) { visceralFatAreaCm2 = v; break }
         }
 
-        // BMD row: "Total Body  1.22  0.4  0.6" (BMD | T-score | Z-score)
+        // ── BMD row ────────────────────────────────────────────────────────────
+        // Matches "Total Body  1.22  0.4  0.6" or "Total  1.22  0.4  0.6"
+        // We scan ALL matches and take the first whose BMD value is in the realistic
+        // g/cm² range (0.5–3.5) — this prevents false matches against the segmental
+        // table's "Total  185.4  31.6  148.7" weight row.
         let bmdRowRegex = try? NSRegularExpression(
-            pattern: #"total\s+body\s+(\d+\.\d+)\s+([-+]?\d+\.?\d*)\s+([-+]?\d+\.?\d*)"#,
+            pattern: #"(?:total\s+body|whole\s+body|total)\s+(\d+\.\d+)\s+([-+]?\d+\.?\d*)\s+([-+]?\d+\.?\d*)"#,
             options: .caseInsensitive
         )
-        if let regex = bmdRowRegex,
-           let match = regex.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)) {
-            boneDensityBMD = substring(lower, range: match.range(at: 1)).flatMap(Double.init)
-            boneTScore     = substring(lower, range: match.range(at: 2)).flatMap(Double.init)
-            boneZScore     = substring(lower, range: match.range(at: 3)).flatMap(Double.init)
+        if let regex = bmdRowRegex {
+            let allBmdMatches = regex.matches(in: lower, range: NSRange(lower.startIndex..., in: lower))
+            for match in allBmdMatches {
+                guard let bmdStr = substring(lower, range: match.range(at: 1)),
+                      let bmdVal = Double(bmdStr),
+                      bmdVal >= 0.5 && bmdVal <= 3.5 else { continue }
+                boneDensityBMD = bmdVal
+                boneTScore     = substring(lower, range: match.range(at: 2)).flatMap(Double.init)
+                boneZScore     = substring(lower, range: match.range(at: 3)).flatMap(Double.init)
+                break
+            }
         }
-        // Fallback t/z patterns
+        // Individual fallbacks for BMD, T-score, Z-score
+        if boneDensityBMD == nil {
+            let bmdFallbacks = [
+                #"bmd[:\s]+(\d+\.\d{2,})"#,
+                #"bone\s+mineral\s+density[:\s]+(\d+\.\d+)"#,
+                #"(\d+\.\d{3,})\s*g\/cm"#,
+            ]
+            for p in bmdFallbacks {
+                if let v = firstRegexDouble(in: lower, pattern: p) { boneDensityBMD = v; break }
+            }
+        }
         if boneTScore == nil, let v = firstRegexDouble(in: lower, pattern: #"t[-\s]score[:\s]+([-+]?\d+\.?\d*)"#) { boneTScore = v }
         if boneZScore == nil, let v = firstRegexDouble(in: lower, pattern: #"z[-\s]score[:\s]+([-+]?\d+\.?\d*)"#) { boneZScore = v }
 
-        // Segmental table row: region token followed by Total | Fat | Lean (lbs)
-        let rowRegex = try? NSRegularExpression(
+        // ── Segmental table rows ───────────────────────────────────────────────
+        // Pattern A: bare token  "Left  9.6  1.5  7.9  ..."
+        let simpleRowRegex = try? NSRegularExpression(
             pattern: #"^\s*(left|right|trunk|pelvis|spine|head|arms|legs|total)\s+(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\d+\.?\d*)"#,
+            options: .caseInsensitive
+        )
+        // Pattern B: full region name  "Left Arm  9.6  1.5  7.9  ..."
+        let extRowRegex = try? NSRegularExpression(
+            pattern: #"^\s*((?:left|right|l|r)\.?\s+(?:arm|leg)|trunk|pelvis|spine|head|total\s+body)\s+(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\d+\.?\d*)"#,
             options: .caseInsensitive
         )
 
@@ -436,48 +506,90 @@ enum PDFReportParser {
             guard !trimmed.isEmpty else { continue }
             let lowerLine = trimmed.lowercased()
 
-            // Group header lines (standalone "Arms" / "Legs" with no numbers)
-            if lowerLine == "arms" { currentGroup = "arms"; continue }
-            if lowerLine == "legs" { currentGroup = "legs"; continue }
+            // Group header lines — no digits, matches known arm/leg label variants
+            if lowerLine.first(where: { $0.isNumber }) == nil {
+                if lowerLine == "arms" || lowerLine == "arm" { currentGroup = "arms"; continue }
+                if lowerLine == "legs" || lowerLine == "leg" { currentGroup = "legs"; continue }
+                if lowerLine.hasPrefix("upper") && lowerLine.contains("extrem") { currentGroup = "arms"; continue }
+                if lowerLine.hasPrefix("lower") && lowerLine.contains("extrem") { currentGroup = "legs"; continue }
+            }
 
-            // Data row
-            guard let regex = rowRegex,
-                  let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
-                  let token  = substring(trimmed, range: match.range(at: 1))?.lowercased(),
-                  let s1 = substring(trimmed, range: match.range(at: 2)),
-                  let s2 = substring(trimmed, range: match.range(at: 3)),
-                  let s3 = substring(trimmed, range: match.range(at: 4)),
+            // Try extended pattern first, then simple
+            var match: NSTextCheckingResult?
+            if let re = extRowRegex, let m = re.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
+                match = m
+            } else if let re = simpleRowRegex, let m = re.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
+                match = m
+            }
+
+            guard let m = match,
+                  let tokenRaw = substring(trimmed, range: m.range(at: 1))?.lowercased(),
+                  let s1 = substring(trimmed, range: m.range(at: 2)),
+                  let s2 = substring(trimmed, range: m.range(at: 3)),
+                  let s3 = substring(trimmed, range: m.range(at: 4)),
                   let v1 = Double(s1), let v2 = Double(s2), let v3 = Double(s3) else { continue }
 
-            let totalV = v1, fatV = v2, leanV = v3
+            let token = lunarNormalizeToken(tokenRaw)
+
+            // Column-order detection:
+            // If treating v1 as total mass would yield fat% > 100 (impossible),
+            // the PDF must be using column-order-B: %Fat | Fat | Lean | Total.
+            let useAsFatPct = v1 < 100.0 && v2 > 0 && (v2 / v1 * 100.0) > 100.0
+
+            let rowFatPct:   Double? = useAsFatPct ? v1 : nil
+            let rowFatLbs:   Double  = v2          // fat mass is always 2nd column
+            let rowLeanLbs:  Double  = v3
+            let rowTotalLbs: Double? = useAsFatPct ? nil : v1
 
             switch token {
-            case "total":
-                totalMassLbs = totalV
-                totalFatLbs  = fatV
-                totalLeanLbs = leanV
+            case "total", "total body":
+                // Guard against the BMD section's "Total Body  1.22  0.4  0.6" row being
+                // misinterpreted as the segmental weight row.  Segmental total masses are
+                // always > 10 lbs; BMD values are always < 3.5 g/cm².
+                guard useAsFatPct || v1 > 10.0 else { break }
+                if useAsFatPct {
+                    totalFatPct  = v1
+                    totalFatLbs  = v2
+                    totalLeanLbs = v3
+                } else {
+                    totalMassLbs = v1
+                    totalFatLbs  = v2
+                    totalLeanLbs = v3
+                }
             case "left":
                 let name = currentGroup == "legs" ? "left leg" : "left arm"
-                regionRows.append((name: name, totalLbs: totalV, fatLbs: fatV, leanLbs: leanV))
+                regionRows.append((name: name, totalLbs: rowTotalLbs, fatLbs: rowFatLbs, leanLbs: rowLeanLbs, fatPct: rowFatPct))
             case "right":
                 let name = currentGroup == "legs" ? "right leg" : "right arm"
-                regionRows.append((name: name, totalLbs: totalV, fatLbs: fatV, leanLbs: leanV))
+                regionRows.append((name: name, totalLbs: rowTotalLbs, fatLbs: rowFatLbs, leanLbs: rowLeanLbs, fatPct: rowFatPct))
+            case "left arm", "right arm", "left leg", "right leg":
+                regionRows.append((name: token, totalLbs: rowTotalLbs, fatLbs: rowFatLbs, leanLbs: rowLeanLbs, fatPct: rowFatPct))
             case "arms", "legs":
-                break  // sub-total header row with numbers — skip
+                break  // sub-total rows — skip
             default:
-                regionRows.append((name: token, totalLbs: totalV, fatLbs: fatV, leanLbs: leanV))
+                regionRows.append((name: token, totalLbs: rowTotalLbs, fatLbs: rowFatLbs, leanLbs: rowLeanLbs, fatPct: rowFatPct))
             }
         }
 
-        // Derived totals
+        // ── Derived totals ─────────────────────────────────────────────────────
         let totalBodyFatPercent: Double? = {
+            if let pct = totalFatPct { return pct }
             guard let fat = totalFatLbs, let total = totalMassLbs, total > 0 else { return nil }
-            return fat / total * 100.0
+            let computed = fat / total * 100.0
+            return computed <= 100.0 ? computed : nil
         }()
         let totalLeanMassKg = totalLeanLbs.map(lbsToKg)
 
         let regions = regionRows.map { row -> DexaRegionMetrics in
-            let fatPct: Double? = row.totalLbs > 0 ? row.fatLbs / row.totalLbs * 100.0 : nil
+            let fatPct: Double?
+            if let direct = row.fatPct {
+                fatPct = direct
+            } else if let total = row.totalLbs, total > 0 {
+                let c = row.fatLbs / total * 100.0
+                fatPct = c <= 100.0 ? c : nil
+            } else {
+                fatPct = nil
+            }
             return DexaRegionMetrics(
                 region: row.name,
                 bodyFatPercent: fatPct,
@@ -490,7 +602,7 @@ enum PDFReportParser {
         }
 
         let hasBoneTotal = boneDensityBMD != nil || boneTScore != nil || boneZScore != nil
-        let filled = [totalBodyFatPercent, totalLeanMassKg].compactMap { $0 }.count
+        let filled = [totalBodyFatPercent, totalLeanMassKg, visceralFatAreaCm2].compactMap { $0 }.count
         let confidence = min(1.0, Double(filled + regions.count) / 8.0)
 
         return DexaReportData(
@@ -509,6 +621,20 @@ enum PDFReportParser {
             rawText: text,
             confidence: confidence
         )
+    }
+
+    /// Normalise a raw region token from a GE Lunar row to a canonical name.
+    private static func lunarNormalizeToken(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+        switch t {
+        case "l arm", "l. arm", "l.arm": return "left arm"
+        case "r arm", "r. arm", "r.arm": return "right arm"
+        case "l leg", "l. leg", "l.leg": return "left leg"
+        case "r leg", "r. leg", "r.leg": return "right leg"
+        default:
+            if t.hasPrefix("total") { return t.hasPrefix("total body") ? "total body" : "total" }
+            return t
+        }
     }
 
     // MARK: - Helpers
