@@ -90,6 +90,14 @@
 		2695798C73E44C3B8B641457 /* LeafHashingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */; };
 		55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D2720462134929AF0C687C /* MerkleNormalizationService.swift */; };
 		083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A493F7F7694A57A538C757 /* MerkleLeaf.swift */; };
+		PDF000000000000000000011 /* PDFReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000001 /* PDFReportModels.swift */; };
+		PDF000000000000000000012 /* PDFReportParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000002 /* PDFReportParser.swift */; };
+		PDF000000000000000000013 /* FhirConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000003 /* FhirConverter.swift */; };
+		PDF000000000000000000014 /* PDFUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000004 /* PDFUploadService.swift */; };
+		PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */; };
+		PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000006 /* UploadPDFReportSheet.swift */; };
+		PDF000000000000000000017 /* MockPDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000007 /* MockPDFReports.swift */; };
+		PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000008 /* PDFReportParserTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -179,6 +187,14 @@
 		7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LeafHashingService.swift; path = AmachHealth/Sources/Services/LeafHashingService.swift; sourceTree = SOURCE_ROOT; };
 		56D2720462134929AF0C687C /* MerkleNormalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleNormalizationService.swift; path = AmachHealth/Sources/Services/MerkleNormalizationService.swift; sourceTree = SOURCE_ROOT; };
 		19A493F7F7694A57A538C757 /* MerkleLeaf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeaf.swift; path = AmachHealth/Sources/Models/MerkleLeaf.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000001 /* PDFReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportModels.swift; path = AmachHealth/Sources/Models/PDFReportModels.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000002 /* PDFReportParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParser.swift; path = AmachHealth/Sources/Services/PDFReportParser.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000003 /* FhirConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FhirConverter.swift; path = AmachHealth/Sources/Services/FhirConverter.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000004 /* PDFUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFUploadService.swift; path = AmachHealth/Sources/Services/PDFUploadService.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AmachAPIClient+PDFReports.swift"; path = "AmachHealth/Sources/API/AmachAPIClient+PDFReports.swift"; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000006 /* UploadPDFReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadPDFReportSheet.swift; path = AmachHealth/Sources/Views/UploadPDFReportSheet.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000007 /* MockPDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockPDFReports.swift; path = AmachHealth/Tests/MockPDFReports.swift; sourceTree = SOURCE_ROOT; };
+		PDF000000000000000000008 /* PDFReportParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParserTests.swift; path = AmachHealth/Tests/PDFReportParserTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -253,6 +269,8 @@
 				FF0000000000000000000109 /* TimelineFeatureTests.swift */,
 				FF000000000000000000010D /* MockDataSeeder.swift */,
 				FF0000000000000000000450 /* Helpers */,
+				PDF000000000000000000007 /* MockPDFReports.swift */,
+				PDF000000000000000000008 /* PDFReportParserTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -288,6 +306,7 @@
 			children = (
 				AA0000000000000000000101 /* AmachAPIClient.swift */,
 				EE0000000000000000000001 /* AmachAPIClientProtocol.swift */,
+				PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */,
 			);
 			name = API;
 			sourceTree = "<group>";
@@ -335,6 +354,7 @@
 				DD0000000000000000000001 /* HealthMetricProof.swift */,
 				AA0000000000000000000126 /* TimelineModels.swift */,
 					19A493F7F7694A57A538C757 /* MerkleLeaf.swift */,
+				PDF000000000000000000001 /* PDFReportModels.swift */,
 			);
 			name = Models;
 			sourceTree = "<group>";
@@ -381,6 +401,9 @@
 					7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */,
 					56D2720462134929AF0C687C /* MerkleNormalizationService.swift */,
 					EE0000000000000000000004 /* ZKSyncAttestationService.swift */,
+				PDF000000000000000000002 /* PDFReportParser.swift */,
+				PDF000000000000000000003 /* FhirConverter.swift */,
+				PDF000000000000000000004 /* PDFUploadService.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -403,6 +426,7 @@
 				AA0000000000000000000128 /* TimelineView.swift */,
 				AA0000000000000000000121 /* TrendsView.swift */,
 				AA000000000000000000012B /* UploadLabDataSheet.swift */,
+				PDF000000000000000000006 /* UploadPDFReportSheet.swift */,
 			);
 			name = Views;
 			sourceTree = "<group>";
@@ -577,6 +601,12 @@
 				DD0000000000000000000026 /* ProfilePreviews.swift in Sources */,
 				DD0000000000000000000027 /* ChatPreviews.swift in Sources */,
 				DD0000000000000000000028 /* OnboardingPreviews.swift in Sources */,
+				PDF000000000000000000011 /* PDFReportModels.swift in Sources */,
+				PDF000000000000000000012 /* PDFReportParser.swift in Sources */,
+				PDF000000000000000000013 /* FhirConverter.swift in Sources */,
+				PDF000000000000000000014 /* PDFUploadService.swift in Sources */,
+				PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */,
+				PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -598,6 +628,8 @@
 				FF000000000000000000020B /* MockURLSession.swift in Sources */,
 				FF000000000000000000020C /* MockWalletService.swift in Sources */,
 				FF000000000000000000020D /* MockDataSeeder.swift in Sources */,
+				PDF000000000000000000017 /* MockPDFReports.swift in Sources */,
+				PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
