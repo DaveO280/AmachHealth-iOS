@@ -145,45 +145,49 @@ final class DexaParserTests: XCTestCase {
     }
 
     func test_extracts_body_fat_percent() {
-        XCTAssertEqual(parsed.totalBodyFatPercent ?? 0, 18.4, accuracy: 0.1)
+        // GE Lunar: Total=185.4 lbs, Fat=31.6 lbs → 31.6/185.4 × 100 ≈ 17.04 %
+        XCTAssertEqual(parsed.totalBodyFatPercent ?? 0, 17.0, accuracy: 0.1)
     }
 
     func test_extracts_lean_mass() {
-        XCTAssertEqual(parsed.totalLeanMassKg ?? 0, 67.2, accuracy: 0.1)
+        // GE Lunar: Lean=148.7 lbs × 0.453592 ≈ 67.44 kg
+        XCTAssertEqual(parsed.totalLeanMassKg ?? 0, 67.4, accuracy: 0.2)
     }
 
     func test_extracts_scan_date() {
-        // "09/22/2025" → "2025-09-22"
-        XCTAssertEqual(parsed.scanDate, "2025-09-22")
+        // "03/21/2025" → "2025-03-21"
+        XCTAssertEqual(parsed.scanDate, "2025-03-21")
     }
 
     func test_extracts_bmd() {
         XCTAssertNotNil(parsed.boneDensityTotal, "Bone density total should be extracted")
-        XCTAssertEqual(parsed.boneDensityTotal?.bmd ?? 0, 1.28, accuracy: 0.01)
+        XCTAssertEqual(parsed.boneDensityTotal?.bmd ?? 0, 1.22, accuracy: 0.01)
     }
 
     func test_extracts_t_score() {
-        XCTAssertEqual(parsed.boneDensityTotal?.tScore ?? 0, 0.6, accuracy: 0.1)
+        XCTAssertEqual(parsed.boneDensityTotal?.tScore ?? 0, 0.4, accuracy: 0.1)
     }
 
     func test_extracts_z_score() {
-        XCTAssertEqual(parsed.boneDensityTotal?.zScore ?? 0, 0.8, accuracy: 0.1)
+        XCTAssertEqual(parsed.boneDensityTotal?.zScore ?? 0, 0.6, accuracy: 0.1)
     }
 
     func test_extracts_visceral_fat_rating() {
-        XCTAssertEqual(parsed.visceralFatRating ?? 0, 1.2, accuracy: 0.1)
+        // GE Lunar format does not include a visceral fat rating score
+        XCTAssertNil(parsed.visceralFatRating)
     }
 
     func test_extracts_visceral_fat_area() {
-        XCTAssertEqual(parsed.visceralFatAreaCm2 ?? 0, 42.8, accuracy: 0.1)
+        XCTAssertEqual(parsed.visceralFatAreaCm2 ?? 0, 45.2, accuracy: 0.1)
     }
 
     func test_extracts_android_gynoid_ratio() {
-        XCTAssertEqual(parsed.androidGynoidRatio ?? 0, 0.84, accuracy: 0.01)
+        // GE Lunar segmental format does not include an android/gynoid ratio
+        XCTAssertNil(parsed.androidGynoidRatio)
     }
 
-    func test_detects_source_hologic() {
-        XCTAssertEqual(parsed.source, "Hologic")
+    func test_detects_source_ge_lunar() {
+        XCTAssertEqual(parsed.source, "GE Lunar")
     }
 
     func test_confidence_above_threshold() {
@@ -295,7 +299,9 @@ final class DexaFhirRoundTripTests: XCTestCase {
         let fhir = FhirConverter.convertDexaToFhir(report)
         let fatObs = fhir.contained?.first { $0.code.coding.first?.code == "41982-7" && $0.component == nil }
         XCTAssertNotNil(fatObs, "Total body fat observation should exist")
-        XCTAssertEqual(fatObs?.valueQuantity?.value ?? 0, 18.4, accuracy: 0.01)
+        // GE Lunar mock: 31.6/185.4 × 100 ≈ 17.0 %
+        let expectedFat = report.totalBodyFatPercent ?? 0
+        XCTAssertEqual(fatObs?.valueQuantity?.value ?? 0, expectedFat, accuracy: 0.1)
     }
 
     func test_round_trip_preserves_fat_percent() {
@@ -344,7 +350,8 @@ final class DexaFhirRoundTripTests: XCTestCase {
     func test_conclusion_mentions_source() {
         let report = MockPDFReports.mockDexaReport()
         let fhir = FhirConverter.convertDexaToFhir(report)
-        XCTAssertTrue(fhir.conclusion?.contains("Hologic") ?? false,
+        let sourceName = report.source ?? ""
+        XCTAssertTrue(fhir.conclusion?.contains(sourceName) ?? false,
                       "Conclusion should mention source")
     }
 }

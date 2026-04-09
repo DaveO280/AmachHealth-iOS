@@ -52,9 +52,19 @@ enum PDFReportParser {
         let lower = (text + " " + filename).lowercased()
         let dexaKeywords = ["dexa", "dxa", "dual energy", "bone density", "body composition scan",
                             "lean mass", "fat mass", "visceral fat", "t-score", "z-score",
-                            "android", "gynoid", "hologic", "ge lunar", "norland"]
+                            "android", "gynoid", "hologic", "ge lunar", "norland",
+                            "body composition - segmental analysis", "body composition/bmd report",
+                            "lunar prodigy", "fittrace", "tissue (%fat)", "total body tissue quantitation"]
         let dexaHits = dexaKeywords.filter { lower.contains($0) }.count
         return dexaHits >= 2
+    }
+
+    private static func isLunarProdigyFormat(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        let lunarKeywords = ["lunar prodigy", "fittrace", "body composition - segmental analysis",
+                             "body composition/bmd report", "total body tissue quantitation",
+                             "tissue (%fat)"]
+        return lunarKeywords.contains { lower.contains($0) }
     }
 
     // MARK: - Bloodwork parsing
@@ -193,6 +203,9 @@ enum PDFReportParser {
     // MARK: - DEXA parsing
 
     static func parseDexaText(_ text: String) -> DexaReportData {
+        if isLunarProdigyFormat(text) {
+            return parseLunarProdigyDexaText(text)
+        }
         let lines = text.components(separatedBy: .newlines)
         var scanDate: String?
         var source: String?
@@ -355,6 +368,142 @@ enum PDFReportParser {
             visceralFatVolumeCm3: visceralFatVolumeCm3,
             boneDensityTotal: hasBoneTotal ? DexaBoneDensityTotal(bmd: boneDensityBMD, tScore: boneTScore, zScore: boneZScore) : nil,
             androidGynoidRatio: androidGynoidRatio,
+            regions: regions,
+            notes: [],
+            rawText: text,
+            confidence: confidence
+        )
+    }
+
+    // MARK: - GE Healthcare Lunar Prodigy / FitTrace DEXA parser
+
+    /// Parse a GE Healthcare Lunar Prodigy or FitTrace DEXA PDF.
+    ///
+    /// Segmental table columns: Total(lbs) | Fat(lbs) | Lean(lbs) | Area | BMC
+    /// Row context: "Arms" / "Legs" heading lines make Left/Right rows context-dependent.
+    /// Unit conversion: all masses lbs → kg (× 0.453592); %Fat = Fat/Total × 100.
+    private static func parseLunarProdigyDexaText(_ text: String) -> DexaReportData {
+        let lines = text.components(separatedBy: .newlines)
+        let lower = text.lowercased()
+        let lbsToKg: (Double) -> Double = { $0 * 0.453592 }
+
+        var scanDate: String?
+        var totalMassLbs: Double?
+        var totalFatLbs:  Double?
+        var totalLeanLbs: Double?
+        var visceralFatAreaCm2: Double?
+        var boneDensityBMD: Double?
+        var boneTScore: Double?
+        var boneZScore: Double?
+        var currentGroup: String?  // "arms" | "legs"
+        var regionRows: [(name: String, totalLbs: Double, fatLbs: Double, leanLbs: Double)] = []
+
+        // Scan date
+        if let d = firstRegexMatch(in: text,
+            pattern: #"(?:Scan Date|Date|Performed)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#) {
+            scanDate = normalizeDate(d)
+        }
+
+        // Visceral fat area (cm2)
+        if let v = firstRegexDouble(in: lower,
+            pattern: #"visceral\s+fat\s+area[:\s]+(\d+\.?\d*)\s*cm"#) {
+            visceralFatAreaCm2 = v
+        }
+
+        // BMD row: "Total Body  1.22  0.4  0.6" (BMD | T-score | Z-score)
+        let bmdRowRegex = try? NSRegularExpression(
+            pattern: #"total\s+body\s+(\d+\.\d+)\s+([-+]?\d+\.?\d*)\s+([-+]?\d+\.?\d*)"#,
+            options: .caseInsensitive
+        )
+        if let regex = bmdRowRegex,
+           let match = regex.firstMatch(in: lower, range: NSRange(lower.startIndex..., in: lower)) {
+            boneDensityBMD = substring(lower, range: match.range(at: 1)).flatMap(Double.init)
+            boneTScore     = substring(lower, range: match.range(at: 2)).flatMap(Double.init)
+            boneZScore     = substring(lower, range: match.range(at: 3)).flatMap(Double.init)
+        }
+        // Fallback t/z patterns
+        if boneTScore == nil, let v = firstRegexDouble(in: lower, pattern: #"t[-\s]score[:\s]+([-+]?\d+\.?\d*)"#) { boneTScore = v }
+        if boneZScore == nil, let v = firstRegexDouble(in: lower, pattern: #"z[-\s]score[:\s]+([-+]?\d+\.?\d*)"#) { boneZScore = v }
+
+        // Segmental table row: region token followed by Total | Fat | Lean (lbs)
+        let rowRegex = try? NSRegularExpression(
+            pattern: #"^\s*(left|right|trunk|pelvis|spine|head|arms|legs|total)\s+(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\d+\.?\d*)"#,
+            options: .caseInsensitive
+        )
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let lowerLine = trimmed.lowercased()
+
+            // Group header lines (standalone "Arms" / "Legs" with no numbers)
+            if lowerLine == "arms" { currentGroup = "arms"; continue }
+            if lowerLine == "legs" { currentGroup = "legs"; continue }
+
+            // Data row
+            guard let regex = rowRegex,
+                  let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+                  let token  = substring(trimmed, range: match.range(at: 1))?.lowercased(),
+                  let s1 = substring(trimmed, range: match.range(at: 2)),
+                  let s2 = substring(trimmed, range: match.range(at: 3)),
+                  let s3 = substring(trimmed, range: match.range(at: 4)),
+                  let v1 = Double(s1), let v2 = Double(s2), let v3 = Double(s3) else { continue }
+
+            let totalV = v1, fatV = v2, leanV = v3
+
+            switch token {
+            case "total":
+                totalMassLbs = totalV
+                totalFatLbs  = fatV
+                totalLeanLbs = leanV
+            case "left":
+                let name = currentGroup == "legs" ? "left leg" : "left arm"
+                regionRows.append((name: name, totalLbs: totalV, fatLbs: fatV, leanLbs: leanV))
+            case "right":
+                let name = currentGroup == "legs" ? "right leg" : "right arm"
+                regionRows.append((name: name, totalLbs: totalV, fatLbs: fatV, leanLbs: leanV))
+            case "arms", "legs":
+                break  // sub-total header row with numbers — skip
+            default:
+                regionRows.append((name: token, totalLbs: totalV, fatLbs: fatV, leanLbs: leanV))
+            }
+        }
+
+        // Derived totals
+        let totalBodyFatPercent: Double? = {
+            guard let fat = totalFatLbs, let total = totalMassLbs, total > 0 else { return nil }
+            return fat / total * 100.0
+        }()
+        let totalLeanMassKg = totalLeanLbs.map(lbsToKg)
+
+        let regions = regionRows.map { row -> DexaRegionMetrics in
+            let fatPct: Double? = row.totalLbs > 0 ? row.fatLbs / row.totalLbs * 100.0 : nil
+            return DexaRegionMetrics(
+                region: row.name,
+                bodyFatPercent: fatPct,
+                leanMassKg: lbsToKg(row.leanLbs),
+                fatMassKg: lbsToKg(row.fatLbs),
+                boneDensityGPerCm2: nil,
+                tScore: nil,
+                zScore: nil
+            )
+        }
+
+        let hasBoneTotal = boneDensityBMD != nil || boneTScore != nil || boneZScore != nil
+        let filled = [totalBodyFatPercent, totalLeanMassKg].compactMap { $0 }.count
+        let confidence = min(1.0, Double(filled + regions.count) / 8.0)
+
+        return DexaReportData(
+            type: "dexa",
+            source: "GE Lunar",
+            scanDate: scanDate,
+            totalBodyFatPercent: totalBodyFatPercent,
+            totalLeanMassKg: totalLeanMassKg,
+            visceralFatRating: nil,
+            visceralFatAreaCm2: visceralFatAreaCm2,
+            visceralFatVolumeCm3: nil,
+            boneDensityTotal: hasBoneTotal ? DexaBoneDensityTotal(bmd: boneDensityBMD, tScore: boneTScore, zScore: boneZScore) : nil,
+            androidGynoidRatio: nil,
             regions: regions,
             notes: [],
             rawText: text,
