@@ -54,19 +54,49 @@ final class PDFUploadService: ObservableObject {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> PDFUploadResult {
-        // Step 1: Parse
+        // Step 1: Extract text from PDF
         state = .extracting
-        let report = try await Task.detached(priority: .userInitiated) {
-            PDFReportParser.parse(pdfData: pdfData, filename: filename)
+        let text = await Task.detached(priority: .userInitiated) {
+            PDFReportParser.extractText(from: pdfData)
         }.value
+
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw PDFUploadError.unrecognizedContent
+        }
+
+        // Step 2: Parse — try AI first, fall back to local regex
+        state = .parsing
+        var report: ParsedHealthReport?
+
+        // AI path (requires network)
+        do {
+            report = try await AmachAPIClient.shared.parseReportWithAI(
+                text: text,
+                sourceName: filename
+            )
+            #if DEBUG
+            print("📄 [PDF] AI parsing succeeded")
+            #endif
+        } catch {
+            #if DEBUG
+            print("📄 [PDF] AI parsing failed, falling back to regex: \(error.localizedDescription)")
+            #endif
+        }
+
+        // Regex fallback (offline-capable)
+        if report == nil {
+            report = await Task.detached(priority: .userInitiated) {
+                PDFReportParser.parseText(text, filename: filename)
+            }.value
+        }
+
         guard let report else {
             throw PDFUploadError.unrecognizedContent
         }
 
-        state = .parsing
         let (fhirReport, dataType, fingerprint, reportId) = buildFhirPayload(from: report)
 
-        // Step 2: Dedup check
+        // Step 3: Dedup check
         let existing = try? await checkForDuplicate(
             fingerprint: fingerprint,
             dataType: dataType,
@@ -85,7 +115,7 @@ final class PDFUploadService: ObservableObject {
             return result
         }
 
-        // Step 3: Upload
+        // Step 4: Upload
         state = .uploading(progress: 0.1)
         let metadata = buildMetadata(report: report, fingerprint: fingerprint, reportId: reportId)
         let storeResult = try await AmachAPIClient.shared.storeFhirReport(
@@ -97,7 +127,7 @@ final class PDFUploadService: ObservableObject {
         )
         state = .uploading(progress: 0.8)
 
-        // Step 4: Attestation (fire-and-forget)
+        // Step 5: Attestation (fire-and-forget)
         _ = try? await AmachAPIClient.shared.createAttestation(
             storjUri: storeResult.storjUri,
             dataType: dataType,
