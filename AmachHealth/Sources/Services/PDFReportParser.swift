@@ -76,32 +76,41 @@ enum PDFReportParser {
         var reportDate: String?
         var currentPanel: String?
 
-        // Date pattern: various formats (ISO YYYY-MM-DD checked first)
+        // Date pattern: various formats
         let datePatterns = [
-            #"(?:Date of Service|Collection Date|Report Date|Date)[:\s]+(\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2})"#,
-            #"(?:Date of Service|Collection Date|Report Date|Date)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
+            #"(?:Date of Service|Collection Date|Report Date|Reported|Collected|Date)[:\s]+(\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2})"#,
+            #"(?:Date of Service|Collection Date|Report Date|Reported|Collected|Date)[:\s]+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
             #"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})"#,
         ]
 
         // Lab name patterns
         let labPatterns = [
             #"(Quest Diagnostics|LabCorp|BioReference|ARUP|Mayo Clinic|Sonora Quest|Labcorp)"#,
-            #"(Laboratory|Lab|Diagnostics)[:\s]*([A-Z][A-Za-z\s]+)"#,
         ]
 
         // Panel header pattern (e.g., "COMPREHENSIVE METABOLIC PANEL")
         let panelPattern = try? NSRegularExpression(
-            pattern: #"^([A-Z][A-Z\s\-\/]{4,}(?:PANEL|PROFILE|CBC|BMP|CMP|THYROID|LIPID|METABOLIC|CHEMISTRY|BLOOD|COMPLETE|BASIC|URINALYSIS))\s*$"#,
+            pattern: #"^([A-Z][A-Z\s\-\/]{4,}(?:PANEL|PROFILE|CBC|BMP|CMP|THYROID|LIPID|METABOLIC|CHEMISTRY|BLOOD|COMPLETE|BASIC|URINALYSIS|HEMATOLOGY|DIFFERENTIAL|HEPATIC|RENAL|FUNCTION))\s*$"#,
             options: []
         )
 
-        // Metric line patterns — ordered most-specific first:
-        // Pattern A: "Marker Name   94    65-99    mg/dL    Normal"
-        // Pattern B: "Marker Name    94    mg/dL    [65-99]"
-        // Pattern C: "Marker Name  94 mg/dL  REF: 65-99  H/L flag"
-        // Pattern D: Simple "Marker Name: 94 mg/dL"
-        let metricPatterns: [(pattern: NSRegularExpression, nameGroup: Int, valueGroup: Int, unitGroup: Int, refGroup: Int, flagGroup: Int)] = [
-            // A: name  value  ref_range  unit  flag (Quest style)
+        // Quest-style metric: NAME  VALUE  H/L?  MM/DD/YY?  REF_WITH_UNIT  LABCODE?
+        // e.g. "CHOLESTEROL, TOTAL   237   H   05/21/25   <200 mg/dL   01"
+        // e.g. "GLUCOSE              88        05/21/25   65-139 mg/dL  01"
+        let questPattern = try! NSRegularExpression(
+            pattern: #"^([A-Z][A-Z0-9\s,()\/\-\.%']+?)\s{2,}(-?\d+\.?\d*)\s+(H|L|HH|LL)?\s*(?:\d{2}\/\d{2}\/\d{2,4})?\s{1,}([<>]?\d+\.?\d*\s*[-–]\s*\d+\.?\d*\s*[A-Za-z%\/\-\d\.µ()]+|[<>]\s*\d+\.?\d*\s*[A-Za-z%\/\-\d\.µ()]+)\s*(?:\d{2})?\s*$"#,
+            options: []
+        )
+
+        // Quest-style without reference range (some metrics like % differentials)
+        let questNoRefPattern = try! NSRegularExpression(
+            pattern: #"^([A-Z][A-Z0-9\s,()\/\-\.%']+?)\s{2,}(-?\d+\.?\d*)\s+(H|L|HH|LL)?\s*(?:\d{2}\/\d{2}\/\d{2,4})?\s*$"#,
+            options: []
+        )
+
+        // Standard format: NAME  VALUE  REF_RANGE  UNIT  FLAG
+        let standardPatterns: [(pattern: NSRegularExpression, nameGroup: Int, valueGroup: Int, unitGroup: Int, refGroup: Int, flagGroup: Int)] = [
+            // A: name  value  ref_range  unit  flag
             (try! NSRegularExpression(pattern: #"^(.+?)\s{2,}(\d+\.?\d*)\s{2,}([\d\.\-<>\s]+?)\s{2,}([\w\/\%µ]+)\s*(H|L|HH|LL|High|Low|Normal|Critical)?\s*$"#), 1, 2, 4, 3, 5),
             // B: name  value  unit  [ref_range]
             (try! NSRegularExpression(pattern: #"^(.+?)\s{2,}(\d+\.?\d*)\s+([\w\/\%µmgdLuUI]+)\s+[\[\(]([\d\.\-<>]+)[\]\)]\s*(H|L|HH|LL|High|Low|Normal|Critical)?\s*$"#), 1, 2, 3, 4, 5),
@@ -145,8 +154,64 @@ enum PDFReportParser {
                 continue
             }
 
-            // Try metric patterns
-            for (regex, nameGroup, valueGroup, unitGroup, refGroup, flagGroup) in metricPatterns {
+            // Try Quest format first (most common for real PDFs)
+            if let match = questPattern.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
+                guard let nameRaw = substring(trimmed, range: match.range(at: 1)),
+                      let valueStr = substring(trimmed, range: match.range(at: 2)),
+                      let value = Double(valueStr) else { continue }
+
+                let name = cleanMarkerName(nameRaw)
+                guard !name.isEmpty, name.count >= 2 else { continue }
+
+                let flagRaw = substring(trimmed, range: match.range(at: 3))
+                let flag = normalizeFlag(flagRaw)
+
+                // Split ref+unit blob: "0.40-4.50 mIU/L" → ref="0.40-4.50", unit="mIU/L"
+                let refBlob = substring(trimmed, range: match.range(at: 4)) ?? ""
+                let (ref, unit) = splitRefAndUnit(refBlob)
+
+                metrics.append(BloodworkMetric(
+                    name: name,
+                    value: value,
+                    valueText: valueStr,
+                    unit: unit,
+                    referenceRange: ref,
+                    panel: currentPanel,
+                    collectedAt: reportDate,
+                    flag: flag,
+                    interpretationNotes: nil
+                ))
+                continue
+            }
+
+            // Quest format without reference range (e.g., percentage differentials)
+            if let match = questNoRefPattern.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
+                guard let nameRaw = substring(trimmed, range: match.range(at: 1)),
+                      let valueStr = substring(trimmed, range: match.range(at: 2)),
+                      let value = Double(valueStr) else { continue }
+
+                let name = cleanMarkerName(nameRaw)
+                guard !name.isEmpty, name.count >= 2 else { continue }
+
+                let flagRaw = substring(trimmed, range: match.range(at: 3))
+                let flag = normalizeFlag(flagRaw)
+
+                metrics.append(BloodworkMetric(
+                    name: name,
+                    value: value,
+                    valueText: valueStr,
+                    unit: nil,
+                    referenceRange: nil,
+                    panel: currentPanel,
+                    collectedAt: reportDate,
+                    flag: flag,
+                    interpretationNotes: nil
+                ))
+                continue
+            }
+
+            // Try standard/generic patterns
+            for (regex, nameGroup, valueGroup, unitGroup, refGroup, flagGroup) in standardPatterns {
                 let range = NSRange(trimmed.startIndex..., in: trimmed)
                 guard let match = regex.firstMatch(in: trimmed, range: range) else { continue }
 
@@ -165,7 +230,7 @@ enum PDFReportParser {
                 metrics.append(BloodworkMetric(
                     name: name,
                     value: value,
-                    valueText: String(value),
+                    valueText: valueStr,
                     unit: unit,
                     referenceRange: ref,
                     panel: currentPanel,
@@ -174,6 +239,14 @@ enum PDFReportParser {
                     interpretationNotes: nil
                 ))
                 break
+            }
+        }
+
+        // If line-by-line parsing found very few metrics, try blob extraction
+        if metrics.count < 5 {
+            let blobMetrics = extractMetricsFromBlob(text, reportDate: reportDate)
+            if blobMetrics.count > metrics.count {
+                metrics = blobMetrics
             }
         }
 
@@ -189,7 +262,7 @@ enum PDFReportParser {
         let confidence = min(1.0, Double(deduped.count) / 20.0)
         return BloodworkReportData(
             type: "bloodwork",
-            source: "ios-pdf-import",
+            source: laboratory ?? "ios-pdf-import",
             reportDate: reportDate,
             laboratory: laboratory,
             panels: panels,
@@ -198,6 +271,80 @@ enum PDFReportParser {
             rawText: text,
             confidence: confidence
         )
+    }
+
+    /// Split a combined reference-range-and-unit blob into (range, unit).
+    /// e.g. "0.40-4.50 mIU/L" → ("0.40-4.50", "mIU/L")
+    ///      "<200 mg/dL"       → ("<200", "mg/dL")
+    ///      "38.5-50.0 %"      → ("38.5-50.0", "%")
+    private static func splitRefAndUnit(_ blob: String) -> (String?, String?) {
+        let trimmed = blob.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return (nil, nil) }
+
+        // Match: numeric range part, then unit part
+        let pattern = #"^([<>]?\s*\d+\.?\d*(?:\s*[-–]\s*\d+\.?\d*)?)\s+([A-Za-z%\/\-\d\.µ()]+(?:\/[A-Za-z\d]+)*)$"#
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) {
+            let ref = substring(trimmed, range: match.range(at: 1))
+            let unit = substring(trimmed, range: match.range(at: 2))
+            return (ref, unit)
+        }
+
+        // If no unit found, the whole blob is the reference range
+        return (trimmed, nil)
+    }
+
+    /// Fallback blob extraction for PDFs where text comes out as space-separated columns
+    /// without clean line breaks per metric. Scans for patterns like:
+    ///   NAME  VALUE  [H/L]  [DATE]  REF  UNIT
+    private static func extractMetricsFromBlob(_ text: String, reportDate: String?) -> [BloodworkMetric] {
+        var metrics: [BloodworkMetric] = []
+
+        // Pattern: ALLCAPS_NAME  2+spaces  NUMBER  optional_flag  optional_date  optional_ref_unit
+        // This handles both single-line and run-together text from PDFKit
+        let blobPattern = try! NSRegularExpression(
+            pattern: #"([A-Z][A-Z0-9\s,()\/\-\.%']{2,40}?)\s{2,}(-?\d+\.?\d*)\s+(H|L|HH|LL)?\s*(?:\d{2}\/\d{2}\/\d{2,4}\s+)?([<>]?\d+\.?\d*\s*[-–]\s*\d+\.?\d*\s*[A-Za-z%\/\-\d\.µ()]+|[<>]\s*\d+\.?\d*\s*[A-Za-z%\/\-\d\.µ()]+)?"#,
+            options: []
+        )
+
+        let nsText = text as NSString
+        let matches = blobPattern.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+
+        for match in matches {
+            guard let nameRaw = substring(text, range: match.range(at: 1)),
+                  let valueStr = substring(text, range: match.range(at: 2)),
+                  let value = Double(valueStr) else { continue }
+
+            let name = cleanMarkerName(nameRaw)
+            guard !name.isEmpty, name.count >= 2 else { continue }
+
+            // Skip non-metric lines (headers, dates, etc.)
+            let nameUpper = name.uppercased()
+            let skipPrefixes = ["PAGE", "PATIENT", "PHYSICIAN", "DOCTOR", "DATE", "REPORT",
+                                "LABORATORY", "ACCOUNT", "SPECIMEN", "ORDER", "FINAL",
+                                "FASTING", "COLLECTED", "RECEIVED", "SEE NOTE"]
+            if skipPrefixes.contains(where: { nameUpper.hasPrefix($0) }) { continue }
+
+            let flagRaw = substring(text, range: match.range(at: 3))
+            let flag = normalizeFlag(flagRaw)
+
+            let refBlob = substring(text, range: match.range(at: 4)) ?? ""
+            let (ref, unit) = splitRefAndUnit(refBlob)
+
+            metrics.append(BloodworkMetric(
+                name: name,
+                value: value,
+                valueText: valueStr,
+                unit: unit,
+                referenceRange: ref,
+                panel: nil,
+                collectedAt: reportDate,
+                flag: flag,
+                interpretationNotes: nil
+            ))
+        }
+
+        return metrics
     }
 
     // MARK: - DEXA parsing
