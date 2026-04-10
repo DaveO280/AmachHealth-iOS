@@ -96,6 +96,7 @@
 		PDF000000000000000000013 /* FhirConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000003 /* FhirConverter.swift */; };
 		PDF000000000000000000014 /* PDFUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000004 /* PDFUploadService.swift */; };
 		PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */; };
+		AIP000000000000000000001 /* AmachAPIClient+AIReportParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */; };
 		PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000006 /* UploadPDFReportSheet.swift */; };
 		PDF000000000000000000017 /* MockPDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000007 /* MockPDFReports.swift */; };
 		PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000008 /* PDFReportParserTests.swift */; };
@@ -197,6 +198,7 @@
 		PDF000000000000000000003 /* FhirConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FhirConverter.swift; path = AmachHealth/Sources/Services/FhirConverter.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000004 /* PDFUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFUploadService.swift; path = AmachHealth/Sources/Services/PDFUploadService.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AmachAPIClient+PDFReports.swift"; path = "AmachHealth/Sources/API/AmachAPIClient+PDFReports.swift"; sourceTree = SOURCE_ROOT; };
+		AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AmachAPIClient+AIReportParsing.swift"; path = "AmachHealth/Sources/API/AmachAPIClient+AIReportParsing.swift"; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000006 /* UploadPDFReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadPDFReportSheet.swift; path = AmachHealth/Sources/Views/UploadPDFReportSheet.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000007 /* MockPDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockPDFReports.swift; path = AmachHealth/Tests/MockPDFReports.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000008 /* PDFReportParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParserTests.swift; path = AmachHealth/Tests/PDFReportParserTests.swift; sourceTree = SOURCE_ROOT; };
@@ -317,6 +319,7 @@
 				AA0000000000000000000101 /* AmachAPIClient.swift */,
 				EE0000000000000000000001 /* AmachAPIClientProtocol.swift */,
 				PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */,
+				AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */,
 			);
 			name = API;
 			sourceTree = "<group>";
@@ -620,6 +623,7 @@
 				PDF000000000000000000013 /* FhirConverter.swift in Sources */,
 				PDF000000000000000000014 /* PDFUploadService.swift in Sources */,
 				PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */,
+				AIP000000000000000000001 /* AmachAPIClient+AIReportParsing.swift in Sources */,
 				PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
