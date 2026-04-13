@@ -134,6 +134,9 @@ extension AmachAPIClient {
         case "bloodwork":
             let bw = try first.report.decode(as: BloodworkReportData.self)
             return .bloodwork(bw)
+        case "medical-record":
+            let mr = try first.report.decode(as: MedicalRecordData.self)
+            return .medicalRecord(mr)
         default:
             return nil
         }

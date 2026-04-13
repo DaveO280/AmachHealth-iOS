@@ -72,4 +72,18 @@ extension AmachAPIClient {
         }
         return report
     }
+
+    /// Retrieve a stored medical record FHIR report and convert it back to MedicalRecordData.
+    func retrieveMedicalRecordFhirReport(
+        storjUri: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> MedicalRecordData {
+        let fhir: FhirDiagnosticReport = try await retrieveStoredData(
+            storjUri: storjUri,
+            walletAddress: walletAddress,
+            encryptionKey: encryptionKey
+        )
+        return FhirConverter.convertFhirToMedicalRecord(fhir)
+    }
 }
