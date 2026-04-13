@@ -14,6 +14,7 @@ struct HealthSyncView: View {
     @State private var showingConnectWallet = false
     @State private var showingUploadLabData = false
     @State private var showingImportPDF = false
+    @State private var showingUploadMedicalRecord = false
     @State private var syncStartDate = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
     @State private var labItems: [StorjListItem] = []
     @State private var isLoadingLabRecords = false
@@ -32,6 +33,7 @@ struct HealthSyncView: View {
                             lastSyncSection
                             syncControlSection
                             labRecordsSection
+                            medicalRecordsSection
                             storageLink
                         } else {
                             walletGateCard
@@ -75,6 +77,13 @@ struct HealthSyncView: View {
                 }
                 .environmentObject(wallet)
                 .presentationDetents([.large])
+                .presentationBackground(Color.amachSurface)
+            }
+            .sheet(isPresented: $showingUploadMedicalRecord) {
+                UploadMedicalRecordSheet {
+                    // No lab-record refresh needed — medical records have their own list
+                }
+                .environmentObject(wallet)
                 .presentationBackground(Color.amachSurface)
             }
             .task(id: wallet.isConnected) {
@@ -692,6 +701,64 @@ struct HealthSyncView: View {
                     }
                 }
             }
+        }
+        .padding(16)
+        .background(Color.amachSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.amachPrimary.opacity(0.1), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Medical Records
+
+    private var medicalRecordsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Medical Records")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.amachTextPrimary)
+                    Text("Upload visit notes, imaging, prescriptions, and more.")
+                        .font(.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                }
+
+                Spacer()
+
+                Button {
+                    showingUploadMedicalRecord = true
+                } label: {
+                    Label("Upload", systemImage: "plus.circle")
+                        .font(.caption.weight(.semibold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.amachPrimary.opacity(0.15))
+                .foregroundStyle(Color.amachPrimaryBright)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.amachPrimary.opacity(0.25), lineWidth: 1))
+            }
+
+            NavigationLink {
+                MedicalRecordsListView()
+                    .environmentObject(wallet)
+            } label: {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundStyle(Color.amachPrimaryBright)
+                    Text("View All Records")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.amachPrimaryBright)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(Color.amachTextSecondary.opacity(0.5))
+                }
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
         }
         .padding(16)
         .background(Color.amachSurface)

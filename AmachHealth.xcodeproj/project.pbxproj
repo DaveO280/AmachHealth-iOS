@@ -102,6 +102,11 @@
 		PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000008 /* PDFReportParserTests.swift */; };
 		PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000009 /* PDFReportStressTests.swift */; };
 		E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */; };
+		MRC000000000000000000011 /* MedicalRecordModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = MRC000000000000000000001 /* MedicalRecordModels.swift */; };
+		MRC000000000000000000012 /* AmachAPIClient+MedicalRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = MRC000000000000000000002 /* AmachAPIClient+MedicalRecords.swift */; };
+		MRC000000000000000000013 /* MedicalRecordUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MRC000000000000000000003 /* MedicalRecordUploadService.swift */; };
+		MRC000000000000000000014 /* UploadMedicalRecordSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = MRC000000000000000000004 /* UploadMedicalRecordSheet.swift */; };
+		MRC000000000000000000015 /* MedicalRecordsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MRC000000000000000000005 /* MedicalRecordsListView.swift */; };
 		STL000000000000000000001 /* StorjTimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000011 /* StorjTimelineService.swift */; };
 		STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000012 /* StorjTimelineServiceTests.swift */; };
 /* End PBXBuildFile section */
@@ -194,6 +199,11 @@
 		7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LeafHashingService.swift; path = AmachHealth/Sources/Services/LeafHashingService.swift; sourceTree = SOURCE_ROOT; };
 		56D2720462134929AF0C687C /* MerkleNormalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleNormalizationService.swift; path = AmachHealth/Sources/Services/MerkleNormalizationService.swift; sourceTree = SOURCE_ROOT; };
 		19A493F7F7694A57A538C757 /* MerkleLeaf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeaf.swift; path = AmachHealth/Sources/Models/MerkleLeaf.swift; sourceTree = SOURCE_ROOT; };
+		MRC000000000000000000001 /* MedicalRecordModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedicalRecordModels.swift; path = AmachHealth/Sources/Models/MedicalRecordModels.swift; sourceTree = SOURCE_ROOT; };
+		MRC000000000000000000002 /* AmachAPIClient+MedicalRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AmachAPIClient+MedicalRecords.swift"; path = "AmachHealth/Sources/API/AmachAPIClient+MedicalRecords.swift"; sourceTree = SOURCE_ROOT; };
+		MRC000000000000000000003 /* MedicalRecordUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedicalRecordUploadService.swift; path = AmachHealth/Sources/Services/MedicalRecordUploadService.swift; sourceTree = SOURCE_ROOT; };
+		MRC000000000000000000004 /* UploadMedicalRecordSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadMedicalRecordSheet.swift; path = AmachHealth/Sources/Views/UploadMedicalRecordSheet.swift; sourceTree = SOURCE_ROOT; };
+		MRC000000000000000000005 /* MedicalRecordsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MedicalRecordsListView.swift; path = AmachHealth/Sources/Views/MedicalRecordsListView.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000001 /* PDFReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportModels.swift; path = AmachHealth/Sources/Models/PDFReportModels.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000002 /* PDFReportParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParser.swift; path = AmachHealth/Sources/Services/PDFReportParser.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000003 /* FhirConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FhirConverter.swift; path = AmachHealth/Sources/Services/FhirConverter.swift; sourceTree = SOURCE_ROOT; };
@@ -322,6 +332,7 @@
 				AA0000000000000000000101 /* AmachAPIClient.swift */,
 				EE0000000000000000000001 /* AmachAPIClientProtocol.swift */,
 				PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */,
+				MRC000000000000000000002 /* AmachAPIClient+MedicalRecords.swift */,
 				AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */,
 			);
 			name = API;
@@ -371,6 +382,7 @@
 				AA0000000000000000000126 /* TimelineModels.swift */,
 					19A493F7F7694A57A538C757 /* MerkleLeaf.swift */,
 				PDF000000000000000000001 /* PDFReportModels.swift */,
+				MRC000000000000000000001 /* MedicalRecordModels.swift */,
 			);
 			name = Models;
 			sourceTree = "<group>";
@@ -422,6 +434,7 @@
 				PDF000000000000000000002 /* PDFReportParser.swift */,
 				PDF000000000000000000003 /* FhirConverter.swift */,
 				PDF000000000000000000004 /* PDFUploadService.swift */,
+				MRC000000000000000000003 /* MedicalRecordUploadService.swift */,
 			);
 			name = Services;
 			sourceTree = "<group>";
@@ -445,6 +458,8 @@
 				AA0000000000000000000121 /* TrendsView.swift */,
 				AA000000000000000000012B /* UploadLabDataSheet.swift */,
 				PDF000000000000000000006 /* UploadPDFReportSheet.swift */,
+				MRC000000000000000000004 /* UploadMedicalRecordSheet.swift */,
+				MRC000000000000000000005 /* MedicalRecordsListView.swift */,
 			);
 			name = Views;
 			sourceTree = "<group>";
@@ -628,6 +643,11 @@
 				PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */,
 				AIP000000000000000000001 /* AmachAPIClient+AIReportParsing.swift in Sources */,
 				PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */,
+				MRC000000000000000000011 /* MedicalRecordModels.swift in Sources */,
+				MRC000000000000000000012 /* AmachAPIClient+MedicalRecords.swift in Sources */,
+				MRC000000000000000000013 /* MedicalRecordUploadService.swift in Sources */,
+				MRC000000000000000000014 /* UploadMedicalRecordSheet.swift in Sources */,
+				MRC000000000000000000015 /* MedicalRecordsListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
