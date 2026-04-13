@@ -198,6 +198,7 @@ struct LabRecordDetailView: View {
     @State private var record: LabRecord?
     @State private var bloodworkReport: RemoteBloodworkReport?
     @State private var dexaReport: RemoteDexaReport?
+    @State private var medicalRecord: RemoteMedicalRecord?
     @State private var isLoading = true
     @State private var error: String?
 
@@ -363,6 +364,103 @@ struct LabRecordDetailView: View {
                         }
                         .padding(AmachSpacing.md)
                     }
+                } else if let medicalRecord {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: AmachSpacing.lg) {
+                            reportHeaderCard(
+                                title: medicalRecord.title ?? "Medical Record",
+                                dateText: medicalRecord.reportDate,
+                                txHash: item.attestationTxHash
+                            )
+
+                            if let docType = medicalRecord.documentType, !docType.isEmpty {
+                                HStack {
+                                    Label(docType.replacingOccurrences(of: "-", with: " ").capitalized,
+                                          systemImage: medicalRecordIcon(docType))
+                                        .font(AmachType.caption)
+                                        .foregroundStyle(Color.amachTextSecondary)
+                                    Spacer()
+                                    if let source = medicalRecord.source {
+                                        Text(source)
+                                            .font(AmachType.caption)
+                                            .foregroundStyle(Color.amachTextSecondary)
+                                    }
+                                }
+                                .padding(AmachSpacing.md)
+                                .amachCard()
+                            }
+
+                            if let summary = medicalRecord.summary, !summary.isEmpty {
+                                VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+                                    Text("Summary")
+                                        .font(AmachType.h3)
+                                        .foregroundStyle(Color.amachTextPrimary)
+                                    Text(summary)
+                                        .font(AmachType.body)
+                                        .foregroundStyle(Color.amachTextSecondary)
+                                }
+                                .padding(AmachSpacing.lg)
+                                .amachCard()
+                            }
+
+                            if let findings = medicalRecord.keyFindings, !findings.isEmpty {
+                                VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+                                    Text("Key Findings")
+                                        .font(AmachType.h3)
+                                        .foregroundStyle(Color.amachTextPrimary)
+                                    ForEach(findings, id: \.self) { finding in
+                                        HStack(alignment: .top, spacing: AmachSpacing.sm) {
+                                            Image(systemName: "circle.fill")
+                                                .font(.system(size: 5))
+                                                .foregroundStyle(Color.amachPrimaryBright)
+                                                .padding(.top, 6)
+                                            Text(finding)
+                                                .font(AmachType.body)
+                                                .foregroundStyle(Color.amachTextSecondary)
+                                        }
+                                    }
+                                }
+                                .padding(AmachSpacing.lg)
+                                .amachCard()
+                            }
+
+                            if let diagnoses = medicalRecord.diagnoses, !diagnoses.isEmpty {
+                                VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+                                    Text("Diagnoses")
+                                        .font(AmachType.h3)
+                                        .foregroundStyle(Color.amachTextPrimary)
+                                    ForEach(diagnoses, id: \.self) { dx in
+                                        Text(dx)
+                                            .font(AmachType.body)
+                                            .foregroundStyle(Color.amachTextSecondary)
+                                    }
+                                }
+                                .padding(AmachSpacing.lg)
+                                .amachCard()
+                            }
+
+                            if let meds = medicalRecord.medications, !meds.isEmpty {
+                                VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+                                    Text("Medications")
+                                        .font(AmachType.h3)
+                                        .foregroundStyle(Color.amachTextPrimary)
+                                    ForEach(meds, id: \.self) { med in
+                                        HStack(spacing: AmachSpacing.sm) {
+                                            Image(systemName: "pills.fill")
+                                                .font(AmachType.tiny)
+                                                .foregroundStyle(Color.amachAccent)
+                                            Text(med)
+                                                .font(AmachType.body)
+                                                .foregroundStyle(Color.amachTextSecondary)
+                                        }
+                                    }
+                                }
+                                .padding(AmachSpacing.lg)
+                                .amachCard()
+                            }
+                        }
+                        .padding(AmachSpacing.md)
+                    }
                 }
             }
         }
@@ -380,6 +478,7 @@ struct LabRecordDetailView: View {
             record = nil
             bloodworkReport = nil
             dexaReport = nil
+            medicalRecord = nil
 
             switch item.dataType {
             case "bloodwork-report-fhir":
@@ -390,6 +489,12 @@ struct LabRecordDetailView: View {
                 )
             case "dexa-report-fhir":
                 dexaReport = try await AmachAPIClient.shared.retrieveDexaReport(
+                    storjUri: item.uri,
+                    walletAddress: encryptionKey.walletAddress,
+                    encryptionKey: encryptionKey
+                )
+            case "medical-record-fhir":
+                medicalRecord = try await AmachAPIClient.shared.retrieveMedicalRecord(
                     storjUri: item.uri,
                     walletAddress: encryptionKey.walletAddress,
                     encryptionKey: encryptionKey
@@ -507,6 +612,18 @@ struct LabRecordDetailView: View {
     private func shortHash(_ hash: String) -> String {
         guard hash.count > 16 else { return hash }
         return "\(hash.prefix(10))…\(hash.suffix(6))"
+    }
+
+    private func medicalRecordIcon(_ docType: String) -> String {
+        switch docType.lowercased() {
+        case "imaging": return "photo.on.rectangle"
+        case "discharge-summary", "discharge summary": return "doc.text"
+        case "prescription": return "pills"
+        case "lab-panel", "lab panel": return "testtube.2"
+        case "surgical", "surgical-report": return "bandage"
+        case "referral": return "arrow.right.doc"
+        default: return "doc.plaintext"
+        }
     }
 }
 

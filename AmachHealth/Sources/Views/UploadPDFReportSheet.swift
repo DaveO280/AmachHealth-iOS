@@ -86,6 +86,9 @@ struct UploadPDFReportSheet: View {
                 Label("DEXA body composition scans", systemImage: "figure.stand")
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextSecondary)
+                Label("Medical records & other documents", systemImage: "doc.text")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
             }
 
             Text("Your PDF is encrypted and stored privately on Storj under your wallet address.")
@@ -121,7 +124,7 @@ struct UploadPDFReportSheet: View {
                         .foregroundStyle(Color.amachTextPrimary)
                         .lineLimit(2)
                     if let detected = detectedType {
-                        Label(detected, systemImage: detected == "DEXA Scan" ? "figure.stand" : "drop.fill")
+                        Label(detected, systemImage: iconForReportType(detected))
                             .font(AmachType.tiny)
                             .foregroundStyle(Color.amachSuccess)
                     } else {
@@ -268,11 +271,21 @@ struct UploadPDFReportSheet: View {
         }
     }
 
+    private func iconForReportType(_ type: String) -> String {
+        switch type {
+        case "DEXA Scan": return "figure.stand"
+        case "Bloodwork": return "drop.fill"
+        case "Medical Record": return "doc.text"
+        default: return "doc.fill"
+        }
+    }
+
     private func detectReportType(data: Data, filename: String) -> String? {
         guard let report = PDFReportParser.parse(pdfData: data, filename: filename) else { return nil }
         switch report {
         case .bloodwork: return "Bloodwork"
         case .dexa: return "DEXA Scan"
+        case .medicalRecord: return "Medical Record"
         }
     }
 

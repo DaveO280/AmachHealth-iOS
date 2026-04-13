@@ -37,13 +37,71 @@ enum PDFReportParser {
     }
 
     /// Parse pre-extracted text (useful for testing without a real PDF).
+    /// Falls back to a generic medical record if DEXA/bloodwork detection fails,
+    /// so any health document can be stored and viewed.
     static func parseText(_ text: String, filename: String = "") -> ParsedHealthReport? {
+        // Try DEXA first
         if isDexaReport(text: text, filename: filename) {
             let report = parseDexaText(text)
-            return report.regions.isEmpty && report.totalBodyFatPercent == nil ? nil : .dexa(report)
+            if !report.regions.isEmpty || report.totalBodyFatPercent != nil {
+                return .dexa(report)
+            }
         }
+
+        // Try bloodwork
         let bloodwork = parseBloodworkText(text)
-        return bloodwork.metrics.isEmpty ? nil : .bloodwork(bloodwork)
+        if !bloodwork.metrics.isEmpty {
+            return .bloodwork(bloodwork)
+        }
+
+        // Fallback: generic medical record (preserves raw text for AI re-parse later)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        return .medicalRecord(MedicalRecordData(
+            type: "medical-record",
+            source: nil,
+            reportDate: extractFirstDate(from: trimmed),
+            documentType: "other",
+            title: inferTitle(from: trimmed, filename: filename),
+            summary: nil,
+            keyFindings: nil,
+            medications: nil,
+            diagnoses: nil,
+            rawText: trimmed,
+            confidence: 0.1
+        ))
+    }
+
+    /// Extract the first date-like string from text
+    private static func extractFirstDate(from text: String) -> String? {
+        let patterns = [
+            #"(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"#,
+            #"(\d{4}[\-\/]\d{1,2}[\-\/]\d{1,2})"#,
+        ]
+        for p in patterns {
+            if let match = firstRegexMatch(in: text, pattern: p) {
+                return normalizeDate(match)
+            }
+        }
+        return nil
+    }
+
+    /// Infer a title from the first non-empty line or the filename
+    private static func inferTitle(from text: String, filename: String) -> String {
+        let firstLine = text.components(separatedBy: .newlines)
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+
+        // Use first line if it looks like a title (not too long, not all numbers)
+        if !firstLine.isEmpty, firstLine.count <= 80,
+           firstLine.contains(where: \.isLetter) {
+            return firstLine
+        }
+
+        // Fall back to filename without extension
+        let name = (filename as NSString).deletingPathExtension
+        return name.isEmpty ? "Medical Record" : name
     }
 
     // MARK: - Report type detection

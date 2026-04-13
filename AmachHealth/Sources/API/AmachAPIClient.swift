@@ -451,6 +451,31 @@ final class AmachAPIClient {
         return result
     }
 
+    func retrieveMedicalRecord(
+        storjUri: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> RemoteMedicalRecord {
+        let request = ReportRetrieveRequest(
+            action: "report/retrieve",
+            userAddress: walletAddress,
+            encryptionKey: encryptionKey,
+            storjUri: storjUri,
+            reportType: "medical-record"
+        )
+
+        let response: StorjResponse<RemoteMedicalRecord> = try await post(
+            path: "/api/storj",
+            body: request
+        )
+
+        guard response.success, let result = response.result else {
+            throw APIError.requestFailed(response.error ?? "Failed to retrieve medical record")
+        }
+
+        return result
+    }
+
     // MARK: - Health Summary API
 
     /// Get health summary for AI context.
@@ -1280,6 +1305,18 @@ struct RemoteDexaBoneDensity: Decodable {
     let bmd: Double?
     let tScore: Double?
     let zScore: Double?
+}
+
+struct RemoteMedicalRecord: Decodable {
+    let type: String?
+    let source: String?
+    let reportDate: String?
+    let documentType: String?
+    let title: String?
+    let summary: String?
+    let keyFindings: [String]?
+    let medications: [String]?
+    let diagnoses: [String]?
 }
 
 struct HealthSummary: Decodable {

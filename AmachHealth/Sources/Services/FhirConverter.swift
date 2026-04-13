@@ -453,6 +453,181 @@ enum FhirConverter {
         )
     }
 
+    // MARK: Medical Record encode
+
+    static func convertMedicalRecordToFhir(_ report: MedicalRecordData) -> FhirDiagnosticReport {
+        var observations: [FhirObservation] = []
+        var observationRefs: [FhirReference] = []
+        var counter = 1
+
+        func nextId() -> String { let id = "obs-\(counter)"; counter += 1; return id }
+
+        // Summary observation
+        if let summary = report.summary, !summary.isEmpty {
+            let obsId = nextId()
+            observations.append(FhirObservation(
+                resourceType: "Observation", id: obsId, status: "final",
+                category: [FhirCodeableConcept(coding: [
+                    FhirCoding(system: "http://terminology.hl7.org/CodeSystem/observation-category",
+                               code: "survey", display: "Survey")
+                ])],
+                code: FhirCodeableConcept(coding: [
+                    FhirCoding(system: "http://amach.health/fhir/medical-record",
+                               code: "summary", display: "Document Summary")
+                ]),
+                subject: nil, effectiveDateTime: report.reportDate,
+                valueQuantity: nil, valueString: summary,
+                component: nil, interpretation: nil, referenceRange: nil
+            ))
+            observationRefs.append(FhirReference(reference: "#\(obsId)"))
+        }
+
+        // Key findings as observations
+        for finding in report.keyFindings ?? [] {
+            let obsId = nextId()
+            observations.append(FhirObservation(
+                resourceType: "Observation", id: obsId, status: "final",
+                category: nil,
+                code: FhirCodeableConcept(coding: [
+                    FhirCoding(system: "http://amach.health/fhir/medical-record",
+                               code: "finding", display: "Key Finding")
+                ]),
+                subject: nil, effectiveDateTime: report.reportDate,
+                valueQuantity: nil, valueString: finding,
+                component: nil, interpretation: nil, referenceRange: nil
+            ))
+            observationRefs.append(FhirReference(reference: "#\(obsId)"))
+        }
+
+        // Medications as observations
+        for med in report.medications ?? [] {
+            let obsId = nextId()
+            observations.append(FhirObservation(
+                resourceType: "Observation", id: obsId, status: "final",
+                category: nil,
+                code: FhirCodeableConcept(coding: [
+                    FhirCoding(system: "http://amach.health/fhir/medical-record",
+                               code: "medication", display: "Medication")
+                ]),
+                subject: nil, effectiveDateTime: report.reportDate,
+                valueQuantity: nil, valueString: med,
+                component: nil, interpretation: nil, referenceRange: nil
+            ))
+            observationRefs.append(FhirReference(reference: "#\(obsId)"))
+        }
+
+        // Diagnoses as observations
+        for dx in report.diagnoses ?? [] {
+            let obsId = nextId()
+            observations.append(FhirObservation(
+                resourceType: "Observation", id: obsId, status: "final",
+                category: nil,
+                code: FhirCodeableConcept(coding: [
+                    FhirCoding(system: "http://amach.health/fhir/medical-record",
+                               code: "diagnosis", display: "Diagnosis")
+                ]),
+                subject: nil, effectiveDateTime: report.reportDate,
+                valueQuantity: nil, valueString: dx,
+                component: nil, interpretation: nil, referenceRange: nil
+            ))
+            observationRefs.append(FhirReference(reference: "#\(obsId)"))
+        }
+
+        var conclusionParts: [String] = []
+        if let docType = report.documentType { conclusionParts.append("Type: \(docType)") }
+        if let source = report.source { conclusionParts.append("Source: \(source)") }
+        conclusionParts.append("Confidence: \(report.confidence)")
+
+        return FhirDiagnosticReport(
+            resourceType: "DiagnosticReport",
+            id: nil,
+            status: "final",
+            category: [FhirCodeableConcept(coding: [
+                FhirCoding(system: "http://terminology.hl7.org/CodeSystem/v2-0074",
+                           code: "OTH", display: "Other")
+            ])],
+            code: FhirCodeableConcept(coding: [
+                FhirCoding(system: "http://amach.health/fhir/report-type",
+                           code: "medical-record", display: report.title ?? "Medical Record")
+            ]),
+            subject: nil,
+            effectiveDateTime: report.reportDate,
+            issued: nil,
+            performer: report.source.map { [FhirReference(reference: $0)] },
+            result: observationRefs.isEmpty ? nil : observationRefs,
+            conclusion: conclusionParts.joined(separator: " | "),
+            contained: observations.isEmpty ? nil : observations
+        )
+    }
+
+    // MARK: Medical Record decode
+
+    static func convertFhirToMedicalRecord(_ fhir: FhirDiagnosticReport) -> MedicalRecordData {
+        var summary: String?
+        var keyFindings: [String] = []
+        var medications: [String] = []
+        var diagnoses: [String] = []
+
+        for obs in fhir.contained ?? [] {
+            let code = obs.code.coding.first?.code ?? ""
+            let text = obs.valueString ?? ""
+            switch code {
+            case "summary": summary = text
+            case "finding": keyFindings.append(text)
+            case "medication": medications.append(text)
+            case "diagnosis": diagnoses.append(text)
+            default: break
+            }
+        }
+
+        // Parse conclusion for metadata
+        let conclusion = fhir.conclusion ?? ""
+        var docType: String?
+        var source: String?
+        var confidence = 0.5
+        for part in conclusion.components(separatedBy: " | ") {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("Type: ") { docType = String(trimmed.dropFirst(6)) }
+            if trimmed.hasPrefix("Source: ") { source = String(trimmed.dropFirst(8)) }
+            if trimmed.hasPrefix("Confidence: "), let v = Double(trimmed.dropFirst(12)) { confidence = v }
+        }
+
+        return MedicalRecordData(
+            type: "medical-record",
+            source: source ?? fhir.performer?.first?.reference,
+            reportDate: fhir.effectiveDateTime,
+            documentType: docType,
+            title: fhir.code.coding.first?.display,
+            summary: summary,
+            keyFindings: keyFindings.isEmpty ? nil : keyFindings,
+            medications: medications.isEmpty ? nil : medications,
+            diagnoses: diagnoses.isEmpty ? nil : diagnoses,
+            rawText: "",
+            confidence: confidence
+        )
+    }
+
+    // MARK: Medical Record fingerprint
+
+    static func fingerprintMedicalRecord(_ report: MedicalRecordData) -> String {
+        struct NormalizedReport: Encodable {
+            var type: String; var reportDate: String; var source: String
+            var documentType: String; var title: String; var summary: String
+            var keyFindings: [String]; var diagnoses: [String]
+        }
+        let normalized = NormalizedReport(
+            type: "medical-record",
+            reportDate: report.reportDate ?? "",
+            source: report.source ?? "",
+            documentType: report.documentType ?? "",
+            title: report.title ?? "",
+            summary: report.summary ?? "",
+            keyFindings: (report.keyFindings ?? []).sorted(),
+            diagnoses: (report.diagnoses ?? []).sorted()
+        )
+        return sha256JSON(normalized)
+    }
+
     // MARK: - Fingerprinting (for dedup — mirrors StorjReportService.ts)
 
     static func fingerprintBloodwork(_ report: BloodworkReportData) -> String {

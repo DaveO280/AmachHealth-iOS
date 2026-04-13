@@ -165,6 +165,11 @@ final class PDFUploadService: ObservableObject {
             let fingerprint = FhirConverter.fingerprintDexa(dexa)
             let reportId = "dexa-\(dexa.scanDate ?? timestampString())-\(shortRandom())"
             return (fhir, "dexa-report-fhir", fingerprint, reportId)
+        case .medicalRecord(let mr):
+            let fhir = FhirConverter.convertMedicalRecordToFhir(mr)
+            let fingerprint = FhirConverter.fingerprintMedicalRecord(mr)
+            let reportId = "medical-record-\(mr.reportDate ?? timestampString())-\(shortRandom())"
+            return (fhir, "medical-record-fhir", fingerprint, reportId)
         }
     }
 
@@ -212,6 +217,13 @@ final class PDFUploadService: ObservableObject {
             if let src = dexa.source { metadata["source"] = src }
             metadata["confidence"] = String(dexa.confidence)
             metadata["regioncount"] = String(dexa.regions.count)
+        case .medicalRecord(let mr):
+            metadata["reporttype"] = "medical-record"
+            if let date = mr.reportDate { metadata["reportdate"] = date }
+            if let src = mr.source { metadata["source"] = src }
+            if let docType = mr.documentType { metadata["documenttype"] = docType }
+            if let title = mr.title { metadata["title"] = title }
+            metadata["confidence"] = String(mr.confidence)
         }
         return metadata
     }

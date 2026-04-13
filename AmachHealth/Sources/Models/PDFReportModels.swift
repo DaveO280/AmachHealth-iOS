@@ -70,16 +70,34 @@ struct DexaReportData: Codable, Equatable {
     let confidence: Double         // 0.0 – 1.0
 }
 
+// MARK: - Medical Record (generic catch-all)
+
+struct MedicalRecordData: Codable, Equatable {
+    let type: String               // always "medical-record"
+    let source: String?
+    let reportDate: String?        // ISO date string
+    let documentType: String?      // "imaging", "discharge-summary", "prescription", "lab-panel", "other"
+    let title: String?
+    let summary: String?           // AI-generated summary
+    let keyFindings: [String]?
+    let medications: [String]?
+    let diagnoses: [String]?
+    let rawText: String
+    let confidence: Double         // 0.0 – 1.0
+}
+
 // MARK: - Union
 
 enum ParsedHealthReport {
     case bloodwork(BloodworkReportData)
     case dexa(DexaReportData)
+    case medicalRecord(MedicalRecordData)
 
     var reportType: String {
         switch self {
         case .bloodwork: return "bloodwork"
         case .dexa: return "dexa"
+        case .medicalRecord: return "medical-record"
         }
     }
 }
