@@ -101,6 +101,7 @@
 		PDF000000000000000000017 /* MockPDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000007 /* MockPDFReports.swift */; };
 		PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000008 /* PDFReportParserTests.swift */; };
 		PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000009 /* PDFReportStressTests.swift */; };
+		E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */; };
 		STL000000000000000000001 /* StorjTimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000011 /* StorjTimelineService.swift */; };
 		STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000012 /* StorjTimelineServiceTests.swift */; };
 /* End PBXBuildFile section */
@@ -203,6 +204,7 @@
 		PDF000000000000000000007 /* MockPDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockPDFReports.swift; path = AmachHealth/Tests/MockPDFReports.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000008 /* PDFReportParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParserTests.swift; path = AmachHealth/Tests/PDFReportParserTests.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000009 /* PDFReportStressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportStressTests.swift; path = AmachHealth/Tests/PDFReportStressTests.swift; sourceTree = SOURCE_ROOT; };
+		E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFUploadEndToEndTests.swift; path = AmachHealth/Tests/PDFUploadEndToEndTests.swift; sourceTree = SOURCE_ROOT; };
 		STL000000000000000000011 /* StorjTimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjTimelineService.swift; path = AmachHealth/Sources/Services/StorjTimelineService.swift; sourceTree = SOURCE_ROOT; };
 		STL000000000000000000012 /* StorjTimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjTimelineServiceTests.swift; path = AmachHealth/Tests/StorjTimelineServiceTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -282,6 +284,7 @@
 				PDF000000000000000000007 /* MockPDFReports.swift */,
 				PDF000000000000000000008 /* PDFReportParserTests.swift */,
 				PDF000000000000000000009 /* PDFReportStressTests.swift */,
+				E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */,
 				STL000000000000000000012 /* StorjTimelineServiceTests.swift */,
 			);
 			name = Tests;
@@ -649,6 +652,7 @@
 				PDF000000000000000000017 /* MockPDFReports.swift in Sources */,
 				PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */,
 				PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */,
+				E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */,
 				STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
