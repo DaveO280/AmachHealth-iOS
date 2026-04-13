@@ -258,15 +258,52 @@ enum PDFReportParser {
 
     // MARK: - Bloodwork helpers
 
-    /// Check if a line is clearly non-metric (header, footer, meta, etc.)
+    /// Check if a line/name is clearly non-metric (header, footer, meta, PII, etc.)
     private static func isNonMetricLine(_ line: String) -> Bool {
-        let upper = line.uppercased()
-        let skipPrefixes = ["PAGE", "PATIENT", "PHYSICIAN", "DOCTOR", "PROVIDER",
-                            "REPORT", "LABORATORY", "ACCOUNT", "SPECIMEN",
-                            "ORDER", "FINAL REPORT", "FASTING", "COLLECTED",
-                            "RECEIVED", "SEE NOTE", "CONTINUED", "END OF",
-                            "NPI", "CLIA", "ADDRESS", "PHONE", "FAX"]
+        let upper = line.uppercased().trimmingCharacters(in: .whitespaces)
+        // Exact matches — single words that are never metric names
+        let skipExact: Set<String> = [
+            "PHONE", "FAX", "ADDRESS", "EMAIL", "DOB", "AGE", "SEX", "GENDER",
+            "SSN", "MRN", "NAME", "ZIP", "STATE", "CITY", "COUNTRY",
+        ]
+        let firstWord = upper.components(separatedBy: .whitespaces).first ?? ""
+        if skipExact.contains(firstWord) && upper.count < 30 { return true }
+
+        // Prefix matches — metadata/header lines
+        let skipPrefixes = [
+            "PAGE", "PATIENT", "PHYSICIAN", "DOCTOR", "PROVIDER", "ORDERING",
+            "REPORT", "LABORATORY", "ACCOUNT", "SPECIMEN", "ACCESSION",
+            "ORDER DATE", "ORDER NUMBER", "ORDER #", "ORDER ID",
+            "FINAL REPORT", "FASTING", "COLLECTED", "RECEIVED",
+            "SEE NOTE", "CONTINUED", "END OF", "PRINTED",
+            "NPI", "CLIA", "ICD", "CPT", "CARD NUMBER", "CARD TYPE",
+            "DATE OF BIRTH", "DATE OF SERVICE", "DATE COLLECTED",
+            "DATE REPORTED", "DATE RECEIVED", "DATE ORDERED",
+            "INSURANCE", "BILLING", "AUTHORIZATION", "SUBSCRIBER",
+            "MEMBER", "GROUP", "POLICY", "EMPLOYER", "GUARANTOR",
+            "REQUISITION", "CLINICAL", "COMMENT", "NOTE:",
+        ]
         return skipPrefixes.contains { upper.hasPrefix($0) }
+    }
+
+    /// Check if a metric name looks like a real biomarker vs junk/PII.
+    /// Returns false for names that are clearly metadata.
+    private static func isPlausibleMetricName(_ name: String) -> Bool {
+        let upper = name.uppercased()
+        // Too short or too long
+        if name.count < 2 || name.count > 60 { return false }
+        // Contains digits in the name itself (e.g., "8968", phone numbers)
+        // Exception: names like "T3", "T4", "B12", "25-OH" are valid
+        let digitCount = name.filter(\.isNumber).count
+        if digitCount > 4 { return false }
+        // Known PII/metadata words
+        let junkWords = ["PHONE", "FAX", "ADDRESS", "EMAIL", "CARD NUMBER",
+                         "CARD TYPE", "EXPIR", "SSN", "DOB", "DATE OF BIRTH",
+                         "ORDER DATE", "ZIP CODE", "ACCOUNT", "INSURANCE",
+                         "BILLING", "POLICY", "MEMBER ID", "GROUP #",
+                         "SUBSCRIBER", "GUARANTOR", "EMPLOYER"]
+        if junkWords.contains(where: { upper.contains($0) }) { return false }
+        return true
     }
 
     /// Extract a metric from Layout A (NAME  VALUE  FLAG?  DATE?  REF_WITH_UNIT)
@@ -276,7 +313,7 @@ enum PDFReportParser {
               let value = Double(valueStr) else { return nil }
 
         let name = cleanMarkerName(nameRaw)
-        guard !name.isEmpty, name.count >= 2 else { return nil }
+        guard !name.isEmpty, name.count >= 2, isPlausibleMetricName(name) else { return nil }
 
         let flagRaw = substring(line, range: match.range(at: 3))
         let flag = normalizeFlag(flagRaw)
@@ -298,7 +335,7 @@ enum PDFReportParser {
               let value = Double(valueStr) else { return nil }
 
         let name = cleanMarkerName(nameRaw)
-        guard !name.isEmpty, name.count >= 2 else { return nil }
+        guard !name.isEmpty, name.count >= 2, isPlausibleMetricName(name) else { return nil }
 
         let flagRaw = substring(line, range: match.range(at: 3))
         let flag = normalizeFlag(flagRaw)
@@ -327,7 +364,7 @@ enum PDFReportParser {
               let value = Double(valueStr) else { return nil }
 
         let name = cleanMarkerName(nameRaw)
-        guard !name.isEmpty, name.count >= 2 else { return nil }
+        guard !name.isEmpty, name.count >= 2, isPlausibleMetricName(name) else { return nil }
 
         let unit = groups.unit > 0 ? substring(line, range: match.range(at: groups.unit)) : nil
         let ref = groups.ref > 0 ? substring(line, range: match.range(at: groups.ref))?.trimmingCharacters(in: .whitespaces) : nil
@@ -383,7 +420,7 @@ enum PDFReportParser {
 
             let name = cleanMarkerName(nameRaw)
             guard !name.isEmpty, name.count >= 2 else { continue }
-            guard !isNonMetricLine(name) else { continue }
+            guard !isNonMetricLine(name), isPlausibleMetricName(name) else { continue }
 
             let flagRaw = substring(text, range: match.range(at: 3))
             let flag = normalizeFlag(flagRaw)
