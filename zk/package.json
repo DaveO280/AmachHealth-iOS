@@ -4,8 +4,9 @@
   "description": "Amach Health ZK proof system — Merkle leaves, Poseidon hashing, coverage proofs",
   "type": "commonjs",
   "scripts": {
-    "test": "jest",
-    "test:jest": "jest",
+    "test": "jest --forceExit",
+    "test:jest": "jest --forceExit",
+    "test:improvement": "jest --forceExit scripts/__tests__/improvement_smoke.test.js scripts/__tests__/improvement_proof.test.js",
     "test:phase2": "node scripts/test_phase2.js",
     "test:phase3": "node scripts/test_phase3.js",
     "test:phase4": "node scripts/test_phase4.js",

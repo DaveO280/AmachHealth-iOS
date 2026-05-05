@@ -1,6 +1,8 @@
 node_modules/
 artifacts/
 artifacts-zk/
+artifacts-evm/
 cache/
 cache-zk/
+cache-evm/
 contracts/
