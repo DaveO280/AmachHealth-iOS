@@ -1,0 +1,42 @@
+{
+  "name": "amach-health-zk",
+  "version": "1.0.0",
+  "description": "Amach Health ZK proof system — Merkle leaves, Poseidon hashing, coverage proofs",
+  "type": "commonjs",
+  "scripts": {
+    "test": "jest",
+    "test:jest": "jest",
+    "test:phase2": "node scripts/test_phase2.js",
+    "test:phase3": "node scripts/test_phase3.js",
+    "test:phase4": "node scripts/test_phase4.js",
+    "compile:contracts": "cd deploy && npx hardhat compile",
+    "deploy:all": "node deploy/scripts/deploy_all.js",
+    "submit-root": "node deploy/scripts/submit_genesis_root.js",
+    "hash-leaf": "node scripts/hash_leaf.js",
+    "build-tree": "node scripts/build_tree.js",
+    "genesis": "node scripts/generate_genesis_root.js",
+    "prove": "node scripts/generate_proof.js",
+    "vectors:v2": "node scripts/__tests__/v2_test_vectors.js"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "poseidon-lite": "^0.2.1",
+    "snarkjs": "^0.7.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testMatch": [
+      "<rootDir>/scripts/__tests__/**/*.test.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/scripts/__tests__/v2_test_vectors.js"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

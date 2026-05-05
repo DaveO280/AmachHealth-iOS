@@ -1,0 +1,23 @@
+{
+  "name": "amach-health-zk-deploy",
+  "version": "1.0.0",
+  "description": "Amach Health ZK — Phase 5 contract deployment (zkSync Era Sepolia)",
+  "type": "commonjs",
+  "scripts": {
+    "compile":           "hardhat compile",
+    "deploy:verifier":   "HARDHAT_NETWORK=zkSyncSepolia hardhat deploy --script scripts/01_CoverageVerifier.js",
+    "deploy:commitment": "HARDHAT_NETWORK=zkSyncSepolia hardhat deploy --script scripts/02_MerkleCommitment.js",
+    "deploy:all":        "HARDHAT_NETWORK=zkSyncSepolia hardhat deploy",
+    "submit-root":       "node scripts/submit_genesis_root.js"
+  },
+  "dependencies": {
+    "@matterlabs/hardhat-zksync-deploy": "^1.5.0",
+    "@matterlabs/hardhat-zksync-solc": "^1.2.5",
+    "ethers": "^6.13.0",
+    "hardhat": "^2.22.15",
+    "zksync-ethers": "^6.15.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

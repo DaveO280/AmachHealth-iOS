@@ -82,33 +82,67 @@ final class MerkleTreeBuilder: ObservableObject {
 
     // MARK: - Build Genesis Tree
 
-    /// Build the genesis Merkle tree from a set of hashed leaves.
+    /// Build the genesis Merkle tree from a set of v1 hashed leaves.
     ///
-    /// Steps:
-    /// 1. Export normalized leaves to JSON
-    /// 2. Run Node.js build_tree.js
-    /// 3. Parse the genesis_tree.json output
-    /// 4. Return MerkleTreeResult
+    /// Legacy path. Used for v1 commitments. Spring Push Season One uses
+    /// `buildGenesisTreeV2` instead.
     ///
     /// - Parameter hashedLeaves: From LeafHashingService.hashLeaves()
     /// - Returns: MerkleTreeResult ready for Storj upload and on-chain commitment
     func buildGenesisTree(from hashedLeaves: [HashedLeaf]) async throws -> MerkleTreeResult {
-        guard !hashedLeaves.isEmpty else {
+        try await buildGenesisTreeImpl(
+            inputs: hashedLeaves.map { ($0.dayId, $0.serialized, $0.hash) },
+            inputFileName: "hashed_leaves_input.json",
+            outputFileName: "genesis_tree_output.json"
+        )
+    }
+
+    /// Build the genesis Merkle tree from a set of v2 hashed leaves
+    /// (Poseidon4 over 124-byte AmachLeafV2 leaves). Tree construction is
+    /// hash-agnostic so the only thing that changes from v1 is the leaf
+    /// serialization length; the Node-side dispatcher in build_tree.js
+    /// accepts either length transparently.
+    ///
+    /// - Parameter hashedLeaves: From LeafHashingService.hashLeavesV2()
+    /// - Returns: MerkleTreeResult ready for Storj upload and on-chain commitment
+    func buildGenesisTree(from hashedLeaves: [HashedLeafV2]) async throws -> MerkleTreeResult {
+        try await buildGenesisTreeImpl(
+            inputs: hashedLeaves.map { ($0.dayId, $0.serialized, $0.hash) },
+            inputFileName: "hashed_leaves_v2_input.json",
+            outputFileName: "genesis_tree_v2_output.json"
+        )
+    }
+
+    private func buildGenesisTreeImpl(
+        inputs: [(dayId: UInt32, serialized: Data, hash: String)],
+        inputFileName: String,
+        outputFileName: String
+    ) async throws -> MerkleTreeResult {
+        guard !inputs.isEmpty else {
             throw MerkleTreeError.noLeaves
         }
 
         isBuilding = true
         buildProgress = 0
         lastError = nil
-        defer {
-            isBuilding = false
-        }
+        defer { isBuilding = false }
 
         // Export hashed leaves to file for Node.js script
         buildProgress = 0.1
-        let inputFile = try exportHashedLeaves(hashedLeaves)
+        let exported = inputs.map { input -> [String: Any] in
+            [
+                "dayId": input.dayId,
+                "serialized": input.serialized.hexEncodedString(),
+                "hash": input.hash
+            ] as [String: Any]
+        }
+        let exportData = try JSONSerialization.data(withJSONObject: exported)
+        let inputFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent(inputFileName)
+        try exportData.write(to: inputFile)
+
         let outputFile = FileManager.default.temporaryDirectory
-            .appendingPathComponent("genesis_tree_output.json")
+            .appendingPathComponent(outputFileName)
 
         // Run Node.js tree builder
         buildProgress = 0.3
@@ -121,14 +155,18 @@ final class MerkleTreeBuilder: ObservableObject {
 
         buildProgress = 0.7
 
-        // Parse output
         guard FileManager.default.fileExists(atPath: outputFile.path),
               let data = FileManager.default.contents(atPath: outputFile.path),
               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw MerkleTreeError.buildFailed("Node.js script produced no output")
         }
 
-        let result = try parseTreeOutput(json, leaves: hashedLeaves)
+        let dayIds = inputs.map(\.dayId)
+        let result = try parseTreeOutputGeneric(
+            json,
+            startDayId: dayIds.min() ?? 0,
+            endDayId: dayIds.max() ?? 0
+        )
 
         buildProgress = 1.0
         lastBuiltTree = result
@@ -208,25 +246,91 @@ final class MerkleTreeBuilder: ObservableObject {
         )
     }
 
-    // MARK: - Private Helpers
+    /// Build the Storj payload for a v2 genesis tree commitment. Mirrors the
+    /// v1 helper but encodes the v2 metric set and pins protocolVersion=2.0.
+    func buildStorjPayload(
+        tree: MerkleTreeResult,
+        hashedLeaves: [HashedLeafV2],
+        walletAddress: String
+    ) throws -> MerkleStorjPayload {
 
-    private func exportHashedLeaves(_ leaves: [HashedLeaf]) throws -> URL {
-        let output = leaves.map { hl -> [String: Any] in
-            [
+        let treeData: [String: Any] = [
+            "root": tree.root,
+            "rootPadded": tree.rootPadded,
+            "tree": tree.tree,
+            "leafHashes": tree.leafHashes,
+            "leafCount": tree.leafCount,
+            "treeSize": tree.treeSize,
+            "depth": tree.treeDepth,
+            "leafFormat": "v2"
+        ]
+
+        let leavesData = hashedLeaves.map { hl -> [String: Any] in
+            let n = hl.normalizedLeaf
+            return [
                 "dayId": hl.dayId,
                 "serialized": hl.serialized.hexEncodedString(),
-                "hash": hl.hash
+                "hash": hl.hash,
+                "version": 2,
+                "schemaVersion": 1,
+                "leafType": 0,
+                // v1-equivalent metrics
+                "steps": n.steps,
+                "activeEnergy": n.activeEnergy,
+                "exerciseMins": n.exerciseMins,
+                "hrv": n.hrv,
+                "restingHR": n.restingHR,
+                "sleepMins": n.sleepMins,
+                "workoutCount": n.workoutCount,
+                "dataFlags": n.dataFlagsV2,
+                // v2 additions
+                "vo2max": n.vo2max,
+                "weight": n.weight,
+                "bodyFatPct": n.bodyFatPct,
+                "leanMass": n.leanMass,
+                "deepSleepMins": n.deepSleepMins,
+                "remSleepMins": n.remSleepMins,
+                "lightSleepMins": n.lightSleepMins,
+                "awakeMins": n.awakeMins
             ] as [String: Any]
         }
 
-        let data = try JSONSerialization.data(withJSONObject: output)
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("hashed_leaves_input.json")
-        try data.write(to: url)
-        return url
+        let iso8601 = ISO8601DateFormatter()
+        let metadata = MerkleCommitmentMetadata(
+            rootHash: tree.root,
+            rootHashPadded: tree.rootPadded,
+            startDayId: tree.startDayId,
+            endDayId: tree.endDayId,
+            leafCount: tree.leafCount,
+            treeDepth: tree.treeDepth,
+            treeSize: tree.treeSize,
+            generatedAt: iso8601.string(from: tree.generatedAt),
+            platform: "ios",
+            protocolVersion: "2.0"
+        )
+
+        let treeJson = try JSONSerialization.data(withJSONObject: treeData, options: .prettyPrinted)
+        let leavesJson = try JSONSerialization.data(withJSONObject: leavesData, options: .prettyPrinted)
+        let metadataJson = try JSONEncoder().encode(metadata)
+
+        let storjPath = "merkle/\(walletAddress.lowercased())/genesis"
+
+        return MerkleStorjPayload(
+            treeJsonData: treeJson,
+            leavesJsonData: leavesJson,
+            metadataJsonData: metadataJson,
+            storjPath: storjPath,
+            metadata: metadata
+        )
     }
 
-    private func parseTreeOutput(_ json: [String: Any], leaves: [HashedLeaf]) throws -> MerkleTreeResult {
+    // MARK: - Private Helpers
+
+    private func parseTreeOutputGeneric(
+        _ json: [String: Any],
+        startDayId: UInt32,
+        endDayId: UInt32
+    ) throws -> MerkleTreeResult {
         guard let root = json["root"] as? String,
               let leafCount = json["leafCount"] as? Int,
               let treeDepth = json["depth"] as? Int,
@@ -236,8 +340,11 @@ final class MerkleTreeBuilder: ObservableObject {
             throw MerkleTreeError.buildFailed("Invalid tree output format")
         }
 
-        let startDayId = leaves.min(by: { $0.dayId < $1.dayId })?.dayId ?? 0
-        let endDayId = leaves.max(by: { $0.dayId < $1.dayId })?.dayId ?? 0
+        // The Node CLI also returns startDayId/endDayId from the input order;
+        // prefer those if present (handles unordered inputs cleanly), and
+        // fall back to the caller-provided window otherwise.
+        let resolvedStart = (json["startDayId"] as? Int).map { UInt32($0) } ?? startDayId
+        let resolvedEnd = (json["endDayId"] as? Int).map { UInt32($0) } ?? endDayId
 
         let rootPadded = "0x" + root.replacingOccurrences(of: "0x", with: "").padLeft(toLength: 64, with: "0")
 
@@ -247,8 +354,8 @@ final class MerkleTreeBuilder: ObservableObject {
             leafCount: leafCount,
             treeDepth: treeDepth,
             treeSize: treeSize,
-            startDayId: startDayId,
-            endDayId: endDayId,
+            startDayId: resolvedStart,
+            endDayId: resolvedEnd,
             generatedAt: Date(),
             tree: treeLevels,
             leafHashes: leafHashes

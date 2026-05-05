@@ -80,6 +80,7 @@
 		FF0000000000000000000207 /* HealthMetricProofTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000107 /* HealthMetricProofTests.swift */; };
 		FF0000000000000000000208 /* SeedHealthKitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000108 /* SeedHealthKitTests.swift */; };
 		FF0000000000000000000209 /* TimelineFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0000000000000000000109 /* TimelineFeatureTests.swift */; };
+		V20000000000000000000201 /* AmachLeafV2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = V20000000000000000000301 /* AmachLeafV2Tests.swift */; };
 		FF000000000000000000020A /* MockAmachAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010A /* MockAmachAPIClient.swift */; };
 		FF000000000000000000020B /* MockURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010B /* MockURLSession.swift */; };
 		FF000000000000000000020C /* MockWalletService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF000000000000000000010C /* MockWalletService.swift */; };
@@ -91,6 +92,7 @@
 		2695798C73E44C3B8B641457 /* LeafHashingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */; };
 		55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D2720462134929AF0C687C /* MerkleNormalizationService.swift */; };
 		083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A493F7F7694A57A538C757 /* MerkleLeaf.swift */; };
+		V20000000000000000000001 /* AmachLeafV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = V20000000000000000000101 /* AmachLeafV2.swift */; };
 		PDF000000000000000000011 /* PDFReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000001 /* PDFReportModels.swift */; };
 		PDF000000000000000000012 /* PDFReportParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000002 /* PDFReportParser.swift */; };
 		PDF000000000000000000013 /* FhirConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000003 /* FhirConverter.swift */; };
@@ -183,6 +185,7 @@
 		FF0000000000000000000107 /* HealthMetricProofTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMetricProofTests.swift; path = AmachHealth/Tests/HealthMetricProofTests.swift; sourceTree = SOURCE_ROOT; };
 		FF0000000000000000000108 /* SeedHealthKitTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SeedHealthKitTests.swift; path = AmachHealth/Tests/SeedHealthKitTests.swift; sourceTree = SOURCE_ROOT; };
 		FF0000000000000000000109 /* TimelineFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineFeatureTests.swift; path = AmachHealth/Tests/TimelineFeatureTests.swift; sourceTree = SOURCE_ROOT; };
+		V20000000000000000000301 /* AmachLeafV2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachLeafV2Tests.swift; path = AmachHealth/Tests/AmachLeafV2Tests.swift; sourceTree = SOURCE_ROOT; };
 		FF000000000000000000010A /* MockAmachAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockAmachAPIClient.swift; path = AmachHealth/Tests/Helpers/MockAmachAPIClient.swift; sourceTree = SOURCE_ROOT; };
 		FF000000000000000000010B /* MockURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockURLSession.swift; path = AmachHealth/Tests/Helpers/MockURLSession.swift; sourceTree = SOURCE_ROOT; };
 		FF000000000000000000010C /* MockWalletService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockWalletService.swift; path = AmachHealth/Tests/Helpers/MockWalletService.swift; sourceTree = SOURCE_ROOT; };
@@ -194,6 +197,7 @@
 		7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LeafHashingService.swift; path = AmachHealth/Sources/Services/LeafHashingService.swift; sourceTree = SOURCE_ROOT; };
 		56D2720462134929AF0C687C /* MerkleNormalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleNormalizationService.swift; path = AmachHealth/Sources/Services/MerkleNormalizationService.swift; sourceTree = SOURCE_ROOT; };
 		19A493F7F7694A57A538C757 /* MerkleLeaf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeaf.swift; path = AmachHealth/Sources/Models/MerkleLeaf.swift; sourceTree = SOURCE_ROOT; };
+		V20000000000000000000101 /* AmachLeafV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachLeafV2.swift; path = AmachHealth/Sources/Models/AmachLeafV2.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000001 /* PDFReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportModels.swift; path = AmachHealth/Sources/Models/PDFReportModels.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000002 /* PDFReportParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParser.swift; path = AmachHealth/Sources/Services/PDFReportParser.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000003 /* FhirConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FhirConverter.swift; path = AmachHealth/Sources/Services/FhirConverter.swift; sourceTree = SOURCE_ROOT; };
@@ -279,6 +283,7 @@
 				FF0000000000000000000107 /* HealthMetricProofTests.swift */,
 				FF0000000000000000000108 /* SeedHealthKitTests.swift */,
 				FF0000000000000000000109 /* TimelineFeatureTests.swift */,
+				V20000000000000000000301 /* AmachLeafV2Tests.swift */,
 				FF000000000000000000010D /* MockDataSeeder.swift */,
 				FF0000000000000000000450 /* Helpers */,
 				PDF000000000000000000007 /* MockPDFReports.swift */,
@@ -370,6 +375,7 @@
 				DD0000000000000000000001 /* HealthMetricProof.swift */,
 				AA0000000000000000000126 /* TimelineModels.swift */,
 					19A493F7F7694A57A538C757 /* MerkleLeaf.swift */,
+					V20000000000000000000101 /* AmachLeafV2.swift */,
 				PDF000000000000000000001 /* PDFReportModels.swift */,
 			);
 			name = Models;
@@ -609,6 +615,7 @@
 					2695798C73E44C3B8B641457 /* LeafHashingService.swift in Sources */,
 					55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */,
 					083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */,
+					V20000000000000000000001 /* AmachLeafV2.swift in Sources */,
 					DD0000000000000000000011 /* HealthMetricProof.swift in Sources */,
 				DD0000000000000000000012 /* HealthMetricProofService.swift in Sources */,
 				DD0000000000000000000013 /* ProofGeneratorView.swift in Sources */,
@@ -645,6 +652,7 @@
 				FF0000000000000000000207 /* HealthMetricProofTests.swift in Sources */,
 				FF0000000000000000000208 /* SeedHealthKitTests.swift in Sources */,
 				FF0000000000000000000209 /* TimelineFeatureTests.swift in Sources */,
+				V20000000000000000000201 /* AmachLeafV2Tests.swift in Sources */,
 				FF000000000000000000020A /* MockAmachAPIClient.swift in Sources */,
 				FF000000000000000000020B /* MockURLSession.swift in Sources */,
 				FF000000000000000000020C /* MockWalletService.swift in Sources */,

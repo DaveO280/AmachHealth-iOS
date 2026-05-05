@@ -12,13 +12,26 @@ import Foundation
 
 // MARK: - Hashed Leaf
 
-/// A leaf that has been Poseidon-hashed, ready for tree inclusion.
+/// A v1 leaf that has been Poseidon3-hashed, ready for tree inclusion.
+/// Used for legacy commitments. New work goes through HashedLeafV2.
 struct HashedLeaf {
     let leaf: MerkleLeaf
     let normalizedLeaf: NormalizedDailyLeaf
     let serialized: Data        // 90 bytes
     let hash: String            // Poseidon hash as decimal string (BN128 field element)
     let hashHex: String         // Poseidon hash as hex string (for display)
+    let dayId: UInt32
+}
+
+/// A v2 leaf that has been Poseidon4-hashed, ready for tree inclusion.
+/// Used for Spring Push Season One and beyond. Mirrors HashedLeaf so the
+/// tree builder can consume either format via the dayId+hash pair.
+struct HashedLeafV2 {
+    let leaf: AmachLeafV2
+    let normalizedLeaf: NormalizedDailyLeaf
+    let serialized: Data        // 124 bytes
+    let hash: String            // Poseidon hash as decimal string (BN128 field element)
+    let hashHex: String         // Poseidon hash as hex string (0x-prefixed)
     let dayId: UInt32
 }
 
@@ -50,7 +63,10 @@ final class LeafHashingService: ObservableObject {
 
     // MARK: - Public API
 
-    /// Hash an array of normalized leaves using Poseidon.
+    /// Hash an array of normalized leaves using v1 Poseidon3 (90-byte leaves).
+    ///
+    /// Legacy path. Existing on-chain v1 commitments depend on this. New work
+    /// (Spring Push Season One onward) uses hashLeavesV2 / Poseidon4.
     ///
     /// - Parameter leaves: Sorted array of NormalizedDailyLeaf from MerkleNormalizationService
     /// - Returns: Array of HashedLeaf, same order as input
@@ -109,6 +125,84 @@ final class LeafHashingService: ObservableObject {
 
             let leaf = normalized.toMerkleLeaf()
             let hashedLeaf = HashedLeaf(
+                leaf: leaf,
+                normalizedLeaf: normalized,
+                serialized: leaf.serialize(),
+                hash: hashDecimal,
+                hashHex: hashHex,
+                dayId: normalized.dayId
+            )
+            hashedLeaves.append(hashedLeaf)
+        }
+
+        hashingProgress = 1.0
+        return hashedLeaves
+    }
+
+    /// Hash an array of normalized leaves using v2 Poseidon4 (124-byte leaves).
+    ///
+    /// This is the default for Spring Push Season One and beyond. The Node
+    /// batch script dispatches to Poseidon4 automatically based on leaf
+    /// length (see hash_leaf.js's hashLeaf), so the only Swift-side change
+    /// from hashLeaves() is the serialization format.
+    ///
+    /// - Parameter leaves: Sorted array of NormalizedDailyLeaf
+    /// - Returns: Array of HashedLeafV2, same order as input
+    func hashLeavesV2(_ leaves: [NormalizedDailyLeaf]) async throws -> [HashedLeafV2] {
+        isHashing = true
+        hashingProgress = 0
+        defer {
+            isHashing = false
+            hashingProgress = 0
+        }
+
+        // Serialize all leaves to 124-byte hex strings. The JS hash_leaf
+        // dispatcher selects Poseidon4 for any 124-byte input.
+        let serializedLeaves = leaves.map { normalized -> [String: Any] in
+            let leaf = normalized.toAmachLeafV2()
+            let serialized = leaf.serialize()
+            return [
+                "dayId": normalized.dayId,
+                "serialized": serialized.hexEncodedString(),
+                "version": 2
+            ]
+        }
+
+        hashingProgress = 0.1
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let inputFile = tempDir.appendingPathComponent("leaves_to_hash_v2.json")
+        let outputFile = tempDir.appendingPathComponent("hashed_leaves_v2.json")
+
+        let inputData = try JSONSerialization.data(withJSONObject: serializedLeaves)
+        try inputData.write(to: inputFile)
+
+        hashingProgress = 0.2
+
+        _ = try await runNodeScript(
+            script: "hash_leaves_batch.js",
+            args: [inputFile.path, outputFile.path]
+        )
+
+        hashingProgress = 0.8
+
+        guard FileManager.default.fileExists(atPath: outputFile.path),
+              let outputData = FileManager.default.contents(atPath: outputFile.path),
+              let outputArray = try JSONSerialization.jsonObject(with: outputData) as? [[String: Any]] else {
+            throw LeafHashingError.scriptOutputMissing
+        }
+
+        var hashedLeaves: [HashedLeafV2] = []
+        for (i, (normalized, output)) in zip(leaves, outputArray).enumerated() {
+            guard let hashDecimal = output["hash"] as? String,
+                  let hashHex = output["hashHex"] as? String else {
+                throw LeafHashingError.invalidOutput(index: i)
+            }
+
+            let leaf = normalized.toAmachLeafV2()
+            try leaf.validate()
+
+            let hashedLeaf = HashedLeafV2(
                 leaf: leaf,
                 normalizedLeaf: normalized,
                 serialized: leaf.serialize(),

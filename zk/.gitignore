@@ -1,0 +1,24 @@
+# Node + Jest tooling
+node_modules/
+# Jest coverage report directory (anchored to zk root, not zk/circuits/coverage/).
+/coverage/
+
+# Hardhat artifacts (regenerated on compile)
+deploy/artifacts-zk/
+deploy/cache-zk/
+deploy/typechain-types/
+
+# snarkJS artifacts
+*.zkey
+*.r1cs
+*.sym
+*.wtns
+
+# Phase 1 trusted setup files (pulled separately, large)
+*.ptau
+
+# Witness/proof intermediates produced during local runs
+data/
+
+# Compiled circuits / build outputs
+build/
