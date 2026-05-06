@@ -44,6 +44,7 @@ final class ZKSyncAttestationService: ObservableObject {
     // Used only for the pre-flight eth_call check; does not store state.
     // keccak256("verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[4])") → 5fe8c13b
     private let coverageVerifierAddress  = "0x58a856a2b11817f8B5E9fd96F797dDD48E57D884"
+    private let improvementVerifierAddress = "0x2248040f9833A6C91bfC161F244E0238da64615b"
     private let verifyProofSelector      = "5fe8c13b"
 
     // CoverageRegistry contract — ZKsync Era Sepolia
