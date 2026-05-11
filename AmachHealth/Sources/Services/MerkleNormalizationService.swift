@@ -64,7 +64,43 @@ struct NormalizedDailyLeaf {
     let restingHRPresent: Bool
     let bloodOxygenPresent: Bool
 
-    /// Convert to the wire-format MerkleLeaf for serialization and hashing.
+    // MARK: - v2-only metrics
+    //
+    // Units and fixed-point encodings match the v2 leaf format spec in
+    // `zk/scripts/hash_leaf.js` (buildTestLeafV2) and the TS interface
+    // `AmachLeafV2Fields` in `improvementWitnessBuilder.ts`. Drift here
+    // breaks the Spring Push improvement proof for every uploaded leaf.
+
+    /// VO₂ max in ml/(kg·min) × 10. 0 if absent.
+    /// e.g. 42.5 ml/(kg·min) → 425.
+    let vo2max: UInt16
+    /// Body mass in kg × 100 (i.e. "tens of grams"). 0 if absent.
+    /// e.g. 78.00 kg → 7800.
+    let weight: UInt16
+    /// Body fat as basis points (% × 100). 0 if absent.
+    /// e.g. 18.50% → 1850. HealthKit returns body fat as a fraction
+    /// (0.185 = 18.5%), so the conversion is `fraction * 10000`.
+    let bodyFatPct: UInt16
+    /// Lean body mass in kg × 100. 0 if absent.
+    /// e.g. 63.00 kg → 6300.
+    let leanMass: UInt16
+
+    let deepSleepMins: UInt16
+    let remSleepMins: UInt16
+    let lightSleepMins: UInt16
+    let awakeMins: UInt16
+
+    let vo2maxPresent: Bool
+    let weightPresent: Bool
+    let bodyFatPctPresent: Bool
+    let leanMassPresent: Bool
+    /// True when at least one stage-tagged sleep sample (deep/REM/light/awake)
+    /// was found for the day. v1 `sleepMins` does not imply this — a device
+    /// may report total sleep without breaking it into stages.
+    let sleepStagesPresent: Bool
+
+    /// Convert to the wire-format v1 MerkleLeaf for serialization and hashing.
+    /// v2-only fields are dropped — the MerkleLeaf struct is the v1 spec.
     func toMerkleLeaf() -> MerkleLeaf {
         let tzOffsetMinutes = Int16(timezone.secondsFromGMT() / 60)
         return MerkleLeaf(
@@ -83,6 +119,19 @@ struct NormalizedDailyLeaf {
             sourceHash: sourceHash
         )
     }
+}
+
+/// HealthKit category-value constants for sleep-analysis samples. Mirrors
+/// `HKCategoryValueSleepAnalysis` raw values so a pure-Swift normalization
+/// pipeline doesn't have to import HealthKit. The same numeric mapping is
+/// used by `HealthKitService.sleepStageFromValue` (in reverse).
+enum SleepStageValue {
+    static let inBed = 0
+    static let asleepUnspecified = 1
+    static let awake = 2
+    static let core = 3  // a.k.a. "light"
+    static let deep = 4
+    static let rem = 5
 }
 
 // MARK: - Service
@@ -257,6 +306,16 @@ final class MerkleNormalizationService {
         }
         let sleepMins = UInt16((sleepSecondsTotal / 60).rounded())
 
+        // === Sleep Stages (v2) ===
+        // Bucket sleep samples by HKCategoryValueSleepAnalysis. We skip
+        // `inBed` (0) and `asleepUnspecified` (1) — `inBed` overlaps with
+        // the per-stage samples (would double-count), and "unspecified"
+        // can't be attributed to a stage bucket. v2 stage minutes do not
+        // need to add up to v1 `sleepMins`: stage-tracking devices report
+        // stage samples; older trackers report only unspecified asleep.
+        let (deepMins, remMins, lightMins, awakeMins, stagesSeen) =
+            sumSleepStages(sleepSamples)
+
         // === Workout Count ===
         let workoutCount = UInt8(min(dayWorkouts.count, 255))
 
@@ -266,6 +325,67 @@ final class MerkleNormalizationService {
         // === Blood Oxygen ===
         let bloodOxygenPresent = daySamples.contains {
             $0.metricType == "HKQuantityTypeIdentifierOxygenSaturation"
+        }
+
+        // === v2-only Metrics: VO₂ max + Body Composition ===
+        //
+        // Aggregation rules — chosen to match Apple Health's display
+        // conventions and the v2 leaf-format spec in hash_leaf.js:
+        //   - VO₂ max: average all of the day's samples. Workout-derived
+        //     vo2max readings can land multiple times per day; averaging
+        //     is the conservative choice that mirrors HRV's averaging.
+        //   - Body mass / fat % / lean mass: take the most recent sample
+        //     of the day. Multiple readings on the same day usually come
+        //     from a single scale measurement broken into components;
+        //     "most recent" matches how Apple Health surfaces these.
+        //
+        // Fixed-point encoding (must stay identical with the iOS
+        // hash_leaf.js v2 builder and the TS serializeLeafV2):
+        //   vo2max     = ml/(kg·min) × 10
+        //   weight     = kg × 100
+        //   bodyFatPct = fraction × 10000  (HK returns body fat as a
+        //                                    fraction; 0.185 = 18.5%)
+        //   leanMass   = kg × 100
+        let vo2maxSamples = daySamples.filter {
+            $0.metricType == "HKQuantityTypeIdentifierVO2Max"
+        }
+        let vo2maxPresent = !vo2maxSamples.isEmpty
+        let vo2max: UInt16
+        if vo2maxPresent {
+            let avg = vo2maxSamples.reduce(0.0) { $0 + $1.value } / Double(vo2maxSamples.count)
+            vo2max = UInt16(clamping: Int((avg * 10).roundedHalfUp()))
+        } else {
+            vo2max = 0
+        }
+
+        let weightPresent: Bool
+        let weight: UInt16
+        if let latest = mostRecent(daySamples, metric: "HKQuantityTypeIdentifierBodyMass") {
+            weightPresent = true
+            weight = UInt16(clamping: Int((latest.value * 100).roundedHalfUp()))
+        } else {
+            weightPresent = false
+            weight = 0
+        }
+
+        let bodyFatPctPresent: Bool
+        let bodyFatPct: UInt16
+        if let latest = mostRecent(daySamples, metric: "HKQuantityTypeIdentifierBodyFatPercentage") {
+            bodyFatPctPresent = true
+            bodyFatPct = UInt16(clamping: Int((latest.value * 10000).roundedHalfUp()))
+        } else {
+            bodyFatPctPresent = false
+            bodyFatPct = 0
+        }
+
+        let leanMassPresent: Bool
+        let leanMass: UInt16
+        if let latest = mostRecent(daySamples, metric: "HKQuantityTypeIdentifierLeanBodyMass") {
+            leanMassPresent = true
+            leanMass = UInt16(clamping: Int((latest.value * 100).roundedHalfUp()))
+        } else {
+            leanMassPresent = false
+            leanMass = 0
         }
 
         // === Data Flags ===
@@ -282,8 +402,16 @@ final class MerkleNormalizationService {
         )
 
         // Skip day if truly no data flags set at all
-        // (edge case: only unrecognized metric types present)
-        guard dataFlags != 0 || workoutCount > 0 || sleepMins > 0 else {
+        // (edge case: only unrecognized metric types present). v2-only
+        // metrics (vo2max, body comp, sleep stages) also keep the day —
+        // a user can record a workout-derived vo2max without any v1
+        // activity bits being set.
+        let hasV2 = vo2maxPresent
+            || weightPresent
+            || bodyFatPctPresent
+            || leanMassPresent
+            || stagesSeen
+        guard dataFlags != 0 || workoutCount > 0 || sleepMins > 0 || hasV2 else {
             return nil
         }
 
@@ -310,7 +438,75 @@ final class MerkleNormalizationService {
             sourceHash: sourceHash,
             hrvPresent: hrvPresent,
             restingHRPresent: restingHRPresent,
-            bloodOxygenPresent: bloodOxygenPresent
+            bloodOxygenPresent: bloodOxygenPresent,
+            vo2max: vo2max,
+            weight: weight,
+            bodyFatPct: bodyFatPct,
+            leanMass: leanMass,
+            deepSleepMins: deepMins,
+            remSleepMins: remMins,
+            lightSleepMins: lightMins,
+            awakeMins: awakeMins,
+            vo2maxPresent: vo2maxPresent,
+            weightPresent: weightPresent,
+            bodyFatPctPresent: bodyFatPctPresent,
+            leanMassPresent: leanMassPresent,
+            sleepStagesPresent: stagesSeen
+        )
+    }
+
+    // MARK: - v2 Aggregation Helpers
+
+    /// Find the most recent sample of `metric` (by endDate) in `samples`,
+    /// or nil if none match. Body-composition metrics use this to mirror
+    /// Apple Health's "today's value" display convention.
+    private func mostRecent(_ samples: [HealthSample], metric: String) -> HealthSample? {
+        samples
+            .filter { $0.metricType == metric }
+            .max(by: { $0.endDate < $1.endDate })
+    }
+
+    /// Bucket sleep samples by HKCategoryValueSleepAnalysis into
+    /// (deepMins, remMins, lightMins, awakeMins, stagesSeen). `inBed` (0)
+    /// and `asleepUnspecified` (1) samples are skipped — see the comment
+    /// at the call site for why.
+    ///
+    /// Returns minutes as UInt16 (cap at 1440 = one day).
+    private func sumSleepStages(_ samples: [HealthSample])
+    -> (deep: UInt16, rem: UInt16, light: UInt16, awake: UInt16, stagesSeen: Bool)
+    {
+        var deepSec = 0.0
+        var remSec = 0.0
+        var lightSec = 0.0
+        var awakeSec = 0.0
+        var anyStaged = false
+        for s in samples {
+            let stage = Int(s.value)
+            let dur = s.endDate.timeIntervalSince(s.startDate)
+            switch stage {
+            case SleepStageValue.deep:
+                deepSec += dur
+                anyStaged = true
+            case SleepStageValue.rem:
+                remSec += dur
+                anyStaged = true
+            case SleepStageValue.core:
+                lightSec += dur
+                anyStaged = true
+            case SleepStageValue.awake:
+                awakeSec += dur
+                anyStaged = true
+            default:
+                // inBed (0), asleepUnspecified (1), unknown — skip.
+                break
+            }
+        }
+        return (
+            deep: UInt16(clamping: Int((deepSec / 60).rounded())),
+            rem: UInt16(clamping: Int((remSec / 60).rounded())),
+            light: UInt16(clamping: Int((lightSec / 60).rounded())),
+            awake: UInt16(clamping: Int((awakeSec / 60).rounded())),
+            stagesSeen: anyStaged
         )
     }
 }

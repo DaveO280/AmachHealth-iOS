@@ -31,7 +31,20 @@ final class MerkleLeafV2FieldsTests: XCTestCase {
             sourceHash: Data(repeating: 0xCC, count: 32),
             hrvPresent: true,
             restingHRPresent: true,
-            bloodOxygenPresent: false
+            bloodOxygenPresent: false,
+            vo2max: 0,
+            weight: 0,
+            bodyFatPct: 0,
+            leanMass: 0,
+            deepSleepMins: 0,
+            remSleepMins: 0,
+            lightSleepMins: 0,
+            awakeMins: 0,
+            vo2maxPresent: false,
+            weightPresent: false,
+            bodyFatPctPresent: false,
+            leanMassPresent: false,
+            sleepStagesPresent: false
         )
 
         let v2 = MerkleLeafV2Fields(from: leaf, walletAddress: "0xdead")
@@ -58,11 +71,10 @@ final class MerkleLeafV2FieldsTests: XCTestCase {
         XCTAssertEqual(v2.dataFlags & 0xFFFF_0000, 0)
     }
 
-    func test_init_zeroes_v2_only_metrics_pending_normalizer_support() {
-        // Until MerkleNormalizationService grows v2 outputs, every v2-only
-        // metric must be 0. The Spring Push improvement circuit's vo2max
-        // pointer reading 0 is acceptable for plumbing, but is the gate
-        // for "ready for proof generation" that the future UI checks.
+    func test_init_passes_through_zero_v2_metrics_when_absent() {
+        // Days with no v2 samples at all → all v2 fields are zero. The
+        // *Present flags on NormalizedDailyLeaf are what differentiate
+        // "metric not recorded today" from "recorded as zero" upstream.
         let v2 = MerkleLeafV2Fields(from: makeNormalizedLeaf(), walletAddress: "0xabc")
         XCTAssertEqual(v2.vo2max, 0)
         XCTAssertEqual(v2.weight, 0)
@@ -72,6 +84,31 @@ final class MerkleLeafV2FieldsTests: XCTestCase {
         XCTAssertEqual(v2.remSleepMins, 0)
         XCTAssertEqual(v2.lightSleepMins, 0)
         XCTAssertEqual(v2.awakeMins, 0)
+    }
+
+    func test_init_passes_through_v2_metrics_when_present() {
+        // Matches the encoded values from hash_leaf.js buildTestLeafV2:
+        // 42.5 ml/(kg·min) → 425; 78.00 kg → 7800; 18.50% → 1850;
+        // 63.00 kg lean → 6300.
+        let leaf = makeNormalizedLeaf(
+            vo2max: 425,
+            weight: 7800,
+            bodyFatPct: 1850,
+            leanMass: 6300,
+            deep: 75,
+            rem: 95,
+            light: 240,
+            awake: 20
+        )
+        let v2 = MerkleLeafV2Fields(from: leaf, walletAddress: "0xabc")
+        XCTAssertEqual(v2.vo2max, 425)
+        XCTAssertEqual(v2.weight, 7800)
+        XCTAssertEqual(v2.bodyFatPct, 1850)
+        XCTAssertEqual(v2.leanMass, 6300)
+        XCTAssertEqual(v2.deepSleepMins, 75)
+        XCTAssertEqual(v2.remSleepMins, 95)
+        XCTAssertEqual(v2.lightSleepMins, 240)
+        XCTAssertEqual(v2.awakeMins, 20)
     }
 
     func test_init_encodes_timezone_offset_in_minutes() {
@@ -143,7 +180,15 @@ final class MerkleLeafV2FieldsTests: XCTestCase {
         dayId: UInt32 = 100,
         timezone: TimeZone = TimeZone(identifier: "UTC")!,
         dataFlags: UInt16 = 0,
-        sourceHashBytes: Data = Data(repeating: 0, count: 32)
+        sourceHashBytes: Data = Data(repeating: 0, count: 32),
+        vo2max: UInt16 = 0,
+        weight: UInt16 = 0,
+        bodyFatPct: UInt16 = 0,
+        leanMass: UInt16 = 0,
+        deep: UInt16 = 0,
+        rem: UInt16 = 0,
+        light: UInt16 = 0,
+        awake: UInt16 = 0
     ) -> NormalizedDailyLeaf {
         NormalizedDailyLeaf(
             dayId: dayId,
@@ -162,7 +207,20 @@ final class MerkleLeafV2FieldsTests: XCTestCase {
             sourceHash: sourceHashBytes,
             hrvPresent: false,
             restingHRPresent: false,
-            bloodOxygenPresent: false
+            bloodOxygenPresent: false,
+            vo2max: vo2max,
+            weight: weight,
+            bodyFatPct: bodyFatPct,
+            leanMass: leanMass,
+            deepSleepMins: deep,
+            remSleepMins: rem,
+            lightSleepMins: light,
+            awakeMins: awake,
+            vo2maxPresent: vo2max > 0,
+            weightPresent: weight > 0,
+            bodyFatPctPresent: bodyFatPct > 0,
+            leanMassPresent: leanMass > 0,
+            sleepStagesPresent: deep + rem + light + awake > 0
         )
     }
 }
@@ -261,5 +319,228 @@ final class MerkleV2UploadRequestShapeTests: XCTestCase {
         // contract silently.
         XCTAssertEqual(MerkleV2UploadWindow.baseline.rawValue, "baseline")
         XCTAssertEqual(MerkleV2UploadWindow.finish.rawValue, "finish")
+    }
+}
+
+// MARK: - SpringPushLeavesService.parseSampleValue (sleep-stage data path)
+
+final class SpringPushParseSampleValueTests: XCTestCase {
+
+    func test_parses_sleep_stage_names_to_HKCategoryValueSleepAnalysis() {
+        // HealthKitService stringifies sleep samples to readable stage
+        // names before storing them in HealthDataPoint.value. The v2
+        // normalizer expects integer category values to bucket by stage,
+        // so SpringPushLeavesService.parseSampleValue must reverse that.
+        let sleep = "HKCategoryTypeIdentifierSleepAnalysis"
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("inBed", metricType: sleep), 0)
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("asleep", metricType: sleep), 1)
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("awake", metricType: sleep), 2)
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("core", metricType: sleep), 3)
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("deep", metricType: sleep), 4)
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("rem", metricType: sleep), 5)
+    }
+
+    func test_unknown_sleep_stage_falls_back_to_numeric_parse() {
+        let sleep = "HKCategoryTypeIdentifierSleepAnalysis"
+        // Source that wrote the raw enum integer (rare, but supported).
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("4", metricType: sleep), 4)
+        // Garbage → 0, same fallback as the rest of the pipeline.
+        XCTAssertEqual(SpringPushLeavesService.parseSampleValue("garbage", metricType: sleep), 0)
+    }
+
+    func test_non_sleep_samples_parsed_as_doubles() {
+        XCTAssertEqual(
+            SpringPushLeavesService.parseSampleValue("42.5", metricType: "HKQuantityTypeIdentifierVO2Max"),
+            42.5
+        )
+        XCTAssertEqual(
+            SpringPushLeavesService.parseSampleValue("notanumber", metricType: "HKQuantityTypeIdentifierStepCount"),
+            0
+        )
+    }
+}
+
+// MARK: - MerkleNormalizationService v2 metric tests
+
+final class MerkleNormalizationV2Tests: XCTestCase {
+
+    private let wallet = Data(repeating: 0xAB, count: 32)
+    private let timezone = TimeZone(identifier: "UTC")!
+    private lazy var dayStart: Date = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timezone
+        return cal.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+    }()
+    private lazy var dayEnd: Date = dayStart.addingTimeInterval(86_400)
+
+    private func service() -> MerkleNormalizationService {
+        MerkleNormalizationService(walletAddress: wallet)
+    }
+
+    // MARK: VO₂ max
+
+    func test_vo2max_averages_daily_samples_and_encodes_x10_round_half_up() {
+        // 42.5 and 43.5 → mean 43.0 → 430 (encoded as ml/(kg·min) × 10).
+        let samples = [
+            sample(metric: "HKQuantityTypeIdentifierVO2Max", value: 42.5, at: 100),
+            sample(metric: "HKQuantityTypeIdentifierVO2Max", value: 43.5, at: 200),
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertTrue(leaf.vo2maxPresent)
+        XCTAssertEqual(leaf.vo2max, 430)
+    }
+
+    func test_vo2max_rounds_half_up_at_the_tenths_boundary() {
+        // 42.55 → 425.5 → round half-up to 426.
+        let samples = [
+            sample(metric: "HKQuantityTypeIdentifierVO2Max", value: 42.55, at: 0)
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertEqual(leaf.vo2max, 426)
+    }
+
+    func test_vo2max_absent_when_no_samples_for_the_day() {
+        let leaf = service().normalize(
+            samples: [sample(metric: "HKQuantityTypeIdentifierStepCount", value: 5000, at: 0)],
+            workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertFalse(leaf.vo2maxPresent)
+        XCTAssertEqual(leaf.vo2max, 0)
+    }
+
+    // MARK: Body composition
+
+    func test_weight_uses_most_recent_sample_and_encodes_kg_x100() {
+        // Three readings the same day; the latest one (78.00 kg) wins.
+        let samples = [
+            sample(metric: "HKQuantityTypeIdentifierBodyMass", value: 80.00, at: 100),
+            sample(metric: "HKQuantityTypeIdentifierBodyMass", value: 79.50, at: 200),
+            sample(metric: "HKQuantityTypeIdentifierBodyMass", value: 78.00, at: 300),
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertTrue(leaf.weightPresent)
+        XCTAssertEqual(leaf.weight, 7800)
+    }
+
+    func test_bodyFatPct_converts_fraction_to_basis_points_round_half_up() {
+        // HealthKit body fat is a fraction (0.185 = 18.5%). Encoded as
+        // fraction × 10000 → 1850 basis points.
+        let samples = [
+            sample(metric: "HKQuantityTypeIdentifierBodyFatPercentage", value: 0.185, at: 0)
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertTrue(leaf.bodyFatPctPresent)
+        XCTAssertEqual(leaf.bodyFatPct, 1850)
+    }
+
+    func test_leanMass_uses_most_recent_sample_and_encodes_kg_x100() {
+        let samples = [
+            sample(metric: "HKQuantityTypeIdentifierLeanBodyMass", value: 62.00, at: 100),
+            sample(metric: "HKQuantityTypeIdentifierLeanBodyMass", value: 63.00, at: 200),
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertEqual(leaf.leanMass, 6300)
+        XCTAssertTrue(leaf.leanMassPresent)
+    }
+
+    // MARK: Sleep stages
+
+    func test_sleep_stages_bucket_by_HKCategoryValue_and_sum_minutes() {
+        // 75 min deep (value=4), 95 min REM (5), 240 min light/core (3),
+        // 20 min awake (2). Matches the encoded values in
+        // hash_leaf.js buildTestLeafV2.
+        let samples = [
+            sleepSample(stage: 4, minutes: 75, at: 100),
+            sleepSample(stage: 5, minutes: 95, at: 200),
+            sleepSample(stage: 3, minutes: 240, at: 300),
+            sleepSample(stage: 2, minutes: 20, at: 400),
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertEqual(leaf.deepSleepMins, 75)
+        XCTAssertEqual(leaf.remSleepMins, 95)
+        XCTAssertEqual(leaf.lightSleepMins, 240)
+        XCTAssertEqual(leaf.awakeMins, 20)
+        XCTAssertTrue(leaf.sleepStagesPresent)
+    }
+
+    func test_sleep_inBed_and_unspecified_are_skipped() {
+        // `inBed` (0) overlaps with per-stage samples and would
+        // double-count. `asleepUnspecified` (1) can't be attributed to
+        // any stage bucket. Both must be ignored.
+        let samples = [
+            sleepSample(stage: 0, minutes: 480, at: 100),   // inBed — skip
+            sleepSample(stage: 1, minutes: 60, at: 200),    // unspecified — skip
+            sleepSample(stage: 4, minutes: 75, at: 300),    // deep
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertEqual(leaf.deepSleepMins, 75)
+        XCTAssertEqual(leaf.remSleepMins, 0)
+        XCTAssertEqual(leaf.lightSleepMins, 0)
+        XCTAssertEqual(leaf.awakeMins, 0)
+        XCTAssertTrue(leaf.sleepStagesPresent)
+    }
+
+    func test_sleep_stages_absent_when_only_unspecified_samples_present() {
+        let samples = [
+            sleepSample(stage: 0, minutes: 480, at: 100),   // inBed — skip
+            sleepSample(stage: 1, minutes: 420, at: 200),   // unspecified — skip
+        ]
+        let leaf = service().normalize(
+            samples: samples, workouts: [], restingHRSamples: [],
+            start: dayStart, end: dayEnd, timezone: timezone
+        ).first!
+        XCTAssertFalse(leaf.sleepStagesPresent)
+        XCTAssertEqual(leaf.deepSleepMins + leaf.remSleepMins + leaf.lightSleepMins + leaf.awakeMins, 0)
+    }
+
+    // MARK: Helpers
+
+    private func sample(metric: String, value: Double, at offsetSeconds: TimeInterval) -> HealthSample {
+        let date = dayStart.addingTimeInterval(offsetSeconds)
+        return HealthSample(
+            metricType: metric,
+            value: value,
+            unit: "",
+            startDate: date,
+            endDate: date,
+            sourceBundleID: "com.apple.health",
+            device: nil
+        )
+    }
+
+    private func sleepSample(stage: Int, minutes: Int, at offsetSeconds: TimeInterval) -> HealthSample {
+        let start = dayStart.addingTimeInterval(offsetSeconds)
+        let end = start.addingTimeInterval(Double(minutes) * 60)
+        return HealthSample(
+            metricType: "HKCategoryTypeIdentifierSleepAnalysis",
+            value: Double(stage),
+            unit: "",
+            startDate: start,
+            endDate: end,
+            sourceBundleID: "com.apple.health.sleep",
+            device: nil
+        )
     }
 }

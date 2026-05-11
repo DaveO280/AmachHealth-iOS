@@ -79,12 +79,14 @@ struct MerkleLeafV2Fields: Codable, Equatable {
 // MARK: - Construction from a v1-normalized daily leaf
 
 extension MerkleLeafV2Fields {
-    /// Build a v2 wire leaf from a v1-normalized daily leaf.
+    /// Build a v2 wire leaf from a normalized daily leaf.
     ///
-    /// v2-only metrics (vo2max, body comp, sleep stages) are zeroed; the
-    /// existing `MerkleNormalizationService` only emits v1 fields. When
-    /// the normalization pipeline gains v2 support, populate them here
-    /// and remove the TODO.
+    /// `NormalizedDailyLeaf` carries both v1 fields and the v2-only ones
+    /// added in `MerkleNormalizationService.normalizeDay` (vo2max, body
+    /// composition, sleep stages). Absent metrics for the day come
+    /// through as zeros from the normalizer; the corresponding `*Present`
+    /// flag tells the proof builder whether a non-zero reading means
+    /// "user has this metric" vs "metric not recorded today."
     init(from leaf: NormalizedDailyLeaf, walletAddress: String) {
         self.wallet = walletAddress
         self.dayId = leaf.dayId
@@ -98,20 +100,14 @@ extension MerkleLeafV2Fields {
         self.workoutCount = leaf.workoutCount
         self.sourceCount = leaf.sourceCount
         self.dataFlags = UInt32(leaf.dataFlags)
-        // TODO: populate v2-only metrics once MerkleNormalizationService
-        // emits them (HKQuantityTypeIdentifierVO2Max, BodyMass,
-        // BodyFatPercentage, LeanBodyMass; sleep-stage HKCategorySamples).
-        // Until then, the Spring Push improvement circuit's vo2max metric
-        // pointer will read 0 for every leaf — which is fine for plumbing
-        // tests but produces a divide-by-zero in the proof builder.
-        self.vo2max = 0
-        self.weight = 0
-        self.bodyFatPct = 0
-        self.leanMass = 0
-        self.deepSleepMins = 0
-        self.remSleepMins = 0
-        self.lightSleepMins = 0
-        self.awakeMins = 0
+        self.vo2max = leaf.vo2max
+        self.weight = leaf.weight
+        self.bodyFatPct = leaf.bodyFatPct
+        self.leanMass = leaf.leanMass
+        self.deepSleepMins = leaf.deepSleepMins
+        self.remSleepMins = leaf.remSleepMins
+        self.lightSleepMins = leaf.lightSleepMins
+        self.awakeMins = leaf.awakeMins
         self.reservedPayload = nil
         self.sourceHash = leaf.sourceHash.merkleV2HexString()
         self.version = nil

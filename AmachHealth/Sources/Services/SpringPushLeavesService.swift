@@ -200,9 +200,10 @@ final class SpringPushLeavesService: ObservableObject {
         var restingHR: [HealthSample] = []
         for (metricType, points) in raw {
             for point in points {
+                let value = Self.parseSampleValue(point.value, metricType: metricType)
                 let sample = HealthSample(
                     metricType: metricType,
-                    value: Double(point.value) ?? 0,
+                    value: value,
                     unit: "",
                     startDate: point.startDate,
                     endDate: point.endDate,
@@ -217,6 +218,27 @@ final class SpringPushLeavesService: ObservableObject {
             }
         }
         return Bundle(quantities: quantities, workouts: [], restingHR: restingHR)
+    }
+
+    /// Parse a `HealthDataPoint.value` (always a String) into the numeric
+    /// `HealthSample.value`. For sleep samples, the HealthKit service
+    /// stringifies the HKCategoryValueSleepAnalysis enum into a stage name
+    /// ("core"/"deep"/…) for readability; we reverse that here so the
+    /// normalization service can bucket by stage. For everything else the
+    /// string is already numeric.
+    nonisolated static func parseSampleValue(_ raw: String, metricType: String) -> Double {
+        if metricType == "HKCategoryTypeIdentifierSleepAnalysis" {
+            switch raw {
+            case "inBed":   return Double(SleepStageValue.inBed)
+            case "asleep":  return Double(SleepStageValue.asleepUnspecified)
+            case "awake":   return Double(SleepStageValue.awake)
+            case "core":    return Double(SleepStageValue.core)
+            case "deep":    return Double(SleepStageValue.deep)
+            case "rem":     return Double(SleepStageValue.rem)
+            default:        return Double(raw) ?? 0
+            }
+        }
+        return Double(raw) ?? 0
     }
 
     // MARK: - Constants + helpers
