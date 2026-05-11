@@ -846,6 +846,35 @@ final class AmachAPIClient {
         )
     }
 
+    /// Upload a baseline-window or finish-window v2 leaf bundle for the
+    /// Spring Push improvement-proof flow. The server serializes each
+    /// leaf into its canonical 124-byte form, Poseidon4-hashes it, and
+    /// stores `{ leaves: [{ serializedHex, hashDec, ...fields }] }` to
+    /// Storj under the dataType the web-side proof builder reads from
+    /// (`merkle-v2-baseline-leaves` or `merkle-v2-finish-leaves`).
+    func uploadMerkleV2Leaves(
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey,
+        window: MerkleV2UploadWindow,
+        leaves: [MerkleLeafV2Fields]
+    ) async throws -> MerkleV2UploadResponse {
+        struct UploadRequest: Encodable {
+            let walletAddress: String
+            let encryptionKey: WalletEncryptionKey
+            let window: String
+            let leaves: [MerkleLeafV2Fields]
+        }
+        return try await post(
+            path: "/api/merkle/v2/upload",
+            body: UploadRequest(
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey,
+                window: window.rawValue,
+                leaves: leaves
+            )
+        )
+    }
+
     func generateCoverageProof(
         walletAddress: String,
         encryptionKey: WalletEncryptionKey,
@@ -1448,6 +1477,30 @@ struct GenesisStorjPaths: Decodable {
     let metadata: String
     let tree: String
     let leaves: String
+}
+
+// MARK: - Merkle V2 Upload (Spring Push)
+
+/// Which Spring Push window a leaf bundle belongs to. The server uses
+/// this to pick the Storj dataType (`merkle-v2-baseline-leaves` vs
+/// `merkle-v2-finish-leaves`) that `improvementLeafFetcher.ts` reads from.
+enum MerkleV2UploadWindow: String, Codable {
+    case baseline
+    case finish
+}
+
+struct MerkleV2UploadResponse: Decodable {
+    let success: Bool
+    let storjUri: String
+    let contentHash: String
+    let uploadedAt: Double?
+    let leafCount: Int
+    let window: String
+    let dataType: String
+    /// Per-leaf Poseidon4 hashes as decimal field-element strings, in the
+    /// same order as the uploaded `leaves` array. Useful for the client
+    /// to display a "leaves committed" badge without re-fetching Storj.
+    let hashes: [String]
 }
 
 /// Solidity/EVM ABI proof format returned by the backend's groth16 endpoint.
