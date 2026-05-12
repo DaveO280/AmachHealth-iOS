@@ -42,6 +42,14 @@ struct AmachHealthApp: App {
                     // Seed AppState from service singletons already initialised above
                     appState.setHealthKit(authorized: healthKit.isAuthorized)
                     appState.setWallet(address: wallet.address)
+
+                    // Silent Spring Push leaf capture. Idempotent: checks
+                    // on-chain state + Storj presence before uploading.
+                    // Safe to call on every cold start; the contest service
+                    // reads two cheap getters and exits early when the user
+                    // is not registered or the contest isn't in a capture
+                    // window. See SpringPushLeavesService.autoSyncIfNeeded.
+                    await SpringPushLeavesService.shared.autoSyncIfNeeded()
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     // When the app comes to foreground, check whether a proactive
@@ -49,6 +57,11 @@ struct AmachHealthApp: App {
                     // notification). RootView reacts to pendingDelivery being set.
                     if newPhase == .active {
                         LumaProactiveService.shared.checkAndDeliverPendingInsight()
+                        // Re-run the Spring Push auto-sync on every foreground
+                        // transition. Cheap when nothing has changed
+                        // (state-only RPC + Storj list); fires the capture
+                        // exactly once on the ACTIVE → CLAIMING tick.
+                        Task { await SpringPushLeavesService.shared.autoSyncIfNeeded() }
                     }
                 }
                 // Keep AppState in sync with service state changes mid-session.
@@ -56,6 +69,12 @@ struct AmachHealthApp: App {
                 // launch leaves AppState stale until the next app restart.
                 .onChange(of: wallet.isConnected) { _, connected in
                     appState.setWallet(address: connected ? wallet.address : nil)
+                    if connected {
+                        // Re-run on wallet connect so a freshly-paired user
+                        // gets their baseline captured without waiting for
+                        // the next app launch.
+                        Task { await SpringPushLeavesService.shared.autoSyncIfNeeded() }
+                    }
                 }
                 .onChange(of: healthKit.isAuthorized) { _, authorized in
                     appState.setHealthKit(authorized: authorized)

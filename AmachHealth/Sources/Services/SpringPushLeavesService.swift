@@ -38,50 +38,214 @@ final class SpringPushLeavesService: ObservableObject {
         let hashes: [String]
     }
 
+    /// Decision the auto-trigger makes after checking on-chain state and
+    /// existing Storj uploads. Exposed for unit tests so the (state,
+    /// registered, hasBaseline, hasFinish) matrix can be exercised
+    /// without hitting RPC or HTTP.
+    enum AutoSyncAction: Equatable {
+        case captureBaseline
+        case captureFinish
+        case skipNotRegistered
+        case skipNotInActiveOrClaiming
+        case skipAlreadyCaptured
+        case skipFinishWithoutBaseline
+    }
+
     // MARK: - Published state
 
     @Published private(set) var isUploading = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastResult: CaptureResult?
+    /// Outcome of the most recent auto-sync attempt. `nil` until the
+    /// first attempt resolves; mirrors `lastResult` for whichever capture
+    /// the trigger fired. Exists so a future "Spring Push status" UI can
+    /// surface what the silent background task did without the service
+    /// having to keep a separate UI-state model.
+    @Published private(set) var lastAutoSyncAction: AutoSyncAction?
 
     // MARK: - Dependencies
 
     private let healthKit: HealthKitService
     private let wallet: WalletService
     private let api: AmachAPIClient
+    private let contest: SpringPushContestService
+
+    /// Re-entry guard for the silent auto-sync. Foreground transitions
+    /// + wallet-connect + cold-start can all fire close together; this
+    /// drops the redundant runs without blocking the explicit
+    /// `captureBaseline()` / `captureFinish()` callers.
+    private var autoSyncInFlight = false
 
     private init(
         healthKit: HealthKitService = .shared,
         wallet: WalletService = .shared,
-        api: AmachAPIClient = .shared
+        api: AmachAPIClient = .shared,
+        contest: SpringPushContestService = .shared
     ) {
         self.healthKit = healthKit
         self.wallet = wallet
         self.api = api
+        self.contest = contest
     }
 
     // MARK: - Trigger points
     //
-    // These two methods are the stable entry points the Spring Push UI
-    // will call. They are intentionally simple async functions so the
-    // future UI can call them from a "Register" button (baseline) and a
-    // contest-state observer (finish) without knowing about HealthKit,
-    // wallet, or Storj plumbing.
+    // The Spring Push capture is a fully-silent background task — no UI
+    // gates it. `autoSyncIfNeeded()` is the only entry point real callers
+    // should hit; the explicit `captureBaseline()` / `captureFinish()`
+    // variants stay public for diagnostics and a possible "retry" affordance.
 
-    /// Capture the baseline window and upload it to Storj.
+    /// Silent auto-sync. Reads the contest state + the user's
+    /// registration via `SpringPushContestService`, decides whether the
+    /// baseline or finish leaves need capturing for this wallet right
+    /// now, and runs the capture if so. Re-entrant calls (foreground +
+    /// wallet-connect within the same window) collapse to a single run.
     ///
-    /// TODO: call from Spring Push registration flow.
-    /// This should fire exactly once per user, right after they
-    /// successfully register for the season (after the wallet
-    /// signature). If the upload fails, the registration flow should
-    /// surface the error and offer a retry — without baseline leaves on
-    /// Storj, the user cannot generate an improvement proof at the end
-    /// of the contest.
-    ///
-    /// - Parameters:
-    ///   - daysBack: Window size (default: 90 days). Capped to 128 leaves
-    ///     by the depth-7 improvement circuit; older days are dropped.
-    ///   - endDate: Window end (default: now). Override for testing.
+    /// This method never throws — failures land in `lastError` and are
+    /// printed so the future status UI can show them, but the lifecycle
+    /// callers (scene phase, wallet connect, cold start) don't need to
+    /// handle errors. Returns the decided action so a caller that wants
+    /// telemetry can observe what happened.
+    @discardableResult
+    func autoSyncIfNeeded() async -> AutoSyncAction? {
+        guard !autoSyncInFlight else { return lastAutoSyncAction }
+        autoSyncInFlight = true
+        defer { autoSyncInFlight = false }
+
+        guard wallet.isConnected,
+              let walletAddress = wallet.address,
+              let encryptionKey = wallet.encryptionKey else {
+            return nil
+        }
+
+        let state: ContestState
+        let registered: Bool
+        do {
+            (state, registered) = try await contest.fetchStateAndRegistration(address: walletAddress)
+        } catch {
+            lastError = error.localizedDescription
+            print("🌱 [SpringPush] auto-sync: contest read failed — \(error.localizedDescription)")
+            return nil
+        }
+
+        // Cheap pre-flight: skip the Storj round-trip when the state +
+        // registration already rule out any capture.
+        let preFlight = Self.decideAction(
+            state: state,
+            registered: registered,
+            hasBaseline: nil,
+            hasFinish: nil
+        )
+        switch preFlight {
+        case .skipNotRegistered, .skipNotInActiveOrClaiming:
+            lastAutoSyncAction = preFlight
+            return preFlight
+        default:
+            break
+        }
+
+        // Check both bundles in parallel; either being non-empty means
+        // a previous capture (manual or auto) already uploaded.
+        let baselineExists: Bool
+        let finishExists: Bool
+        do {
+            async let bTask = api.listHealthData(
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey,
+                dataType: "merkle-v2-baseline-leaves"
+            )
+            async let fTask = api.listHealthData(
+                walletAddress: walletAddress,
+                encryptionKey: encryptionKey,
+                dataType: "merkle-v2-finish-leaves"
+            )
+            let (baselineList, finishList) = try await (bTask, fTask)
+            baselineExists = !baselineList.isEmpty
+            finishExists = !finishList.isEmpty
+        } catch {
+            lastError = error.localizedDescription
+            print("🌱 [SpringPush] auto-sync: Storj list failed — \(error.localizedDescription)")
+            return nil
+        }
+
+        let action = Self.decideAction(
+            state: state,
+            registered: registered,
+            hasBaseline: baselineExists,
+            hasFinish: finishExists
+        )
+        lastAutoSyncAction = action
+        switch action {
+        case .captureBaseline:
+            do {
+                _ = try await captureAndUpload(window: .baseline, daysBack: 90, endDate: Date())
+                print("🌱 [SpringPush] auto-sync: baseline captured")
+            } catch {
+                lastError = error.localizedDescription
+                print("🌱 [SpringPush] auto-sync: baseline capture failed — \(error.localizedDescription)")
+            }
+        case .captureFinish:
+            do {
+                _ = try await captureAndUpload(window: .finish, daysBack: 90, endDate: Date())
+                print("🌱 [SpringPush] auto-sync: finish captured")
+            } catch {
+                lastError = error.localizedDescription
+                print("🌱 [SpringPush] auto-sync: finish capture failed — \(error.localizedDescription)")
+            }
+        case .skipNotRegistered,
+             .skipNotInActiveOrClaiming,
+             .skipAlreadyCaptured,
+             .skipFinishWithoutBaseline:
+            break
+        }
+        return action
+    }
+
+    /// Pure decision function exposed for unit tests. Combines on-chain
+    /// state + registration + Storj presence flags into the action the
+    /// auto-trigger should take. Pass `nil` for `hasBaseline` /
+    /// `hasFinish` when only the pre-flight (state/registration) is
+    /// known — the function returns a `skip*` decision in that case
+    /// or `nil` (representing "Storj check is needed").
+    nonisolated static func decideAction(
+        state: ContestState,
+        registered: Bool,
+        hasBaseline: Bool?,
+        hasFinish: Bool?
+    ) -> AutoSyncAction {
+        guard registered else { return .skipNotRegistered }
+        switch state {
+        case .active:
+            guard let hasBaseline else {
+                // Storj not yet checked — caller should fetch.
+                return .captureBaseline
+            }
+            return hasBaseline ? .skipAlreadyCaptured : .captureBaseline
+        case .claiming:
+            guard let hasBaseline else {
+                // Pre-flight: assume we'd capture finish; the post-check
+                // pass narrows this to the right outcome.
+                return .captureFinish
+            }
+            guard hasBaseline else {
+                // No baseline was ever uploaded — finish on its own is
+                // useless to the proof builder. Surface this as a
+                // distinct skip so a "missed baseline" surface can
+                // tell the user.
+                return .skipFinishWithoutBaseline
+            }
+            if hasFinish == true { return .skipAlreadyCaptured }
+            return .captureFinish
+        default:
+            return .skipNotInActiveOrClaiming
+        }
+    }
+
+    /// Capture the baseline window and upload it to Storj. Public for
+    /// diagnostics / retry; the silent auto-trigger goes through
+    /// `autoSyncIfNeeded()` instead so it doesn't fire on already-uploaded
+    /// wallets.
+    @discardableResult
     func captureBaseline(
         daysBack: Int = 90,
         endDate: Date = Date()
@@ -89,18 +253,9 @@ final class SpringPushLeavesService: ObservableObject {
         try await captureAndUpload(window: .baseline, daysBack: daysBack, endDate: endDate)
     }
 
-    /// Capture the finish window and upload it to Storj.
-    ///
-    /// TODO: call when the contest enters CLAIMING state.
-    /// This should fire when the app's contest-state observer transitions
-    /// from ACTIVE → CLAIMING and before the user opens the claim UI.
-    /// The web proof builder reads both windows via
-    /// `fetchImprovementLeavesForWallet` and rejects with a
-    /// user-actionable error if either side is missing.
-    ///
-    /// - Parameters:
-    ///   - daysBack: Window size (default: 90 days). Capped to 128 leaves.
-    ///   - endDate: Window end (default: now). Override for testing.
+    /// Capture the finish window and upload it to Storj. Public for
+    /// diagnostics / retry.
+    @discardableResult
     func captureFinish(
         daysBack: Int = 90,
         endDate: Date = Date()
