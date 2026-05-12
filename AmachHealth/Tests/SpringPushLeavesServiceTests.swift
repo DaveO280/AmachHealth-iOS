@@ -544,3 +544,184 @@ final class MerkleNormalizationV2Tests: XCTestCase {
         )
     }
 }
+
+// MARK: - Auto-sync decision matrix
+
+final class SpringPushAutoSyncDecisionTests: XCTestCase {
+
+    typealias Action = SpringPushLeavesService.AutoSyncAction
+
+    // MARK: Pre-flight (state + registration only)
+
+    func test_pre_flight_unregistered_user_always_skips() {
+        for state in allStates {
+            XCTAssertEqual(
+                SpringPushLeavesService.decideAction(
+                    state: state,
+                    registered: false,
+                    hasBaseline: nil,
+                    hasFinish: nil
+                ),
+                .skipNotRegistered,
+                "state=\(state) should skip when not registered"
+            )
+        }
+    }
+
+    func test_pre_flight_non_capture_states_skip_even_when_registered() {
+        for state in [ContestState.uninitialized, .registrationOpen, .finished, .failed] {
+            XCTAssertEqual(
+                SpringPushLeavesService.decideAction(
+                    state: state,
+                    registered: true,
+                    hasBaseline: nil,
+                    hasFinish: nil
+                ),
+                .skipNotInActiveOrClaiming,
+                "state=\(state) should skip when no capture window is open"
+            )
+        }
+    }
+
+    // MARK: ACTIVE
+
+    func test_active_registered_no_baseline_captures_baseline() {
+        XCTAssertEqual(
+            SpringPushLeavesService.decideAction(
+                state: .active, registered: true,
+                hasBaseline: false, hasFinish: false
+            ),
+            .captureBaseline
+        )
+    }
+
+    func test_active_registered_baseline_exists_skips_already_captured() {
+        XCTAssertEqual(
+            SpringPushLeavesService.decideAction(
+                state: .active, registered: true,
+                hasBaseline: true, hasFinish: false
+            ),
+            .skipAlreadyCaptured
+        )
+    }
+
+    // MARK: CLAIMING
+
+    func test_claiming_with_baseline_and_no_finish_captures_finish() {
+        XCTAssertEqual(
+            SpringPushLeavesService.decideAction(
+                state: .claiming, registered: true,
+                hasBaseline: true, hasFinish: false
+            ),
+            .captureFinish
+        )
+    }
+
+    func test_claiming_with_baseline_and_finish_skips_already_captured() {
+        XCTAssertEqual(
+            SpringPushLeavesService.decideAction(
+                state: .claiming, registered: true,
+                hasBaseline: true, hasFinish: true
+            ),
+            .skipAlreadyCaptured
+        )
+    }
+
+    func test_claiming_without_baseline_surfaces_missed_baseline() {
+        // The proof builder rejects a wallet whose baseline bundle is
+        // missing; capturing finish on its own is wasted work. The
+        // distinct skip code lets a future surface flag this case to
+        // the user instead of silently looking idle.
+        XCTAssertEqual(
+            SpringPushLeavesService.decideAction(
+                state: .claiming, registered: true,
+                hasBaseline: false, hasFinish: false
+            ),
+            .skipFinishWithoutBaseline
+        )
+    }
+
+    private var allStates: [ContestState] {
+        [.uninitialized, .registrationOpen, .active, .claiming, .finished, .failed]
+    }
+}
+
+// MARK: - SpringPushContestService ABI decoding
+
+final class SpringPushContestServiceDecodingTests: XCTestCase {
+
+    func test_decodeUInt8_reads_active_state_from_32_byte_word() throws {
+        // ACTIVE = 2 — single byte in the LSB of a 32-byte ABI word.
+        let raw = "0x" + String(repeating: "0", count: 62) + "02"
+        XCTAssertEqual(try SpringPushContestService.decodeUInt8(from: raw), 2)
+    }
+
+    func test_decodeUInt8_reads_claiming_state() throws {
+        let raw = "0x" + String(repeating: "0", count: 62) + "03"
+        XCTAssertEqual(try SpringPushContestService.decodeUInt8(from: raw), 3)
+    }
+
+    func test_decodeUInt8_throws_on_short_response() {
+        XCTAssertThrowsError(try SpringPushContestService.decodeUInt8(from: "0x01"))
+    }
+
+    func test_decodeBool_reads_true_word() {
+        let raw = "0x" + String(repeating: "0", count: 63) + "1"
+        XCTAssertTrue(SpringPushContestService.decodeBool(from: raw))
+    }
+
+    func test_decodeBool_reads_false_word() {
+        let raw = "0x" + String(repeating: "0", count: 64)
+        XCTAssertFalse(SpringPushContestService.decodeBool(from: raw))
+    }
+
+    func test_decodeBool_returns_false_on_short_response() {
+        XCTAssertFalse(SpringPushContestService.decodeBool(from: "0x"))
+    }
+
+    func test_padLeftHex_pads_short_address_to_32_bytes() {
+        let padded = SpringPushContestService.padLeftHex("abc", toBytes: 32)
+        XCTAssertEqual(padded.count, 64)
+        XCTAssertEqual(padded, String(repeating: "0", count: 61) + "abc")
+    }
+
+    func test_padLeftHex_truncates_oversized_input_from_the_left() {
+        // 33-byte input → keep the right-most 32 bytes (matches the
+        // ZKSyncAttestationService convention for consistency).
+        let big = String(repeating: "f", count: 66)
+        let padded = SpringPushContestService.padLeftHex(big, toBytes: 32)
+        XCTAssertEqual(padded.count, 64)
+        XCTAssertEqual(padded, String(repeating: "f", count: 64))
+    }
+
+    func test_hexStrip_handles_both_0x_prefixes() {
+        XCTAssertEqual(SpringPushContestService.hexStrip("0xabc"), "abc")
+        XCTAssertEqual(SpringPushContestService.hexStrip("0XABC"), "ABC")
+        XCTAssertEqual(SpringPushContestService.hexStrip("abc"), "abc")
+    }
+}
+
+// MARK: - ContestState enum
+
+final class ContestStateTests: XCTestCase {
+
+    func test_raw_values_match_solidity_enum() {
+        // The Solidity contract pins these in this exact order. Drift
+        // here means we'd interpret the state byte wrong on every read.
+        XCTAssertEqual(ContestState.uninitialized.rawValue, 0)
+        XCTAssertEqual(ContestState.registrationOpen.rawValue, 1)
+        XCTAssertEqual(ContestState.active.rawValue, 2)
+        XCTAssertEqual(ContestState.claiming.rawValue, 3)
+        XCTAssertEqual(ContestState.finished.rawValue, 4)
+        XCTAssertEqual(ContestState.failed.rawValue, 5)
+    }
+
+    func test_isActive_and_isClaiming_capture_window_predicates() {
+        XCTAssertTrue(ContestState.active.isActive)
+        XCTAssertFalse(ContestState.claiming.isActive)
+        XCTAssertTrue(ContestState.claiming.isClaiming)
+        XCTAssertFalse(ContestState.active.isClaiming)
+        XCTAssertFalse(ContestState.finished.isActive)
+        XCTAssertFalse(ContestState.finished.isClaiming)
+    }
+}
