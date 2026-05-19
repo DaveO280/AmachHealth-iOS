@@ -48,7 +48,7 @@ final class SpringPushContestService: ObservableObject {
     // Mainnet uses a different deployment; when iOS gains a mainnet
     // toggle this should pivot off `WalletService.chainId`.
     private let rpcURL = "https://sepolia.era.zksync.dev"
-    private let escrowAddress = "0xEB4e6395D97158AbFC05c7bD02A6450b40eE8705"
+    private let escrowAddress = "0x877BEe22bDC7eB38ec02a97872A7E3E615646CE8"
 
     // Pre-computed function selectors. keccak256(signature)[..4]:
     //   state()              → c19d93fb
