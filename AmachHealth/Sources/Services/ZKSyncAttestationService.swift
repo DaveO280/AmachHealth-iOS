@@ -140,7 +140,9 @@ final class ZKSyncAttestationService: ObservableObject {
             throw AttestationError.transactionFailed("Invalid proof shape — expected a[2], b[2][2], c[2], signals[4]")
         }
 
+        #if DEBUG
         print("⛓️ [Coverage] Submitting proof for \(address)")
+        #endif
 
         isSubmitting = true
         defer { isSubmitting = false }
@@ -161,7 +163,9 @@ final class ZKSyncAttestationService: ObservableObject {
             to: coverageRegistryAddress,
             data: submitCalldata
         )
+        #if DEBUG
         print("⛓️ [Coverage] ✅ proof stored in registry: \(txHash)")
+        #endif
         return CoverageProofResult(txHash: txHash, onChainVerified: true)
         #else
         throw AttestationError.privyNotAvailable
@@ -216,14 +220,20 @@ final class ZKSyncAttestationService: ObservableObject {
             throw AttestationError.walletNotConnected
         }
 
+        #if DEBUG
         print("⛓️ [Genesis] Committing root for \(address)")
+        #endif
+        #if DEBUG
         print("⛓️ [Genesis] root=\(input.root.prefix(18))… leaves=\(input.leafCount) days=\(input.startDayId)–\(input.endDayId)")
+        #endif
 
         isSubmitting = true
         defer { isSubmitting = false }
 
         let calldata = encodeCommitGenesisRoot(input)
+        #if DEBUG
         print("⛓️ [Genesis] calldata=\(calldata.prefix(18))… (\(calldata.count) chars)")
+        #endif
 
         #if canImport(PrivySDK)
         let txHash = try await sendTransaction(
@@ -231,7 +241,9 @@ final class ZKSyncAttestationService: ObservableObject {
             to: merkleCommitmentAddress,
             data: calldata
         )
+        #if DEBUG
         print("⛓️ [Genesis] ✅ root committed: \(txHash)")
+        #endif
         return GenesisRootResult(txHash: txHash)
         #else
         throw AttestationError.privyNotAvailable
@@ -258,7 +270,9 @@ final class ZKSyncAttestationService: ObservableObject {
             to: merkleCommitmentAddress,
             data: calldata
         )
+        #if DEBUG
         print("⛓️ [Genesis] ✅ Merkle commitment tx: \(txHash)")
+        #endif
         return GenesisRootResult(txHash: txHash)
         #else
         throw AttestationError.privyNotAvailable
@@ -292,12 +306,18 @@ final class ZKSyncAttestationService: ObservableObject {
     func createAttestation(_ input: AttestationInput) async throws -> AttestationResult {
         let wallet = WalletService.shared
         guard wallet.isConnected, let address = wallet.address else {
+            #if DEBUG
             print("⛓️ [Attestation] Wallet not connected — skipping on-chain anchoring")
+            #endif
             throw AttestationError.walletNotConnected
         }
 
+        #if DEBUG
         print("⛓️ [Attestation] Starting on-chain attestation for \(address)")
+        #endif
+        #if DEBUG
         print("⛓️ [Attestation] contentHash=\(input.contentHash.prefix(18))… dataType=\(input.dataType)")
+        #endif
 
         isSubmitting = true
         defer { isSubmitting = false }
@@ -305,19 +325,27 @@ final class ZKSyncAttestationService: ObservableObject {
         let hasProfile: Bool
         do {
             hasProfile = try await callHasProfile(address: address)
+            #if DEBUG
             print("⛓️ [Attestation] hasProfile=\(hasProfile)")
+            #endif
         } catch {
+            #if DEBUG
             print("⛓️ [Attestation] hasProfile check failed: \(error.localizedDescription)")
+            #endif
             throw error
         }
 
         guard hasProfile else {
+            #if DEBUG
             print("⛓️ [Attestation] No on-chain profile — cannot attest")
+            #endif
             throw AttestationError.noProfile
         }
 
         let calldata = encodeCreateAttestation(input)
+        #if DEBUG
         print("⛓️ [Attestation] Submitting tx to \(contractAddress) (\(calldata.count) chars calldata)")
+        #endif
 
         #if canImport(PrivySDK)
         let txHash = try await sendTransaction(
@@ -325,7 +353,9 @@ final class ZKSyncAttestationService: ObservableObject {
             to: contractAddress,
             data: calldata
         )
+        #if DEBUG
         print("⛓️ [Attestation] ✅ tx submitted: \(txHash)")
+        #endif
         return AttestationResult(txHash: txHash)
         #else
         print("⛓️ [Attestation] PrivySDK not available")

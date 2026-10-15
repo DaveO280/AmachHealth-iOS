@@ -540,10 +540,11 @@ final class ConversationMemoryStore: ObservableObject {
     private func saveToDisk() {
         let payload = ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
         guard let data = try? JSONEncoder().encode(payload) else { return }
-        try? data.write(to: storageURL, options: .atomic)
+        try? ProtectedLocalFile.write(data, to: storageURL)
     }
 
     private func loadFromDisk() {
+        ProtectedLocalFile.protectExisting(at: storageURL)
         guard
             let data = try? Data(contentsOf: storageURL),
             let payload = try? JSONDecoder().decode(ConversationMemoryStorjPayload.self, from: data)

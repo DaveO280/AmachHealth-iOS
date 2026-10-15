@@ -84,7 +84,9 @@ final class StorjTimelineService {
             do {
                 try await registerOnChain(event: event, result: result)
             } catch {
+                #if DEBUG
                 print("⛓️ [Timeline] On-chain registration failed (non-critical): \(error.localizedDescription)")
+                #endif
             }
         }
         return result
@@ -170,7 +172,9 @@ final class StorjTimelineService {
         // Wallet must be connected; non-connected is a silent skip, not an error.
         let wallet = WalletService.shared
         guard await wallet.isConnected else {
+            #if DEBUG
             print("⛓️ [Timeline] Wallet not connected — skipping on-chain registration")
+            #endif
             return
         }
 
@@ -195,9 +199,13 @@ final class StorjTimelineService {
             contentHash: contentHashBytes
         )
 
+        #if DEBUG
         print("⛓️ [Timeline] Registering event \(event.id) on-chain (type=\(event.eventType.rawValue))")
+        #endif
         let txHash = try await wallet.sendTransaction(to: contractAddress, data: calldata, chainId: chainId)
+        #if DEBUG
         print("⛓️ [Timeline] ✅ Registered: \(txHash)")
+        #endif
     }
 
     // MARK: - ABI Encoding

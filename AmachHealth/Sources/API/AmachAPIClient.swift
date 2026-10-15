@@ -847,7 +847,7 @@ final class AmachAPIClient {
     }
 
     /// Upload a baseline-window or finish-window v2 leaf bundle for the
-    /// Spring Push improvement-proof flow. The server serializes each
+    /// improvement-proof flow (no caller since Spring Push was removed). The server serializes each
     /// leaf into its canonical 124-byte form, Poseidon4-hashes it, and
     /// stores `{ leaves: [{ serializedHex, hashDec, ...fields }] }` to
     /// Storj under the dataType the web-side proof builder reads from
@@ -982,6 +982,9 @@ final class AmachAPIClient {
             #endif
             // Try to parse error message
             if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                if errorResponse.code == APIError.enclaveBusyCode {
+                    throw APIError.enclaveBusy
+                }
                 throw APIError.requestFailed(errorResponse.error)
             }
             throw APIError.httpError(statusCode: httpResponse.statusCode)
@@ -1432,6 +1435,8 @@ struct AttestationInfo: Decodable, Identifiable {
 
 struct ErrorResponse: Decodable {
     let error: String
+    /// Machine-readable error code, e.g. "enclave_busy".
+    let code: String?
 }
 
 // MARK: - ZK Coverage Types
@@ -1666,6 +1671,11 @@ enum APIError: LocalizedError {
     case requestFailed(String)
     case encodingFailed
     case decodingFailed
+    /// Every private (enclave) AI model was at capacity (HTTP 503
+    /// `enclave_busy`). The server never falls back to a non-private model.
+    case enclaveBusy
+
+    static let enclaveBusyCode = "enclave_busy"
 
     var errorDescription: String? {
         switch self {
@@ -1679,6 +1689,8 @@ enum APIError: LocalizedError {
             return "Failed to encode request"
         case .decodingFailed:
             return "Failed to decode response"
+        case .enclaveBusy:
+            return "The private AI enclave is busy. Please try again in a moment."
         }
     }
 }

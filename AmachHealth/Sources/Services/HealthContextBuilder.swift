@@ -212,7 +212,9 @@ struct HealthContextBuilder {
                 return labResultSummary(from: record, formatter: formatter)
             }
         } catch {
+            #if DEBUG
             print("🧪 [LabContext] bloodwork fetch error: \(error.localizedDescription)")
+            #endif
             return nil
         }
     }
@@ -244,7 +246,9 @@ struct HealthContextBuilder {
                 return dexaResultSummary(from: record, formatter: formatter)
             }
         } catch {
+            #if DEBUG
             print("🧪 [LabContext] dexa fetch error: \(error.localizedDescription)")
+            #endif
             return nil
         }
     }

@@ -152,7 +152,9 @@ final class MerkleGenesisService: ObservableObject {
         }
 
         progress = .normalizing(progress: 1.0)
+        #if DEBUG
         print("🌿 [Genesis] Normalized \(leaves.count) leaves")
+        #endif
 
         // ─── Step 3-5: Server-side hash + tree + Storj ────────────────
         progress = .hashing(progress: 0.2)
@@ -208,9 +210,13 @@ final class MerkleGenesisService: ObservableObject {
                 walletAddress: walletAddress,
                 remote: remote
             )
+            #if DEBUG
             print("⛓️ [Genesis] On-chain root committed: \(onChainTxHash ?? "no hash")")
+            #endif
         } catch {
+            #if DEBUG
             print("⚠️ [Genesis] On-chain commitment failed: \(error.localizedDescription)")
+            #endif
             throw GenesisError.attestationFailed(error.localizedDescription)
         }
 
@@ -299,16 +305,22 @@ final class MerkleGenesisService: ObservableObject {
         if remote.merkleCommitKind == "skip" {
             let reason = remote.onChainSkipReason ?? ""
             if reason.contains("chain read failed") {
+                #if DEBUG
                 print("⚠️ [Genesis] Lane A calldata unavailable (\(reason)) — trying legacy commit")
+                #endif
             } else {
+                #if DEBUG
                 print("⛓️ [Genesis] On-chain skipped: \(reason.isEmpty ? "no tx needed" : reason)")
+                #endif
                 return nil
             }
         }
 
         if let alreadyCommitted = try? await attestation.hasGenesisRoot(address: walletAddress),
            alreadyCommitted {
+            #if DEBUG
             print("⛓️ [Genesis] Root already committed for \(walletAddress) — skipping")
+            #endif
             return nil
         }
 

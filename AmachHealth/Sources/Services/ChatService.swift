@@ -73,6 +73,11 @@ final class ChatService: ObservableObject {
     /// isn't duplicated, then calls startStreaming as normal.
     func retryLastMessage() {
         guard let text = lastFailedMessage else { return }
+        // Drop Luma's "enclave busy" note so the retry replaces it
+        if let last = currentSession.messages.last, last.role == .assistant,
+           last.content == Self.enclaveBusyReply {
+            currentSession.messages.removeLast()
+        }
         // Remove the dangling user message left by the failed attempt
         if let last = currentSession.messages.last, last.role == .user, last.content == text {
             currentSession.messages.removeLast()
@@ -80,6 +85,28 @@ final class ChatService: ObservableObject {
         lastFailedMessage = nil
         error = nil
         startStreaming(text)
+    }
+
+    // MARK: - Feedback availability
+
+    /// Luma response rating is hidden: /api/feedback exists on no backend
+    /// branch, and feedback text would leave the private path. Re-enable once
+    /// a private feedback route exists.
+    static let feedbackEnabled = false
+
+    // MARK: - Enclave busy
+
+    /// Luma's reply when every private (enclave) model is at capacity.
+    /// The server never falls back to a non-private model, so this is a
+    /// pause, not an error.
+    static let enclaveBusyReply =
+        "I think things through in a private enclave so your data stays sealed, " +
+        "and it's full for the moment. Give it a minute and tap Try Again. " +
+        "Your question is saved."
+
+    private static func isEnclaveBusy(_ error: Error) -> Bool {
+        if case .enclaveBusy = error as? APIError { return true }
+        return false
     }
 
     // MARK: - Send Message
@@ -126,6 +153,12 @@ final class ChatService: ObservableObject {
             saveToDisk()
 
             updateRollingSummaryIfNeeded()
+        } catch where Self.isEnclaveBusy(error) {
+            currentSession.messages.append(ChatMessage(role: .assistant, content: Self.enclaveBusyReply))
+            currentSession.updatedAt = .now
+            saveToDisk()
+            self.error = nil
+            self.lastFailedMessage = trimmed
         } catch {
             self.error = error.localizedDescription
             self.lastFailedMessage = trimmed
@@ -301,6 +334,16 @@ final class ChatService: ObservableObject {
                 }
                 lastFailedMessage = nil
                 saveToDisk()
+            } else if Self.isEnclaveBusy(error) {
+                if currentSession.messages.indices.contains(assistantIdx),
+                   currentSession.messages[assistantIdx].role == .assistant {
+                    currentSession.messages[assistantIdx].content = Self.enclaveBusyReply
+                } else {
+                    currentSession.messages.append(ChatMessage(role: .assistant, content: Self.enclaveBusyReply))
+                }
+                saveToDisk()
+                self.error = nil
+                self.lastFailedMessage = trimmed
             } else {
                 // Timeout or other error — show fallback instead of removing
                 if currentSession.messages.indices.contains(assistantIdx),
@@ -404,6 +447,10 @@ final class ChatService: ObservableObject {
             AmachHaptics.lumaResponse()
             // Link this session back to the HealthEvent for future memory queries
             service.linkSession(currentSession.id, to: event.id)
+        } catch where Self.isEnclaveBusy(error) {
+            currentSession.messages[idx].content = Self.enclaveBusyReply
+            saveToDisk()
+            self.error = nil
         } catch {
             if currentSession.messages[idx].content.isEmpty {
                 currentSession.messages.remove(at: idx)
@@ -420,6 +467,7 @@ final class ChatService: ObservableObject {
     /// the backend for quality monitoring — no health metric values are included,
     /// only the raw text of the user prompt and Luma's reply.
     func submitFeedback(_ feedback: MessageFeedback, for messageId: UUID, comment: String? = nil) {
+        guard Self.feedbackEnabled else { return }
         guard let idx = currentSession.messages.firstIndex(where: { $0.id == messageId }),
               currentSession.messages[idx].role == .assistant else { return }
 
@@ -793,10 +841,11 @@ final class ChatService: ObservableObject {
         }
         let all = [currentSession] + recentSessions.filter { $0.id != currentSession.id }
         guard let data = try? JSONEncoder().encode(all) else { return }
-        try? data.write(to: localStorageURL, options: .atomic)
+        try? ProtectedLocalFile.write(data, to: localStorageURL)
     }
 
     private func loadFromDisk() {
+        ProtectedLocalFile.protectExisting(at: localStorageURL)
         guard
             let data = try? Data(contentsOf: localStorageURL),
             let sessions = try? JSONDecoder().decode([ChatSession].self, from: data),

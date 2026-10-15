@@ -76,6 +76,41 @@ final class ChatServiceSendTests: XCTestCase {
         XCTAssertEqual(sut.lastFailedMessage, "Retry me")
     }
 
+    func test_send_enclave_busy_replies_calmly_without_error() async throws {
+        mockAPI.config.chatError = APIError.enclaveBusy
+        await sut.send("How was my sleep?")
+
+        XCTAssertNil(sut.error)
+        XCTAssertEqual(sut.lastFailedMessage, "How was my sleep?")
+        XCTAssertEqual(sut.currentSession.messages.last?.role, .assistant)
+        XCTAssertEqual(sut.currentSession.messages.last?.content, ChatService.enclaveBusyReply)
+    }
+
+    func test_sendStreaming_enclave_busy_replies_calmly_and_retry_replaces_it() async throws {
+        mockAPI.config.chatError = APIError.enclaveBusy
+        await sut.sendStreaming("How was my sleep?")
+
+        XCTAssertNil(sut.error)
+        XCTAssertEqual(sut.lastFailedMessage, "How was my sleep?")
+        XCTAssertEqual(sut.currentSession.messages.last?.content, ChatService.enclaveBusyReply)
+
+        mockAPI.config.chatError = nil
+        sut.retryLastMessage()
+        // Busy note and dangling user message are removed before the resend.
+        XCTAssertFalse(sut.currentSession.messages.contains { $0.content == ChatService.enclaveBusyReply })
+    }
+
+    func test_feedback_is_disabled_and_never_calls_api() async throws {
+        mockAPI.config.chatResponse = .fixture(content: "Here you go")
+        await sut.send("Hi")
+        let reply = try XCTUnwrap(sut.currentSession.messages.last)
+        sut.submitFeedback(.helpful, for: reply.id)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(ChatService.feedbackEnabled)
+        XCTAssertEqual(mockAPI.submitFeedbackCallCount, 0)
+        XCTAssertNil(sut.currentSession.messages.last?.feedback)
+    }
+
     func test_send_passes_history_to_api() async throws {
         // First exchange
         await sut.send("What is HRV?")

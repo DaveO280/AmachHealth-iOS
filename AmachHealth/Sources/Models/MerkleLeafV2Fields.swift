@@ -49,7 +49,7 @@ struct MerkleLeafV2Fields: Codable, Equatable {
     // v2-only metrics. The improvement circuit's default metric pointer
     // is `vo2max` (chunk 2, byte offset 2 — see METRIC_POINTER in the TS
     // builder). All v2-only fields are 0 until the iOS HealthKit pipeline
-    // gains support for them; see SpringPushLeavesService for the TODO.
+    // gains support for them.
     let vo2max: UInt16             // ml/(kg·min) * 10
     let weight: UInt16             // grams / 10
     let bodyFatPct: UInt16         // % * 100 (basis points)
