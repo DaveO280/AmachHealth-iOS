@@ -258,9 +258,13 @@ final class HealthMetricProofService: ObservableObject {
         // via the user's Privy wallet — same pattern as the web app.
         do {
             proof = try await anchorOnChain(proof: proof, claim: claim, period: period)
+            #if DEBUG
             print("⛓️ [Proof] On-chain anchoring succeeded — txHash=\(proof.prover.attestationTxHash ?? "nil")")
+            #endif
         } catch {
+            #if DEBUG
             print("⛓️ [Proof] On-chain anchoring failed: \(error.localizedDescription) — proof still valid off-chain")
+            #endif
         }
 
         lastGeneratedProof = proof

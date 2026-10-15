@@ -546,7 +546,7 @@ struct LumaMessageBubble: View {
 
     private var isUser: Bool { message.role == .user }
     private var isStreaming: Bool { message.content.isEmpty }
-    private var showFeedback: Bool { !isUser && !isStreaming }
+    private var showFeedback: Bool { ChatService.feedbackEnabled && !isUser && !isStreaming }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: AmachSpacing.sm) {

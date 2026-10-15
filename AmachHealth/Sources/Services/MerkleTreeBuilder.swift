@@ -222,7 +222,7 @@ final class MerkleTreeBuilder: ObservableObject {
         let data = try JSONSerialization.data(withJSONObject: output)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("hashed_leaves_input.json")
-        try data.write(to: url)
+        try data.write(to: url, options: .completeFileProtection)
         return url
     }
 

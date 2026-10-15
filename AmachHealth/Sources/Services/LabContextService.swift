@@ -151,7 +151,7 @@ final class LabContextService: ObservableObject {
                     encryptionKey: key
                 )
                 #if DEBUG
-                print("🧪 LabContextService: FHIR dexa → bodyFat=\(report.totalBodyFatPercent as Any)")
+                print("🧪 LabContextService: FHIR dexa report retrieved")
                 #endif
                 return convertDexaReport(report)
             } else {

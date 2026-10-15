@@ -80,7 +80,7 @@ final class LeafHashingService: ObservableObject {
         let outputFile = tempDir.appendingPathComponent("hashed_leaves.json")
 
         let inputData = try JSONSerialization.data(withJSONObject: serializedLeaves)
-        try inputData.write(to: inputFile)
+        try inputData.write(to: inputFile, options: .completeFileProtection)
 
         hashingProgress = 0.2
 
@@ -147,7 +147,7 @@ final class LeafHashingService: ObservableObject {
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("normalized_leaves.json")
-        try data.write(to: url)
+        try data.write(to: url, options: .completeFileProtection)
 
         return url
     }

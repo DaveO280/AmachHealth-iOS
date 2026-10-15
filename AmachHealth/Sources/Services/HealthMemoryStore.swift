@@ -198,6 +198,7 @@ final class HealthMemoryStore: ObservableObject {
     // MARK: - Persistence
 
     private func load() {
+        [eventsURL, baselinesURL, pendingURL].forEach(ProtectedLocalFile.protectExisting(at:))
         if let data = try? Data(contentsOf: eventsURL),
            let decoded = try? JSONDecoder().decode([HealthEvent].self, from: data) {
             events = decoded
@@ -214,16 +215,16 @@ final class HealthMemoryStore: ObservableObject {
 
     private func saveEvents() {
         guard let data = try? JSONEncoder().encode(events) else { return }
-        try? data.write(to: eventsURL, options: .atomic)
+        try? ProtectedLocalFile.write(data, to: eventsURL)
     }
 
     private func saveBaselines() {
         guard let data = try? JSONEncoder().encode(baselines) else { return }
-        try? data.write(to: baselinesURL, options: .atomic)
+        try? ProtectedLocalFile.write(data, to: baselinesURL)
     }
 
     private func savePending() {
         guard let data = try? JSONEncoder().encode(pendingInsights) else { return }
-        try? data.write(to: pendingURL, options: .atomic)
+        try? ProtectedLocalFile.write(data, to: pendingURL)
     }
 }

@@ -31,6 +31,7 @@
 		AA0000000000000000000215 /* HealthDataSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000115 /* HealthDataSyncService.swift */; };
 		AA0000000000000000000216 /* HealthKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000116 /* HealthKitService.swift */; };
 		AA0000000000000000000217 /* HealthMemoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000117 /* HealthMemoryStore.swift */; };
+		5BABE100000000000000E002 /* ProtectedLocalFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE100000000000000E001 /* ProtectedLocalFile.swift */; };
 		AA0000000000000000000218 /* LumaProactiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000118 /* LumaProactiveService.swift */; };
 		AA0000000000000000000219 /* WalletService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000119 /* WalletService.swift */; };
 		AA000000000000000000021A /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000011A /* ChatView.swift */; };
@@ -92,9 +93,7 @@
 		55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D2720462134929AF0C687C /* MerkleNormalizationService.swift */; };
 		083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19A493F7F7694A57A538C757 /* MerkleLeaf.swift */; };
 		5BABE100000000000000A002 /* MerkleLeafV2Fields.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE100000000000000A001 /* MerkleLeafV2Fields.swift */; };
-		5BABE100000000000000B002 /* SpringPushLeavesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE100000000000000B001 /* SpringPushLeavesService.swift */; };
-		5BABE100000000000000C002 /* SpringPushLeavesServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE100000000000000C001 /* SpringPushLeavesServiceTests.swift */; };
-		5BABE100000000000000D002 /* SpringPushContestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE100000000000000D001 /* SpringPushContestService.swift */; };
+		5BABE100000000000000C002 /* MerkleLeafV2FieldsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE100000000000000C001 /* MerkleLeafV2FieldsTests.swift */; };
 		PDF000000000000000000011 /* PDFReportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000001 /* PDFReportModels.swift */; };
 		PDF000000000000000000012 /* PDFReportParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000002 /* PDFReportParser.swift */; };
 		PDF000000000000000000013 /* FhirConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000003 /* FhirConverter.swift */; };
@@ -143,6 +142,7 @@
 		AA0000000000000000000115 /* HealthDataSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthDataSyncService.swift; path = AmachHealth/Sources/Services/HealthDataSyncService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000116 /* HealthKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthKitService.swift; path = AmachHealth/Sources/Services/HealthKitService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000117 /* HealthMemoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthMemoryStore.swift; path = AmachHealth/Sources/Services/HealthMemoryStore.swift; sourceTree = SOURCE_ROOT; };
+		5BABE100000000000000E001 /* ProtectedLocalFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProtectedLocalFile.swift; path = AmachHealth/Sources/Services/ProtectedLocalFile.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000118 /* LumaProactiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaProactiveService.swift; path = AmachHealth/Sources/Services/LumaProactiveService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000119 /* WalletService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletService.swift; path = AmachHealth/Sources/Services/WalletService.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000011A /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatView.swift; path = AmachHealth/Sources/Views/ChatView.swift; sourceTree = SOURCE_ROOT; };
@@ -199,9 +199,7 @@
 		56D2720462134929AF0C687C /* MerkleNormalizationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleNormalizationService.swift; path = AmachHealth/Sources/Services/MerkleNormalizationService.swift; sourceTree = SOURCE_ROOT; };
 		19A493F7F7694A57A538C757 /* MerkleLeaf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeaf.swift; path = AmachHealth/Sources/Models/MerkleLeaf.swift; sourceTree = SOURCE_ROOT; };
 		5BABE100000000000000A001 /* MerkleLeafV2Fields.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeafV2Fields.swift; path = AmachHealth/Sources/Models/MerkleLeafV2Fields.swift; sourceTree = SOURCE_ROOT; };
-		5BABE100000000000000B001 /* SpringPushLeavesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpringPushLeavesService.swift; path = AmachHealth/Sources/Services/SpringPushLeavesService.swift; sourceTree = SOURCE_ROOT; };
-		5BABE100000000000000C001 /* SpringPushLeavesServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpringPushLeavesServiceTests.swift; path = AmachHealth/Tests/SpringPushLeavesServiceTests.swift; sourceTree = SOURCE_ROOT; };
-		5BABE100000000000000D001 /* SpringPushContestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SpringPushContestService.swift; path = AmachHealth/Sources/Services/SpringPushContestService.swift; sourceTree = SOURCE_ROOT; };
+		5BABE100000000000000C001 /* MerkleLeafV2FieldsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MerkleLeafV2FieldsTests.swift; path = AmachHealth/Tests/MerkleLeafV2FieldsTests.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000001 /* PDFReportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportModels.swift; path = AmachHealth/Sources/Models/PDFReportModels.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000002 /* PDFReportParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParser.swift; path = AmachHealth/Sources/Services/PDFReportParser.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000003 /* FhirConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FhirConverter.swift; path = AmachHealth/Sources/Services/FhirConverter.swift; sourceTree = SOURCE_ROOT; };
@@ -294,7 +292,7 @@
 				PDF000000000000000000009 /* PDFReportStressTests.swift */,
 				E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */,
 				STL000000000000000000012 /* StorjTimelineServiceTests.swift */,
-				5BABE100000000000000C001 /* SpringPushLeavesServiceTests.swift */,
+				5BABE100000000000000C001 /* MerkleLeafV2FieldsTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -416,6 +414,7 @@
 				AA0000000000000000000115 /* HealthDataSyncService.swift */,
 				AA0000000000000000000116 /* HealthKitService.swift */,
 				AA0000000000000000000117 /* HealthMemoryStore.swift */,
+				5BABE100000000000000E001 /* ProtectedLocalFile.swift */,
 				DD0000000000000000000002 /* HealthMetricProofService.swift */,
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
 				AA0000000000000000000127 /* TimelineService.swift */,
@@ -427,8 +426,6 @@
 					79574FCB749142349FF1DA95 /* MerkleTreeBuilder.swift */,
 					7C89EDF893CB4E9D9EBF137A /* LeafHashingService.swift */,
 					56D2720462134929AF0C687C /* MerkleNormalizationService.swift */,
-					5BABE100000000000000B001 /* SpringPushLeavesService.swift */,
-					5BABE100000000000000D001 /* SpringPushContestService.swift */,
 					EE0000000000000000000004 /* ZKSyncAttestationService.swift */,
 				EE0000000000000000000005 /* Keccak256.swift */,
 				PDF000000000000000000002 /* PDFReportParser.swift */,
@@ -596,6 +593,7 @@
 				AA0000000000000000000215 /* HealthDataSyncService.swift in Sources */,
 				AA0000000000000000000216 /* HealthKitService.swift in Sources */,
 				AA0000000000000000000217 /* HealthMemoryStore.swift in Sources */,
+				5BABE100000000000000E002 /* ProtectedLocalFile.swift in Sources */,
 				AA0000000000000000000218 /* LumaProactiveService.swift in Sources */,
 				AA0000000000000000000227 /* TimelineService.swift in Sources */,
 				STL000000000000000000001 /* StorjTimelineService.swift in Sources */,
@@ -622,8 +620,6 @@
 					55F1D8827F0B4D55833FF708 /* MerkleNormalizationService.swift in Sources */,
 					083E922D2D324518A4CEFC05 /* MerkleLeaf.swift in Sources */,
 					5BABE100000000000000A002 /* MerkleLeafV2Fields.swift in Sources */,
-					5BABE100000000000000B002 /* SpringPushLeavesService.swift in Sources */,
-					5BABE100000000000000D002 /* SpringPushContestService.swift in Sources */,
 					DD0000000000000000000011 /* HealthMetricProof.swift in Sources */,
 				DD0000000000000000000012 /* HealthMetricProofService.swift in Sources */,
 				DD0000000000000000000013 /* ProofGeneratorView.swift in Sources */,
@@ -669,7 +665,7 @@
 				PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */,
 				E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */,
 				STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */,
-				5BABE100000000000000C002 /* SpringPushLeavesServiceTests.swift in Sources */,
+				5BABE100000000000000C002 /* MerkleLeafV2FieldsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
