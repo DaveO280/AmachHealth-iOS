@@ -210,6 +210,7 @@ final class WalletService: ObservableObject {
 
     /// Disconnect wallet and clear local state.
     func disconnect() async {
+        LocalVault.shared.close(forget: true)
         if let addr = address {
             deleteEncryptionKeyFromKeychain(for: addr)
         }

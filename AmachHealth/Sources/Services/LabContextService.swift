@@ -1,13 +1,13 @@
 // LabContextService.swift
 // AmachHealth
 //
-// Fetches and caches the user's most recent bloodwork and DEXA lab results
-// for injection into Luma's chat context.
+// Builds the user's most recent bloodwork and DEXA results for Luma's chat
+// context, from the vault (lab_reports / lab_markers).
 //
 // Load lifecycle:
-//   • Triggered once when ChatView appears (if wallet is connected)
-//   • Results cached in-memory for the session — no redundant API calls
-//   • Silently no-ops when wallet is not connected or no records exist
+//   • Triggered when ChatView appears; reads the vault, so it works offline
+//   • Results cached in-memory until invalidate() (new upload, vault change)
+//   • Without a vault (no wallet) it falls back to fetching from Storj
 //
 // Luma receives the cached context on every message via HealthContextBuilder.
 
@@ -37,8 +37,13 @@ final class LabContextService: ObservableObject {
     func load(wallet: WalletService, force: Bool = false) async {
         guard !isLoading else { return }
 
-        // Already cached — skip the Storj round-trip entirely.
+        // Already cached — skip the round-trip entirely.
         if !force, context != nil { return }
+
+        if let vault = LocalVault.shared.database {
+            context = Self.context(from: vault)
+            return
+        }
 
         guard wallet.isConnected else {
             #if DEBUG
@@ -96,6 +101,18 @@ final class LabContextService: ObservableObject {
             print("🧪 LabContextService: load failed — \(error)")
             #endif
         }
+    }
+
+    // MARK: - Vault
+
+    /// Latest bloodwork and DEXA in the vault, in the shape Luma reads.
+    static func context(from vault: VaultDatabase) -> LabResultsContext? {
+        let bloodwork = (try? vault.labReports(kind: .bloodwork))?.first
+        let dexa = (try? vault.labReports(kind: .dexa))?.first
+        let bw = bloodwork.flatMap { shared.convertBloodworkReport($0.asBloodwork) }
+        let dx = dexa.map { shared.convertDexaReport($0.asDexa) } ?? nil
+        guard bw != nil || dx != nil else { return nil }
+        return LabResultsContext(bloodwork: bw, dexa: dx)
     }
 
     // MARK: - Private Fetch Helpers

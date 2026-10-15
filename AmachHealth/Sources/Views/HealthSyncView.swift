@@ -16,6 +16,9 @@ struct HealthSyncView: View {
     @State private var showingImportPDF = false
     @State private var syncStartDate = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
     @State private var labItems: [StorjListItem] = []
+    @State private var vaultLabs: [LabReportWithMarkers] = []
+    @ObservedObject private var vault = LocalVault.shared
+    @ObservedObject private var importer = StorjImportService.shared
     @State private var isLoadingLabRecords = false
     @State private var labError: String?
 
@@ -27,7 +30,10 @@ struct HealthSyncView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         connectionSection
-                        if wallet.isConnected {
+                        if vault.isOpen {
+                            VaultStatusSection()
+                        }
+                        if wallet.isConnected || vault.isOpen {
                             syncProgressSection
                             lastSyncSection
                             syncControlSection
@@ -77,13 +83,16 @@ struct HealthSyncView: View {
                 .presentationDetents([.large])
                 .presentationBackground(Color.amachSurface)
             }
-            .task(id: wallet.isConnected) {
-                if wallet.isConnected {
+            .task(id: wallet.isConnected || vault.isOpen) {
+                if wallet.isConnected || vault.isOpen {
                     await loadLabRecords()
                 } else {
                     labItems = []
                     labError = nil
                 }
+            }
+            .onChange(of: importer.state) { _, _ in
+                Task { await loadLabRecords() }
             }
             .onChange(of: syncService.lastSyncDate) { _, _ in
                 guard wallet.isConnected else { return }
@@ -674,6 +683,25 @@ struct HealthSyncView: View {
                 Text(labError)
                     .font(.caption)
                     .foregroundStyle(Color.amachDestructive)
+            } else if vault.isOpen {
+                if vaultLabs.isEmpty {
+                    Text("No lab reports stored yet.")
+                        .font(.caption)
+                        .foregroundStyle(Color.amachTextSecondary)
+                        .padding(.vertical, 6)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(vaultLabs) { report in
+                            NavigationLink {
+                                LabRecordDetailView(vaultItem: report)
+                                    .environmentObject(wallet)
+                            } label: {
+                                VaultLabReportCard(report: report)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             } else if labItems.isEmpty {
                 Text("No DEXA or bloodwork records stored yet.")
                     .font(.caption)
@@ -812,6 +840,11 @@ struct HealthSyncView: View {
     }
 
     private func loadLabRecords() async {
+        if let database = vault.database {
+            vaultLabs = (try? database.labReports()) ?? []
+            labError = nil
+            return
+        }
         guard wallet.isConnected else {
             labItems = []
             labError = nil

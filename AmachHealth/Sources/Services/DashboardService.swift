@@ -1,8 +1,11 @@
 // DashboardService.swift
 // AmachHealth
 //
-// Fetches live HealthKit data for the dashboard:
-// today's key metrics + daily trend data for 7/30/90-day periods
+// Dashboard data: today's key metrics + daily trends for 7/30/90-day periods.
+// With a vault, metrics and trends come from daily_metrics (kept current by
+// HealthKitIngestionService), so they work offline and include imported
+// history. Heart-rate zones and recent workouts need raw samples, so they
+// still come from HealthKit. Without a vault everything is live HealthKit.
 
 import Foundation
 import HealthKit
@@ -239,6 +242,12 @@ final class DashboardService: ObservableObject {
 
     func load(force: Bool = false) async {
         if !force, let last = lastLoaded, Date().timeIntervalSince(last) < 300 { return }
+
+        if let vault = LocalVault.shared.database {
+            await loadFromVault(vault)
+            return
+        }
+
         guard HKHealthStore.isHealthDataAvailable() else { return }
 
         isLoading = true
@@ -307,6 +316,44 @@ final class DashboardService: ObservableObject {
         todayHRZones = await hrZonesFetch
         hrZonesTrend = await hrZonesAllFetch
         recentWorkoutSummaries = await workoutsFetch
+
+        isLoading = false
+        lastLoaded = Date()
+    }
+
+    // MARK: - Vault
+
+    private func loadFromVault(_ vault: VaultDatabase) async {
+        isLoading = true
+        error = nil
+        let healthKitAvailable = HKHealthStore.isHealthDataAvailable()
+
+        // Bring today and yesterday up to date before reading.
+        if healthKitAvailable {
+            await HealthKitIngestionService.shared.refreshRecent()
+        }
+
+        let reader = VaultDashboardReader(vault: vault)
+        today = reader.today()
+        stepsTrend = reader.allPeriods("steps")
+        heartRateTrend = reader.allPeriods("heart_rate")
+        hrvTrend = reader.allPeriods("hrv_sdnn")
+        calsTrend = reader.allPeriods("active_energy")
+        exerciseTrend = reader.allPeriods("exercise_minutes")
+        rhrTrend = reader.allPeriods("resting_heart_rate")
+        rrTrend = reader.allPeriods("respiratory_rate")
+        vo2Trend = reader.allPeriods("vo2_max")
+        sleepTrend = Dictionary(uniqueKeysWithValues: TrendPeriod.allCases.map { ($0, reader.sleepTrend(days: $0.days)) })
+        sleepStagesTrend = Dictionary(uniqueKeysWithValues: TrendPeriod.allCases.map { ($0, reader.sleepStagesTrend(days: $0.days)) })
+
+        if healthKitAvailable {
+            async let hrZonesFetch = fetchTodayHRZones()
+            async let hrZonesAllFetch = fetchHRZonesAllPeriods()
+            async let workoutsFetch = fetchRecentWorkoutSummaries(days: 7)
+            todayHRZones = await hrZonesFetch
+            hrZonesTrend = await hrZonesAllFetch
+            recentWorkoutSummaries = await workoutsFetch
+        }
 
         isLoading = false
         lastLoaded = Date()

@@ -96,6 +96,52 @@ final class PDFUploadService: ObservableObject {
 
         let (fhirReport, dataType, fingerprint, reportId) = buildFhirPayload(from: report)
 
+        // Vault first. A report already in the vault is a duplicate; with
+        // legacy writes off, the vault copy is the only one.
+        var savedInVault = false
+        if let vault = LocalVault.shared.database {
+            let item = Self.vaultItem(for: report, id: reportId, pdfSHA256: LabVaultMapping.sha256Hex(pdfData))
+            switch try vault.saveLabReport(item) {
+            case .duplicate(let existingId):
+                let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: existingId,
+                                             report: report, wasDuplicate: true)
+                state = .done(result)
+                return result
+            case .inserted:
+                savedInVault = true
+            }
+            if !VaultFlags.legacyStorjWrites {
+                let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: reportId,
+                                             report: report, wasDuplicate: false)
+                state = .done(result)
+                return result
+            }
+        }
+
+        do {
+            return try await uploadToStorj(
+                report: report, fhirReport: fhirReport, dataType: dataType, fingerprint: fingerprint,
+                reportId: reportId, walletAddress: walletAddress, encryptionKey: encryptionKey
+            )
+        } catch where savedInVault {
+            // Saved on the phone; the Storj copy is best-effort.
+            let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: reportId,
+                                         report: report, wasDuplicate: false)
+            state = .done(result)
+            return result
+        }
+    }
+
+    /// Legacy Storj upload (dedup check, store, attestation). Phase 3 replaces it.
+    private func uploadToStorj(
+        report: ParsedHealthReport,
+        fhirReport: FhirDiagnosticReport,
+        dataType: String,
+        fingerprint: String,
+        reportId: String,
+        walletAddress: String,
+        encryptionKey: WalletEncryptionKey
+    ) async throws -> PDFUploadResult {
         // Step 3: Dedup check
         let existing = try? await checkForDuplicate(
             fingerprint: fingerprint,
@@ -150,6 +196,17 @@ final class PDFUploadService: ObservableObject {
     }
 
     func reset() { state = .idle }
+
+    static func vaultItem(for report: ParsedHealthReport, id: String, pdfSHA256: String?) -> LabReportWithMarkers {
+        switch report {
+        case .bloodwork(let bw):
+            return LabVaultMapping.bloodwork(bw, id: id, origin: "device", pdfSHA256: pdfSHA256)
+        case .dexa(let dexa):
+            return LabVaultMapping.dexa(dexa, id: id, origin: "device", pdfSHA256: pdfSHA256)
+        case .medicalRecord(let mr):
+            return LabVaultMapping.medical(mr, id: id, origin: "device", pdfSHA256: pdfSHA256)
+        }
+    }
 
     // MARK: - Helpers
 

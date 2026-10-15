@@ -1,8 +1,10 @@
 // TimelineService.swift
 // AmachHealth
 //
-// Loads timeline events from Storj, merges them with local anomaly memory,
-// and caches the combined feed for fast startup.
+// Timeline events live in the vault (timeline_events), merged with local
+// anomaly memory for display. Storj copies are written only while
+// VaultFlags.legacyStorjWrites is on; without a vault (no wallet) the
+// feed falls back to loading from Storj.
 
 import Foundation
 
@@ -16,11 +18,15 @@ final class TimelineService: ObservableObject {
 
     private let storjService: StorjTimelineService
     private let wallet = WalletService.shared
-    private let cacheKey = "amach_timeline_events"
+    private var vault: VaultDatabase? { LocalVault.shared.database }
 
     private init(storjService: StorjTimelineService = .shared) {
         self.storjService = storjService
-        events = loadFromCache()
+    }
+
+    /// Called by LocalVault when the vault opens or closes.
+    func vaultDidChange() {
+        events = vault == nil ? [] : loadFromCache()
     }
 
     // MARK: - Public API
@@ -29,14 +35,18 @@ final class TimelineService: ObservableObject {
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async {
-        let cachedEvents = loadFromCache()
-        events = cachedEvents
+        if vault != nil {
+            // Local-first: the vault already holds imported Storj events.
+            events = loadFromCache()
+            error = nil
+            return
+        }
+
         isLoading = true
         error = nil
         defer { isLoading = false }
 
         timelineDebug("Begin load for \(walletAddress)")
-        timelineDebug("Loaded \(cachedEvents.count) cached timeline events")
 
         do {
             let storjEvents = try await loadStorjEvents(
@@ -64,6 +74,7 @@ final class TimelineService: ObservableObject {
         error = nil
         events.insert(event, at: 0)
         saveToCache(events)
+        guard VaultFlags.legacyStorjWrites else { return }
 
         do {
             let storeResult = try await storjService.saveEvent(
@@ -88,6 +99,8 @@ final class TimelineService: ObservableObject {
             replaceLocalEvent(with: storedEvent)
         } catch {
             timelineDebug("Failed to store timeline event \(event.id): \(error.localizedDescription)")
+            // Saved in the vault already; the Storj copy is best-effort.
+            if vault != nil { return }
             events.removeAll { $0.id == event.id }
             saveToCache(events)
             self.error = error.localizedDescription
@@ -102,6 +115,7 @@ final class TimelineService: ObservableObject {
     ) async throws {
         error = nil
         replaceLocalEvent(with: event)
+        guard VaultFlags.legacyStorjWrites else { return }
 
         do {
             let storeResult = try await storjService.saveEvent(
@@ -126,6 +140,7 @@ final class TimelineService: ObservableObject {
             replaceLocalEvent(with: storedEvent)
         } catch {
             timelineDebug("Failed to update timeline event \(event.id): \(error.localizedDescription)")
+            if vault != nil { return }
             self.error = error.localizedDescription
             throw error
         }
@@ -140,8 +155,9 @@ final class TimelineService: ObservableObject {
         // Optimistic local removal
         let removed = events.filter { $0.id == id }
         events.removeAll { $0.id == id }
-        saveToCache(events)
-        timelineDebug("Optimistically removed timeline event \(id) from local state")
+        try? vault?.deleteTimelineEvent(id: id)
+        timelineDebug("Removed timeline event \(id) from local state")
+        guard VaultFlags.legacyStorjWrites else { return }
 
         do {
             try await storjService.deleteEvent(
@@ -151,11 +167,12 @@ final class TimelineService: ObservableObject {
             )
             timelineDebug("Deleted timeline event \(id) from Storj")
         } catch {
+            // With a vault the local delete stands; the Storj copy is best-effort.
+            if vault != nil { return }
             // Rollback: re-insert the removed event
             if let event = removed.first {
                 events.insert(event, at: 0)
                 events.sort { $0.timestamp > $1.timestamp }
-                saveToCache(events)
             }
             timelineDebug("Failed to delete timeline event \(id): \(error.localizedDescription)")
             self.error = error.localizedDescription
@@ -163,21 +180,20 @@ final class TimelineService: ObservableObject {
         }
     }
 
-    // MARK: - Cache
+    // MARK: - Vault
 
+    /// Vault events merged with local anomaly memory, newest first.
     private func loadFromCache() -> [TimelineEvent] {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey) else { return [] }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([TimelineEvent].self, from: data)) ?? []
+        let stored = (try? vault?.timelineEvents()) ?? []
+        let anomalies = HealthMemoryStore.shared.events.map(TimelineEvent.init(fromHealthEvent:))
+        return merge(storjEvents: stored, anomalies: anomalies)
     }
 
+    /// Persist user events to the vault. Anomaly events stay in HealthMemoryStore.
     private func saveToCache(_ events: [TimelineEvent]) {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(events) else { return }
-        UserDefaults.standard.set(data, forKey: cacheKey)
+        guard let vault else { return }
+        let anomalyIds = Set(HealthMemoryStore.shared.events.map { TimelineEvent(fromHealthEvent: $0).id })
+        try? vault.saveTimelineEvents(events.filter { !anomalyIds.contains($0.id) }, origin: "device")
     }
 
     private func replaceLocalEvent(with event: TimelineEvent) {

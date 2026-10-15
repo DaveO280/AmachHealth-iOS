@@ -173,6 +173,72 @@ final class AmachAPIClient {
         return result.data
     }
 
+    // MARK: - Keyless raw access (on-device decryption)
+    //
+    // storage/list-raw and storage/download-raw take a bucket name the phone
+    // computed itself (StorjBucketName) and never receive the encryption key.
+
+    struct RawStorjObject: Decodable, Equatable {
+        let key: String
+        let size: Int
+        let dataType: String
+        let uploadedAt: Int64
+    }
+
+    /// Every object key in the bucket (follows pagination).
+    func listRawObjects(bucketName: String) async throws -> [RawStorjObject] {
+        struct Request: Encodable {
+            let action = "storage/list-raw"
+            let bucketName: String
+            let cursor: String?
+        }
+        struct Page: Decodable {
+            let objects: [RawStorjObject]
+            let nextCursor: String?
+        }
+        var all: [RawStorjObject] = []
+        var cursor: String?
+        repeat {
+            let response: StorjResponse<Page> = try await post(
+                path: "/api/storj",
+                body: Request(bucketName: bucketName, cursor: cursor)
+            )
+            guard response.success, let page = response.result else {
+                throw APIError.requestFailed(response.error ?? "Failed to list storage")
+            }
+            all += page.objects
+            cursor = page.nextCursor
+        } while cursor != nil
+        return all
+    }
+
+    /// The object's stored bytes, exactly as uploaded (ciphertext).
+    func downloadRawObject(bucketName: String, objectKey: String) async throws -> Data {
+        struct Request: Encodable {
+            let action = "storage/download-raw"
+            let bucketName: String
+            let objectKey: String
+        }
+        guard let url = URL(string: baseURL.absoluteString + "/api/storj") else {
+            throw APIError.invalidResponse
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
+        request.httpBody = try JSONEncoder().encode(Request(bucketName: bucketName, objectKey: objectKey))
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        guard (200...299).contains(http.statusCode) else {
+            if let err = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                throw APIError.requestFailed(err.error)
+            }
+            throw APIError.httpError(statusCode: http.statusCode)
+        }
+        return data
+    }
+
     // MARK: - Timeline Operations
 
     func storeTimelineEvent(

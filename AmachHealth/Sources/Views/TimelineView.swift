@@ -6,6 +6,7 @@ import SwiftUI
 struct TimelineView: View {
     @EnvironmentObject private var wallet: WalletService
     @EnvironmentObject private var timeline: TimelineService
+    @ObservedObject private var vault = LocalVault.shared
 
     @State private var showingAddEvent = false
     @State private var editingEvent: TimelineEvent? = nil
@@ -17,7 +18,7 @@ struct TimelineView: View {
             ZStack {
                 Color.amachBg.ignoresSafeArea()
 
-                if !wallet.isConnected {
+                if !wallet.isConnected && !vault.isOpen {
                     walletGate
                         .padding(AmachSpacing.md)
                 } else {
@@ -105,7 +106,7 @@ struct TimelineView: View {
                 Button("Cancel", role: .cancel) { deletingEvent = nil }
             } message: {
                 if let event = deletingEvent {
-                    Text("\"\(event.titleText)\" will be removed from your timeline and Storj.")
+                    Text("\"\(event.titleText)\" will be removed from your timeline.")
                 }
             }
         }
@@ -263,6 +264,11 @@ struct TimelineView: View {
     }
 
     private func loadEventsIfPossible() async {
+        if vault.isOpen {
+            // Vault-backed: no network, no key needed to read.
+            timeline.vaultDidChange()
+            return
+        }
         guard wallet.isConnected else { return }
 
         do {

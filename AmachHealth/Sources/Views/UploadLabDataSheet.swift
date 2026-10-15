@@ -174,12 +174,22 @@ struct UploadLabDataSheet: View {
         )
 
         do {
-            _ = try await AmachAPIClient.shared.storeLabRecord(
-                data: record,
-                dataType: mode.dataType,
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
+            // Vault first; the Storj copy only while legacy writes are on.
+            if let vault = LocalVault.shared.database {
+                try vault.saveLabReport(LabVaultMapping.legacy(record, origin: "device"))
+            }
+            if VaultFlags.legacyStorjWrites {
+                do {
+                    _ = try await AmachAPIClient.shared.storeLabRecord(
+                        data: record,
+                        dataType: mode.dataType,
+                        walletAddress: encryptionKey.walletAddress,
+                        encryptionKey: encryptionKey
+                    )
+                } catch where LocalVault.shared.isOpen {
+                    // Saved locally; the Storj copy is best-effort.
+                }
+            }
             await onSaved()
             LabContextService.shared.invalidate()
             AmachHaptics.success()
@@ -191,7 +201,21 @@ struct UploadLabDataSheet: View {
 }
 
 struct LabRecordDetailView: View {
-    let item: StorjListItem
+    /// A Storj item (no vault) or a vault report. Vault reports open offline.
+    private let item: StorjListItem?
+    private let vaultItem: LabReportWithMarkers?
+
+    init(item: StorjListItem) {
+        self.item = item
+        self.vaultItem = nil
+    }
+
+    init(vaultItem: LabReportWithMarkers) {
+        self.item = nil
+        self.vaultItem = vaultItem
+    }
+
+    private var txHash: String? { item?.attestationTxHash ?? vaultItem?.report.attestationTxHash }
 
     @EnvironmentObject private var wallet: WalletService
 
@@ -229,7 +253,7 @@ struct LabRecordDetailView: View {
                                         .foregroundStyle(Color.amachTextSecondary)
                                 }
 
-                                if let txHash = item.attestationTxHash ?? record.attestationTxHash {
+                                if let txHash = txHash ?? record.attestationTxHash {
                                     Label("Verified on ZKsync", systemImage: "checkmark.seal.fill")
                                         .font(AmachType.tiny)
                                         .foregroundStyle(Color.amachSuccess)
@@ -284,7 +308,7 @@ struct LabRecordDetailView: View {
                             reportHeaderCard(
                                 title: "Bloodwork",
                                 dateText: bloodworkReport.reportDate,
-                                txHash: item.attestationTxHash
+                                txHash: txHash
                             )
 
                             VStack(alignment: .leading, spacing: AmachSpacing.md) {
@@ -335,7 +359,7 @@ struct LabRecordDetailView: View {
                             reportHeaderCard(
                                 title: "DEXA Scan",
                                 dateText: dexaReport.scanDate,
-                                txHash: item.attestationTxHash
+                                txHash: txHash
                             )
 
                             VStack(alignment: .leading, spacing: AmachSpacing.md) {
@@ -358,6 +382,10 @@ struct LabRecordDetailView: View {
                             .padding(AmachSpacing.lg)
                             .amachCard()
 
+                            if let regions = vaultItem?.dexaRegions, !regions.isEmpty {
+                                dexaRegionsCard(regions)
+                            }
+
                             if let notes = dexaReport.notes, !notes.isEmpty {
                                 notesCard(notes.joined(separator: "\n"))
                             }
@@ -370,7 +398,7 @@ struct LabRecordDetailView: View {
                             reportHeaderCard(
                                 title: medicalRecord.title ?? "Medical Record",
                                 dateText: medicalRecord.reportDate,
-                                txHash: item.attestationTxHash
+                                txHash: txHash
                             )
 
                             if let docType = medicalRecord.documentType, !docType.isEmpty {
@@ -472,6 +500,17 @@ struct LabRecordDetailView: View {
     private func loadRecord() async {
         isLoading = true
         defer { isLoading = false }
+
+        if let vaultItem {
+            switch vaultItem.report.kindValue {
+            case .bloodwork: bloodworkReport = vaultItem.asBloodwork
+            case .dexa: dexaReport = vaultItem.asDexa
+            case .medical: medicalRecord = vaultItem.asMedicalRecord
+            }
+            error = nil
+            return
+        }
+        guard let item else { return }
 
         do {
             let encryptionKey = try await wallet.ensureEncryptionKey()
@@ -590,6 +629,35 @@ struct LabRecordDetailView: View {
                 Text(shortHash(txHash))
                     .font(AmachType.dataMono)
                     .foregroundStyle(Color.amachTextSecondary)
+            }
+        }
+        .padding(AmachSpacing.lg)
+        .amachCard()
+    }
+
+    private func dexaRegionsCard(_ regions: [(region: String, markers: [LabMarkerRow])]) -> some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.md) {
+            Text("Regions")
+                .font(AmachType.h3)
+                .foregroundStyle(Color.amachTextPrimary)
+
+            ForEach(regions, id: \.region) { region in
+                VStack(alignment: .leading, spacing: AmachSpacing.xs) {
+                    Text(region.region.replacingOccurrences(of: "_", with: " ").capitalized)
+                        .font(AmachType.caption.weight(.semibold))
+                        .foregroundStyle(Color.amachTextPrimary)
+                    ForEach(Array(region.markers.enumerated()), id: \.offset) { _, marker in
+                        HStack {
+                            Text(marker.canonicalName.replacingOccurrences(of: "_", with: " ").capitalized)
+                                .font(AmachType.tiny)
+                                .foregroundStyle(Color.amachTextSecondary)
+                            Spacer()
+                            Text("\(marker.value.map(formatted) ?? "—")\(marker.unit.map { " \($0)" } ?? "")")
+                                .font(AmachType.dataMono)
+                                .foregroundStyle(Color.amachTextPrimary)
+                        }
+                    }
+                }
             }
         }
         .padding(AmachSpacing.lg)
