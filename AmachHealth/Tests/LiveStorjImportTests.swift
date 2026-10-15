@@ -9,6 +9,7 @@
 //   TEST_RUNNER_AMACH_API_URL=https://<preview>.vercel.app
 //   TEST_RUNNER_AMACH_LIVE_WALLET=0x...
 //   TEST_RUNNER_AMACH_LIVE_KEY=<64-hex wallet encryption key>
+//   TEST_RUNNER_AMACH_VERCEL_BYPASS=<secret>   (only for protected previews)
 //
 // The key stays in the test process; only the bucket name is sent.
 

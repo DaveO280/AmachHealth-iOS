@@ -226,6 +226,7 @@ final class AmachAPIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
+        applyPreviewBypass(&request)
         request.httpBody = try JSONEncoder().encode(Request(bucketName: bucketName, objectKey: objectKey))
 
         let (data, response) = try await session.data(for: request)
@@ -1019,6 +1020,7 @@ final class AmachAPIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
+        applyPreviewBypass(&request)
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -1068,6 +1070,15 @@ final class AmachAPIClient {
             }
             #endif
             throw error
+        }
+    }
+
+    /// Vercel preview deployments are behind Deployment Protection. Test runs
+    /// against a preview pass the automation bypass secret in
+    /// AMACH_VERCEL_BYPASS; it is never set in the shipped app.
+    private func applyPreviewBypass(_ request: inout URLRequest) {
+        if let secret = ProcessInfo.processInfo.environment["AMACH_VERCEL_BYPASS"], !secret.isEmpty {
+            request.setValue(secret, forHTTPHeaderField: "x-vercel-protection-bypass")
         }
     }
 
