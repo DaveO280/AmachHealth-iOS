@@ -56,9 +56,13 @@ final class ParserRobustnessTests: XCTestCase {
         XCTAssertNil(PDFReportParser.parseText("   \n\t\n  ", filename: "test.pdf"))
     }
 
-    func test_random_prose_returns_nil() {
+    func test_random_prose_is_flagged_non_medical_record() {
         let text = "This is a patient summary note. No lab values were recorded today."
-        XCTAssertNil(PDFReportParser.parseText(text, filename: "note.pdf"))
+        let report = PDFReportParser.parseText(text, filename: "note.pdf")
+        guard case .medicalRecord(let mr) = report else {
+            return XCTFail("Expected medicalRecord, got \(String(describing: report))")
+        }
+        XCTAssertTrue(mr.appearsNonMedical, "Prose without medical content should carry the non-medical note")
     }
 
     // MARK: Non-standard marker names

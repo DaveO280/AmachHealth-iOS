@@ -36,8 +36,15 @@ final class PDFReportTypeDetectionTests: XCTestCase {
         XCTAssertNil(PDFReportParser.parseText("", filename: "empty.pdf"))
     }
 
-    func test_returns_nil_for_nonsense_text() {
-        XCTAssertNil(PDFReportParser.parseText("Hello world this is not a lab report.", filename: "note.pdf"))
+    func test_nonsense_text_is_flagged_non_medical_record() {
+        // Any non-empty text is kept as a generic medical record (no PDF is rejected),
+        // but text with no medical content carries a "doesn't look medical" note.
+        let report = PDFReportParser.parseText("Hello world this is not a lab report.", filename: "note.pdf")
+        guard case .medicalRecord(let mr) = report else {
+            return XCTFail("Expected medicalRecord, got \(String(describing: report))")
+        }
+        XCTAssertTrue(mr.appearsNonMedical)
+        XCTAssertEqual(mr.summary, MedicalRecordData.noMedicalContentNote)
     }
 
     func test_dexa_filename_hint_not_required() {

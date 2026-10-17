@@ -418,7 +418,14 @@ struct LabRecordDetailView: View {
                                 .amachCard()
                             }
 
-                            if let summary = medicalRecord.summary, !summary.isEmpty {
+                            if medicalRecord.summary == MedicalRecordData.noMedicalContentNote {
+                                Label(MedicalRecordData.noMedicalContentNote, systemImage: "exclamationmark.triangle")
+                                    .font(AmachType.caption)
+                                    .foregroundStyle(Color.amachWarning)
+                                    .padding(AmachSpacing.md)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .amachCard()
+                            } else if let summary = medicalRecord.summary, !summary.isEmpty {
                                 VStack(alignment: .leading, spacing: AmachSpacing.sm) {
                                     Text("Summary")
                                         .font(AmachType.h3)

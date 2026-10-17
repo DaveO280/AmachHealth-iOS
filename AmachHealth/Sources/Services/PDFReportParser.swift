@@ -64,13 +64,26 @@ enum PDFReportParser {
             reportDate: extractFirstDate(from: trimmed),
             documentType: "other",
             title: inferTitle(from: trimmed, filename: filename),
-            summary: nil,
+            summary: hasMedicalSignal(trimmed) ? nil : MedicalRecordData.noMedicalContentNote,
             keyFindings: nil,
             medications: nil,
             diagnoses: nil,
             rawText: trimmed,
             confidence: 0.1
         ))
+    }
+
+    /// Clinical vocabulary used to decide whether a catch-all medical record
+    /// actually looks medical. Generic words that show up in ordinary prose
+    /// ("patient", "lab", "report", "note", "medical") are deliberately left out.
+    private static let medicalSignalPattern = try! NSRegularExpression(
+        pattern: #"\b(?:diagnos|assessment|impression|findings|symptom|prescri|medication|dosage|\d+\s?(?:mg|mcg|ml)\b|tablet|capsule|hospital|clinic|physician|doctor|dr\.|surgeon|surger|surgical|operative|anesthe|admission|discharge|referral|radiolog|x-ray|mri\b|ct scan|ultrasound|imaging|biopsy|patholog|blood pressure|heart rate|vital signs|chief complaint|allerg|vaccin|immuniz|hypertension|diabet|infection|pneumonia|cholesterol|glucose|hemoglobin|dexa|dxa|bone density|body fat|lean mass|médic|diagnóstic|ecograf|hallazgo|receta|ordonnance|analyses)"#,
+        options: [.caseInsensitive]
+    )
+
+    /// True if the text contains at least one clinical term.
+    static func hasMedicalSignal(_ text: String) -> Bool {
+        medicalSignalPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
     /// Extract the first date-like string from text
