@@ -208,12 +208,26 @@ final class StorjImportTests: XCTestCase {
         XCTAssertEqual(try status("timelineWeb")?.status, "failed")
     }
 
-    func test_malformed_payload_is_recorded_as_failed() throws {
-        let c = try fixture("healthScores")  // valid ciphertext, wrong shape for a report
-        let bad = AmachAPIClient.RawStorjObject(key: "bloodwork-report-fhir/2-bad.enc", size: 1, dataType: "bloodwork-report-fhir", uploadedAt: 2)
-        guard case .failed = importer.importObject(bad, bytes: Data(c.objectText.utf8), passphrase: passphrase) else {
+    func test_unrecognized_shape_under_a_report_dataType_is_kept_as_json() throws {
+        // Routing goes by the JSON's shape: a non-report under a report
+        // dataType is archived with its contents, never dropped.
+        let c = try fixture("healthScores")
+        let odd = AmachAPIClient.RawStorjObject(key: "bloodwork-report-fhir/2-odd.enc", size: 1, dataType: "bloodwork-report-fhir", uploadedAt: 2)
+        guard case .archived(let json) = importer.importObject(odd, bytes: Data(c.objectText.utf8), passphrase: passphrase) else {
             return XCTFail()
         }
+        XCTAssertTrue(json.contains("overall"))
+    }
+
+    func test_unit_conversion_for_sample_exports() {
+        XCTAssertEqual(StorjObjectImporter.convert(5.2, from: "km", to: "m"), 5200)
+        XCTAssertEqual(StorjObjectImporter.convert(10, from: "hr", to: "min"), 600)
+        XCTAssertEqual(StorjObjectImporter.convert(0.97, from: "%", to: "%") ?? 0, 97, accuracy: 1e-9)
+        XCTAssertEqual(StorjObjectImporter.convert(97.8, from: "%", to: "%"), 97.8)
+        XCTAssertEqual(StorjObjectImporter.convert(38.5, from: "mL/kg·min", to: "mL/kg/min"), 38.5)
+        XCTAssertEqual(StorjObjectImporter.convert(22, from: "kg/m²", to: "kg/m2"), 22)
+        XCTAssertEqual(StorjObjectImporter.convert(212, from: "degF", to: "degC") ?? 0, 100, accuracy: 1e-9)
+        XCTAssertNil(StorjObjectImporter.convert(1, from: "furlong", to: "m"))
     }
 
     // MARK: - Helpers

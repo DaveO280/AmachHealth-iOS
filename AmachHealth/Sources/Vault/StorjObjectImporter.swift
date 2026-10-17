@@ -83,46 +83,85 @@ struct StorjObjectImporter {
 
     // MARK: - Routing
 
+    /// Route by what the JSON looks like, using the dataType as a hint.
+    /// Real buckets hold shapes their dataType doesn't promise: test seeds
+    /// and older clients stored plain report objects under
+    /// "bloodwork-report-fhir", timeline arrays under "timeline-events",
+    /// chat under "conversation-history", and so on.
     private func route(_ object: AmachAPIClient.RawStorjObject, json text: String, leftover: inout String?) throws -> Outcome {
         let data = Data(text.utf8)
         let created = Date(unixMillis: object.uploadedAt)
-        switch object.dataType {
-        case "apple-health-full-export":
-            return try importAppleHealth(data, leftover: &leftover)
-        case "bloodwork-report-fhir", "dexa-report-fhir", "medical-record-fhir":
-            return try importFhirReport(data, object: object, created: created, leftover: &leftover)
-        case "bloodwork", "dexa":
-            let record = try VaultJSON.decoder.decode(LabRecord.self, from: data)
-            return saveLab(LabVaultMapping.legacy(record, origin: "import", storjKey: object.key))
-        case "gut-health-report":
-            return try importGutHealth(data, object: object, created: created)
-        case let type where type.hasSuffix("-narrative"):
+        let dataType = object.dataType
+        let json = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+
+        if dataType.hasSuffix("-narrative"), json is String {
             return try importNarrative(data, object: object, raw: text)
-        case "timeline-event":
-            return try importTimelineEvent(data)
-        case "chat-session":
-            let session = try VaultJSON.decoder.decode(ChatSession.self, from: data)
-            let n = try vault.insertMissingChatSessions([session], origin: "import")
-            return n == 0
-                ? .duplicate(recordType: "chat_sessions", recordId: session.id.uuidString)
-                : .imported(recordType: "chat_sessions", recordId: session.id.uuidString,
-                            counts: ["chat_sessions": 1, "chat_messages": session.messages.count], note: nil)
-        case "conversation-session":
-            return try importWebConversationSession(data)
-        case "conversation-memory":
-            let payload = try VaultJSON.decoder.decode(ConversationMemoryStorjPayload.self, from: data)
-            return try mergeMemory(payload, note: nil)
-        case "conversation-history":
-            return try importWebConversationHistory(data, raw: text, leftover: &leftover)
-        case "merkle-genesis-leaves":
-            return try importMerkleLeaves(data)
-        case "merkle-genesis-tree", "merkle-genesis-metadata":
-            return try importMerkleRoot(data, raw: text, keepPayload: object.dataType == "merkle-genesis-tree", leftover: &leftover)
-        default:
-            // merkle-genesis (iOS raw file), health-scores, quarterly-aggregate,
-            // gut-health-species, merkle-v2-*: no table yet, keep the JSON.
+        }
+        if let list = json as? [[String: Any]], list.contains(where: { $0["eventType"] != nil }) {
+            return try importTimelineList(list)
+        }
+        guard let dict = json as? [String: Any] else {
             return .archived(payloadJSON: text)
         }
+
+        if dict["resourceType"] as? String == "DiagnosticReport" {
+            return try importFhirReport(data, object: object, created: created, leftover: &leftover)
+        }
+        switch (dict["type"] as? String)?.lowercased() {
+        case "bloodwork"? where dict["metrics"] != nil || dict["panels"] != nil:
+            return saveLab(LabVaultMapping.bloodwork(Self.bloodwork(from: dict), id: Self.reportId(for: object.key),
+                                                     origin: "import", storjKey: object.key, createdAt: created))
+        case "dexa"? where dict["values"] == nil:
+            return saveLab(LabVaultMapping.dexa(Self.dexa(from: dict), id: Self.reportId(for: object.key),
+                                                origin: "import", storjKey: object.key, createdAt: created))
+        case "medical-record"?:
+            return saveLab(LabVaultMapping.medical(Self.medical(from: dict), id: Self.reportId(for: object.key),
+                                                   origin: "import", storjKey: object.key, createdAt: created))
+        default:
+            break
+        }
+        if dict["values"] is [String: Any], dict["units"] != nil, dict["type"] != nil {
+            let record = try VaultJSON.decoder.decode(LabRecord.self, from: data)
+            return saveLab(LabVaultMapping.legacy(record, origin: "import", storjKey: object.key))
+        }
+        if dict["dailySummaries"] != nil {
+            return try importAppleHealth(data, leftover: &leftover)
+        }
+        if dataType.hasPrefix("apple-health"), let samples = (dict["data"] as? [String: Any]) ?? Optional(dict),
+           samples.values.contains(where: { $0 is [[String: Any]] }) {
+            return try importAppleHealthSamples(samples, leftover: &leftover, raw: text)
+        }
+        if dict["eventType"] != nil, dict["id"] != nil {
+            return try importTimelineList([dict])
+        }
+        if let events = (dict["events"] ?? dict["timeline"] ?? dict["items"]) as? [[String: Any]],
+           events.contains(where: { $0["eventType"] != nil }) {
+            return try importTimelineList(events)
+        }
+        if dict["messages"] is [[String: Any]] {
+            return try importChat(dict, data: data)
+        }
+        if dict["facts"] != nil || dict["criticalFacts"] != nil {
+            return try importMemory(dict, data: data, raw: text, leftover: &leftover)
+        }
+        if dataType.hasPrefix("merkle-v2") {
+            // Spring Push baseline/finish snapshots: separate leaf sets that
+            // can cover the same days, with no root of their own. Keep them
+            // whole rather than mixing them into the genesis leaves.
+            return .archived(payloadJSON: text)
+        }
+        if dict["leaves"] is [[String: Any]] {
+            return try importMerkleLeaves(data)
+        }
+        if dict["rootPadded"] != nil {
+            return try importMerkleRoot(data, raw: text, keepPayload: dict["tree"] != nil, leftover: &leftover)
+        }
+        if dataType == "gut-health-report" {
+            return try importGutHealth(data, object: object, created: created)
+        }
+        // merkle-genesis (iOS raw file), health-scores,
+        // quarterly-aggregate, gut-health-species: no table yet, keep the JSON.
+        return .archived(payloadJSON: text)
     }
 
     // MARK: - Apple Health
@@ -214,6 +253,143 @@ struct StorjObjectImporter {
                 return row
             }
         }
+    }
+
+    /// Per-sample export: { metricKey: [{ startDate, endDate, value, unit, chartData? }] },
+    /// the website's (and the test seeds') "apple-health-export". Units come
+    /// with each sample, so they are converted exactly rather than guessed.
+    private func importAppleHealthSamples(_ samples: [String: Any], leftover: inout String?, raw: String) throws -> Outcome {
+        struct Acc { var values: [Double] = []; var sum = 0.0 }
+        var byMetricDay: [String: [String: Acc]] = [:]
+        var sleep: [String: (total: Double, inBed: Double, awake: Double, core: Double, deep: Double, rem: Double, n: Int)] = [:]
+        var unmapped = Set<String>(), badUnits = Set<String>()
+
+        for (key, value) in samples {
+            guard let list = value as? [[String: Any]] else { continue }
+            let lower = key.lowercased()
+            if lower.contains("sleepanalysis") {
+                for item in list {
+                    guard let start = Self.date(item["startDate"]) else { continue }
+                    let end = Self.date(item["endDate"]) ?? start
+                    let day = end.vaultDay
+                    var acc = sleep[day] ?? (0, 0, 0, 0, 0, 0, 0)
+                    acc.n += 1
+                    if let minutes = Self.number(item["value"]) {
+                        // One summary sample per night: total minutes plus phases.
+                        let phases = (item["chartData"] as? [String: Any])?["phases"] as? [String: Any] ?? [:]
+                        acc.total += minutes
+                        acc.deep += Self.number(phases["deep"]) ?? 0
+                        acc.rem += Self.number(phases["rem"]) ?? 0
+                        acc.core += Self.number(phases["light"] ?? phases["core"]) ?? 0
+                        acc.awake += Self.number(phases["awake"]) ?? 0
+                        acc.inBed += Self.number(phases["inBed"]) ?? 0
+                    } else {
+                        // Stage samples (XML import): duration goes to the stage.
+                        let minutes = end.timeIntervalSince(start) / 60
+                        let stage = (item["value"] as? String ?? "").lowercased()
+                        if stage.contains("inbed") { acc.inBed += minutes }
+                        else if stage.contains("awake") { acc.awake += minutes }
+                        else if stage.contains("deep") { acc.deep += minutes; acc.total += minutes }
+                        else if stage.contains("rem") { acc.rem += minutes; acc.total += minutes }
+                        else { acc.core += minutes; acc.total += minutes }
+                    }
+                    sleep[day] = acc
+                }
+                continue
+            }
+            let metricId: String
+            if lower.contains("mindfulsession") {
+                metricId = AmachMetric.mindfulMinutesId
+            } else if let metric = AmachMetric.resolve(legacyKey: key) {
+                metricId = metric.id
+            } else {
+                unmapped.insert(key)
+                continue
+            }
+            let targetUnit = AmachMetric.unit(for: metricId) ?? ""
+            for item in list {
+                guard let start = Self.date(item["startDate"]), var v = Self.number(item["value"]) else { continue }
+                if let unit = item["unit"] as? String {
+                    guard let converted = Self.convert(v, from: unit, to: targetUnit) else { badUnits.insert("\(key) \(unit)"); continue }
+                    v = converted
+                }
+                var acc = byMetricDay[metricId, default: [:]][start.vaultDay] ?? Acc()
+                acc.values.append(v)
+                acc.sum += v
+                byMetricDay[metricId, default: [:]][start.vaultDay] = acc
+            }
+        }
+
+        var rows: [DailyMetricRow] = []
+        for (metricId, days) in byMetricDay {
+            let aggregation = AmachMetric.byId[metricId]?.aggregation ?? .sum
+            for (day, acc) in days {
+                switch aggregation {
+                case .sum:
+                    rows.append(DailyMetricRow(day: day, metric: metricId, total: acc.sum, count: acc.values.count, source: .importWeb))
+                case .range, .average:
+                    rows.append(DailyMetricRow(day: day, metric: metricId, avg: acc.sum / Double(acc.values.count),
+                                               min: acc.values.min(), max: acc.values.max(), count: acc.values.count, source: .importWeb))
+                }
+            }
+        }
+        for (day, acc) in sleep {
+            var row = DailyMetricRow(day: day, metric: AmachMetric.sleepId, total: acc.total, count: acc.n, source: .importWeb)
+            row.sleepInBedMin = acc.inBed
+            row.sleepAwakeMin = acc.awake
+            row.sleepCoreMin = acc.core
+            row.sleepDeepMin = acc.deep
+            row.sleepRemMin = acc.rem
+            row.sleepEfficiency = acc.inBed > 0 ? acc.total / acc.inBed : nil
+            rows.append(row)
+        }
+
+        let written = try vault.upsertDailyMetrics(rows, policy: .fillImportedOnly)
+        var notes: [String] = []
+        if !unmapped.isEmpty { notes.append("unmapped metrics kept as JSON: \(unmapped.sorted().joined(separator: ", "))") }
+        if !badUnits.isEmpty { notes.append("samples with unknown units kept as JSON: \(badUnits.sorted().joined(separator: ", "))") }
+        if !notes.isEmpty { leftover = raw }
+        return .imported(recordType: "daily_metrics", recordId: nil,
+                         counts: ["daily_metrics": written, "health_days": Set(rows.map(\.day)).count],
+                         note: notes.isEmpty ? nil : notes.joined(separator: "; "))
+    }
+
+    /// Convert a sample value from its stated unit to the metric's vault unit.
+    /// nil means the unit isn't understood.
+    static func convert(_ value: Double, from unit: String, to target: String) -> Double? {
+        let u = unit.trimmingCharacters(in: .whitespaces).lowercased()
+        let t = target.lowercased()
+        // Percentages: HealthKit and older iOS stored 0–1; the vault uses 0–100.
+        if t == "%", u == "%" || u.isEmpty { return value <= 1.5 ? value * 100 : value }
+        if u.isEmpty || u == t { return value }
+        switch (u, t) {
+        case ("km", "m"): return value * 1000
+        case ("mi", "m"): return value * 1609.344
+        case ("ft", "m"): return value * 0.3048
+        case ("cm", "m"): return value / 100
+        case ("m", "cm"): return value * 100
+        case ("in", "cm"): return value * 2.54
+        case ("hr", "min"), ("h", "min"): return value * 60
+        case ("s", "min"): return value / 60
+        case ("lb", "kg"): return value * 0.45359237
+        case ("g", "kg"): return value / 1000
+        case ("degf", "degc"), ("°f", "degc"): return (value - 32) * 5 / 9
+        case ("°c", "degc"): return value
+        case ("l", "ml"): return value * 1000
+        case ("kj", "kcal"): return value / 4.184
+        case ("cal", "kcal"): return value
+        case ("count/min", "bpm"), ("bpm", "breaths/min"), ("count/min", "breaths/min"): return value
+        default: break
+        }
+        // Units that mean the same thing written differently.
+        let same: [Set<String>] = [
+            ["ml/kg·min", "ml/kg/min", "ml/(kg·min)", "ml/kg*min"],
+            ["count", "steps"],
+            ["kg/m²", "kg/m2", "count"],
+            ["mg/dl"], ["mmhg"], ["ms"], ["kcal"], ["min"], ["breaths/min"],
+        ]
+        if same.contains(where: { $0.contains(u) && $0.contains(t) }) { return value }
+        return nil
     }
 
     // MARK: - Labs
@@ -335,73 +511,106 @@ struct StorjObjectImporter {
 
     // MARK: - Timeline
 
-    private func importTimelineEvent(_ data: Data) throws -> Outcome {
-        let event = try VaultJSON.decoder.decode(TimelineEvent.self, from: data)
-        // Unknown web types decode as CUSTOM; keep the original in event_type.
-        let rawType = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["eventType"] as? String
-        var row = TimelineEventRow(event: event, origin: "import")
-        if let rawType { row.eventType = rawType }
-        let inserted: Bool = try vault.dbQueue.write { db in
-            if try TimelineEventRow.exists(db, key: row.id) { return false }
-            try row.insert(db)
-            return true
+    private func importTimelineList(_ items: [[String: Any]]) throws -> Outcome {
+        var inserted = 0, duplicates = 0
+        var notes: [String] = []
+        var lastId: String?
+        for item in items {
+            guard JSONSerialization.isValidJSONObject(item) else { continue }
+            let data = try JSONSerialization.data(withJSONObject: item)
+            let event = try VaultJSON.decoder.decode(TimelineEvent.self, from: data)
+            // Unknown web types decode as CUSTOM; keep the original in event_type.
+            var row = TimelineEventRow(event: event, origin: "import")
+            if let rawType = item["eventType"] as? String {
+                row.eventType = rawType
+                if TimelineEventType(rawValue: rawType) == nil { notes.append("event type \(rawType) shown as Custom") }
+            }
+            let isNew: Bool = try vault.dbQueue.write { db in
+                if try TimelineEventRow.exists(db, key: row.id) { return false }
+                try row.insert(db)
+                return true
+            }
+            if isNew { inserted += 1 } else { duplicates += 1 }
+            lastId = event.id
         }
-        guard inserted else { return .duplicate(recordType: "timeline_events", recordId: event.id) }
-        let note = rawType.flatMap { TimelineEventType(rawValue: $0) == nil ? "event type \($0) shown as Custom" : nil }
-        return .imported(recordType: "timeline_events", recordId: event.id, counts: ["timeline_events": 1], note: note)
+        if inserted == 0, duplicates > 0, items.count == 1, let lastId {
+            return .duplicate(recordType: "timeline_events", recordId: lastId)
+        }
+        return .imported(recordType: "timeline_events", recordId: items.count == 1 ? lastId : nil,
+                         counts: ["timeline_events": inserted],
+                         note: notes.isEmpty ? nil : Array(Set(notes)).sorted().joined(separator: "; "))
     }
 
-    // MARK: - Chat and memory (website shapes)
+    // MARK: - Chat and memory (iOS and website shapes)
 
-    private func importWebConversationSession(_ data: Data) throws -> Outcome {
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let sessionDict = root["session"] as? [String: Any],
-              let rawId = sessionDict["id"] as? String else { throw ImportError.shape("no session") }
-        let messages = (root["messages"] as? [[String: Any]] ?? []).enumerated().compactMap { index, m -> ChatMessage? in
-            guard let content = m["content"] as? String else { return nil }
-            let role = MessageRole(rawValue: m["role"] as? String ?? "") ?? .assistant
-            let ts = Self.number(m["timestamp"]).map { Date(unixMillis: Int64($0)) } ?? Date()
-            return ChatMessage(id: Self.uuid(from: m["id"] as? String ?? "\(rawId)-\(index)"),
-                               role: role, content: content, timestamp: ts)
+    /// iOS ChatSession, website {session, messages}, or a chat history
+    /// {sessionId, messages, summary, rollingMemory}.
+    private func importChat(_ dict: [String: Any], data: Data) throws -> Outcome {
+        let session: ChatSession
+        if let ios = try? VaultJSON.decoder.decode(ChatSession.self, from: data) {
+            session = ios
+        } else {
+            let sessionDict = dict["session"] as? [String: Any] ?? [:]
+            let rawId = (sessionDict["id"] ?? dict["sessionId"] ?? dict["id"]) as? String ?? LabVaultMapping.sha256Hex(data)
+            let messages = (dict["messages"] as? [[String: Any]] ?? []).enumerated().compactMap { index, m -> ChatMessage? in
+                guard let content = m["content"] as? String else { return nil }
+                return ChatMessage(id: Self.uuid(from: m["id"] as? String ?? "\(rawId)-\(index)"),
+                                   role: MessageRole(rawValue: m["role"] as? String ?? "") ?? .assistant,
+                                   content: content, timestamp: Self.date(m["timestamp"]) ?? Date())
+            }
+            let started = Self.date(sessionDict["startedAt"] ?? dict["createdAt"] ?? dict["startedAt"])
+                ?? messages.first?.timestamp ?? Date()
+            var s = ChatSession(id: Self.uuid(from: rawId), createdAt: started)
+            s.messages = messages
+            s.updatedAt = Self.date(dict["updatedAt"]) ?? messages.last?.timestamp ?? started
+            s.healthSummary = (sessionDict["summary"] ?? dict["summary"]) as? String
+            s.rollingSummary = (dict["rollingSummary"] ?? dict["rollingMemory"]) as? String
+            session = s
         }
-        let started = Self.number(sessionDict["startedAt"]).map { Date(unixMillis: Int64($0)) } ?? messages.first?.timestamp ?? Date()
-        var session = ChatSession(id: Self.uuid(from: rawId), createdAt: started)
-        session.messages = messages
-        session.updatedAt = messages.last?.timestamp ?? started
-        session.healthSummary = sessionDict["summary"] as? String
-        let n = try vault.insertMissingChatSessions([session], origin: "import:web")
+        let n = try vault.insertMissingChatSessions([session], origin: "import")
         return n == 0 ? .duplicate(recordType: "chat_sessions", recordId: session.id.uuidString)
                       : .imported(recordType: "chat_sessions", recordId: session.id.uuidString,
-                                  counts: ["chat_sessions": 1, "chat_messages": messages.count], note: nil)
+                                  counts: ["chat_sessions": 1, "chat_messages": session.messages.count], note: nil)
     }
 
-    private func importWebConversationHistory(_ data: Data, raw: String, leftover: inout String?) throws -> Outcome {
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ImportError.shape("not an object") }
+    /// iOS {facts, summaries}, or the website's ConversationMemory /
+    /// StorjConversationHistory {criticalFacts, sessions | importantSessions + recentSessions}.
+    private func importMemory(_ dict: [String: Any], data: Data, raw: String, leftover: inout String?) throws -> Outcome {
+        if dict["facts"] != nil, let ios = try? VaultJSON.decoder.decode(ConversationMemoryStorjPayload.self, from: data) {
+            return try mergeMemory(ios, note: nil)
+        }
         var skippedCategories = Set<String>()
-        let facts: [CriticalFact] = (root["criticalFacts"] as? [[String: Any]] ?? []).compactMap { f in
+        let facts: [CriticalFact] = (dict["criticalFacts"] as? [[String: Any]] ?? []).compactMap { f in
             guard let value = f["value"] as? String, let cat = f["category"] as? String else { return nil }
             guard let category = FactCategory(rawValue: cat) else { skippedCategories.insert(cat); return nil }
-            let identified = (f["dateIdentified"] as? String).flatMap(VaultJSON.parseISODate) ?? Date()
             return CriticalFact(id: Self.uuid(from: f["id"] as? String ?? value), category: category, value: value,
-                                context: f["context"] as? String, dateIdentified: identified,
+                                context: f["context"] as? String, dateIdentified: Self.date(f["dateIdentified"]) ?? Date(),
                                 isActive: f["isActive"] as? Bool ?? true, lastConfirmed: nil)
         }
-        let summaries: [SessionSummary] = (root["sessions"] as? [[String: Any]] ?? []).compactMap { s in
+        let sessionDicts = ["sessions", "importantSessions", "recentSessions"].flatMap { dict[$0] as? [[String: Any]] ?? [] }
+        let summaries: [SessionSummary] = sessionDicts.compactMap { s in
             guard let summary = s["summary"] as? String, !summary.isEmpty, let rawId = s["id"] as? String else { return nil }
             return SessionSummary(
                 id: Self.uuid(from: rawId),
-                date: Self.number(s["startedAt"]).map { Date(unixMillis: Int64($0)) } ?? Date(),
+                date: Self.date(s["date"] ?? s["startedAt"]) ?? Date(),
                 summary: summary, topics: s["topics"] as? [String] ?? [],
                 importance: MemoryImportance(rawValue: s["importance"] as? String ?? "") ?? .medium,
                 messageCount: Int(Self.number(s["messageCount"]) ?? 0)
             )
         }
-        var note: String?
+        var notes: [String] = []
         if !skippedCategories.isEmpty {
-            note = "fact categories not in this app kept as JSON: \(skippedCategories.sorted().joined(separator: ", "))"
-            leftover = raw
+            notes.append("fact categories not in this app: \(skippedCategories.sorted().joined(separator: ", "))")
         }
-        return try mergeMemory(ConversationMemoryStorjPayload(facts: facts, summaries: summaries), note: note)
+        if let prefs = dict["preferences"] as? [String: Any], !prefs.isEmpty {
+            notes.append("preferences have no table yet")
+        }
+        if !notes.isEmpty {
+            leftover = raw
+            notes.append("full object kept as JSON")
+        }
+        return try mergeMemory(ConversationMemoryStorjPayload(facts: facts, summaries: summaries),
+                               note: notes.isEmpty ? nil : notes.joined(separator: "; "))
     }
 
     private func mergeMemory(_ remote: ConversationMemoryStorjPayload, note: String?) throws -> Outcome {
@@ -463,6 +672,71 @@ struct StorjObjectImporter {
         case let s as String: return Double(s)
         default: return nil
         }
+    }
+
+    /// ISO-8601 string, or Unix seconds / ms.
+    static func date(_ any: Any?) -> Date? {
+        if let s = any as? String { return VaultJSON.parseISODate(s) }
+        if let n = number(any) { return n > 100_000_000_000 ? Date(unixMillis: Int64(n)) : Date(timeIntervalSince1970: n) }
+        return nil
+    }
+
+    static func bloodwork(from d: [String: Any]) -> BloodworkReportData {
+        func metric(_ m: [String: Any]) -> BloodworkMetric? {
+            guard let name = m["name"] as? String else { return nil }
+            let value = number(m["value"])
+            return BloodworkMetric(
+                name: name, value: value,
+                valueText: m["valueText"] as? String ?? (value == nil ? m["value"] as? String : nil),
+                unit: (m["unit"] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                referenceRange: m["referenceRange"] as? String, panel: m["panel"] as? String,
+                collectedAt: m["collectedAt"] as? String, flag: m["flag"] as? String,
+                interpretationNotes: m["interpretationNotes"] as? [String]
+            )
+        }
+        var metrics = (d["metrics"] as? [[String: Any]] ?? []).compactMap(metric)
+        if metrics.isEmpty, let panels = d["panels"] as? [String: Any] {
+            for key in panels.keys.sorted() {
+                for m in panels[key] as? [[String: Any]] ?? [] {
+                    var withPanel = m
+                    if withPanel["panel"] == nil { withPanel["panel"] = key }
+                    if let parsed = metric(withPanel) { metrics.append(parsed) }
+                }
+            }
+        }
+        return BloodworkReportData(
+            type: "bloodwork", source: d["source"] as? String, reportDate: d["reportDate"] as? String,
+            laboratory: d["laboratory"] as? String, panels: [:], metrics: metrics,
+            notes: d["notes"] as? [String], rawText: "", confidence: number(d["confidence"]) ?? 0
+        )
+    }
+
+    static func dexa(from d: [String: Any]) -> DexaReportData {
+        let bone = d["boneDensityTotal"] as? [String: Any]
+        let regions = (d["regions"] as? [[String: Any]] ?? []).compactMap { r -> DexaRegionMetrics? in
+            guard let region = r["region"] as? String else { return nil }
+            return DexaRegionMetrics(region: region, bodyFatPercent: number(r["bodyFatPercent"]), leanMassKg: number(r["leanMassKg"]),
+                                     fatMassKg: number(r["fatMassKg"]), boneDensityGPerCm2: number(r["boneDensityGPerCm2"]),
+                                     tScore: number(r["tScore"]), zScore: number(r["zScore"]))
+        }
+        return DexaReportData(
+            type: "dexa", source: d["source"] as? String, scanDate: d["scanDate"] as? String,
+            totalBodyFatPercent: number(d["totalBodyFatPercent"]), totalLeanMassKg: number(d["totalLeanMassKg"]),
+            visceralFatRating: number(d["visceralFatRating"]), visceralFatAreaCm2: number(d["visceralFatAreaCm2"]),
+            visceralFatVolumeCm3: number(d["visceralFatVolumeCm3"]),
+            boneDensityTotal: bone.map { DexaBoneDensityTotal(bmd: number($0["bmd"]), tScore: number($0["tScore"]), zScore: number($0["zScore"])) },
+            androidGynoidRatio: number(d["androidGynoidRatio"]), regions: regions,
+            notes: d["notes"] as? [String], rawText: "", confidence: number(d["confidence"]) ?? 0
+        )
+    }
+
+    static func medical(from d: [String: Any]) -> MedicalRecordData {
+        MedicalRecordData(
+            type: "medical-record", source: d["source"] as? String, reportDate: d["reportDate"] as? String,
+            documentType: d["documentType"] as? String, title: d["title"] as? String, summary: d["summary"] as? String,
+            keyFindings: d["keyFindings"] as? [String], medications: d["medications"] as? [String],
+            diagnoses: d["diagnoses"] as? [String], rawText: "", confidence: number(d["confidence"]) ?? 0
+        )
     }
 
     static func reportId(for objectKey: String) -> String {

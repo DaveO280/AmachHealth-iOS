@@ -56,7 +56,7 @@ struct AmachMetric: Hashable {
 
     static let all: [AmachMetric] = [
         // Activity (sums)
-        AmachMetric("steps", unit: "count", .sum, hk: .stepCount, hkUnit: .count(), legacy: ["StepCount"]),
+        AmachMetric("steps", unit: "count", .sum, hk: .stepCount, hkUnit: .count(), legacy: ["StepCount", "steps"]),
         AmachMetric("active_energy", unit: "kcal", .sum, hk: .activeEnergyBurned, hkUnit: .kilocalorie(), legacy: ["ActiveEnergyBurned"]),
         AmachMetric("basal_energy", unit: "kcal", .sum, hk: .basalEnergyBurned, hkUnit: .kilocalorie(), legacy: ["BasalEnergyBurned"]),
         AmachMetric("exercise_minutes", unit: "min", .sum, hk: .appleExerciseTime, hkUnit: .minute(), legacy: ["AppleExerciseTime"]),
@@ -70,7 +70,7 @@ struct AmachMetric: Hashable {
 
         // Heart and breathing (ranges)
         AmachMetric("heart_rate", unit: "bpm", .range, hk: .heartRate, hkUnit: bpm, legacy: ["HeartRate"]),
-        AmachMetric("hrv_sdnn", unit: "ms", .range, hk: .heartRateVariabilitySDNN, hkUnit: .secondUnit(with: .milli), legacy: ["HeartRateVariabilitySDNN"]),
+        AmachMetric("hrv_sdnn", unit: "ms", .range, hk: .heartRateVariabilitySDNN, hkUnit: .secondUnit(with: .milli), legacy: ["HeartRateVariabilitySDNN", "HeartRateVariability", "hrv"]),
         AmachMetric("respiratory_rate", unit: "breaths/min", .range, hk: .respiratoryRate, hkUnit: bpm, legacy: ["RespiratoryRate"]),
         AmachMetric("blood_oxygen", unit: "%", .range, hk: .oxygenSaturation, hkUnit: .percent(), scale: 100, legacy: ["OxygenSaturation"]),
         AmachMetric("body_temperature", unit: "degC", .range, hk: .bodyTemperature, hkUnit: .degreeCelsius(), legacy: ["BodyTemperature"]),
