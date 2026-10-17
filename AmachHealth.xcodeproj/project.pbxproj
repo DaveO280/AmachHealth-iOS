@@ -7,6 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BABE2937A5632A813CFF62A /* LiveStorjImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2309F848DA63D91A833 /* LiveStorjImportTests.swift */; };
+		5BABE2923A783FED0924D45C /* VaultServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */; };
+		5BABE2FA78A5DE02FD06E7FB /* VaultIngestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */; };
+		5BABE232140E4B1AB5BD01AF /* StorjImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE259E1C6CFBF77535235 /* StorjImportTests.swift */; };
+		5BABE2B7305459B119D5C615 /* VaultMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2A8D0EB99BCF1BD1450 /* VaultMigrationTests.swift */; };
+		5BABE2D2CD6A91B61814DBE0 /* WalletPayloadDecryptorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */; };
+		5BABE207745533791E8E4732 /* WalletDecryptorFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */; };
+		5BABE2C99FB104BE6C321398 /* VaultViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2722AEC406FA4FFB80F /* VaultViews.swift */; };
+		5BABE2454C7C64401228A3F5 /* VaultDashboardReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2A1E3F8B3E56EB0E3B7 /* VaultDashboardReader.swift */; };
+		5BABE268C7B271EAD7C3DB81 /* StorjObjectImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2BFAEF2DF0520208B31 /* StorjObjectImporter.swift */; };
+		5BABE208DDD4D2541F2A69B3 /* StorjImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2A1D008E02FA09EE4DB /* StorjImportService.swift */; };
+		5BABE2B3B78A0FF6D2E215E5 /* LocalVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE286DFE7F0B5890D0A76 /* LocalVault.swift */; };
+		5BABE20FD352F43897F2E4EA /* HealthKitIngestionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE24776724043409C4C95 /* HealthKitIngestionService.swift */; };
+		5BABE21D402359A54C906CD7 /* WalletPayloadDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2651D8A654BBF2D2A8F /* WalletPayloadDecryptor.swift */; };
+		5BABE26E04396C5AE196C745 /* VaultRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE21ED13F18135533009D /* VaultRecords.swift */; };
+		5BABE2006FCC474FB5570DB4 /* VaultDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE20D946FBF14DE8E08B1 /* VaultDatabase.swift */; };
+		5BABE29D1C883410A2E96633 /* VaultDatabase+Timeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2537D29BAFE0DAAD8A1 /* VaultDatabase+Timeline.swift */; };
+		5BABE2F27532E4004FF0FBA0 /* VaultDatabase+Metrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2B6465F668C7461EFB6 /* VaultDatabase+Metrics.swift */; };
+		5BABE2D1A787DC7B6B9A60E6 /* VaultDatabase+Labs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2D93D47691042994295 /* VaultDatabase+Labs.swift */; };
+		5BABE253552F344C2FB37482 /* VaultDatabase+Chat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2844728FCD24E570DDA /* VaultDatabase+Chat.swift */; };
+		5BABE20E9E110C96BDBF8A4C /* LocalVaultKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2109A0E8AAF921148D4 /* LocalVaultKey.swift */; };
+		5BABE281467A839BB9904985 /* AmachMetric.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE21022355134D65EEB76 /* AmachMetric.swift */; };
+		5BABE2000000000000000A03 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 5BABE2000000000000000A02 /* GRDB */; };
 		AA0000000000000000000201 /* AmachAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000101 /* AmachAPIClient.swift */; };
 		AA0000000000000000000202 /* AmachHealthApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000102 /* AmachHealthApp.swift */; };
 		AA0000000000000000000203 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000103 /* AppState.swift */; };
@@ -110,6 +133,28 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5BABE2309F848DA63D91A833 /* LiveStorjImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveStorjImportTests.swift; path = AmachHealth/Tests/LiveStorjImportTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultServicesTests.swift; path = AmachHealth/Tests/VaultServicesTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultIngestionTests.swift; path = AmachHealth/Tests/VaultIngestionTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE259E1C6CFBF77535235 /* StorjImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjImportTests.swift; path = AmachHealth/Tests/StorjImportTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2A8D0EB99BCF1BD1450 /* VaultMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultMigrationTests.swift; path = AmachHealth/Tests/VaultMigrationTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletPayloadDecryptorTests.swift; path = AmachHealth/Tests/WalletPayloadDecryptorTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletDecryptorFixtures.swift; path = AmachHealth/Tests/Fixtures/WalletDecryptorFixtures.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2722AEC406FA4FFB80F /* VaultViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultViews.swift; path = AmachHealth/Sources/Vault/VaultViews.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2A1E3F8B3E56EB0E3B7 /* VaultDashboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultDashboardReader.swift; path = AmachHealth/Sources/Vault/VaultDashboardReader.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2BFAEF2DF0520208B31 /* StorjObjectImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjObjectImporter.swift; path = AmachHealth/Sources/Vault/StorjObjectImporter.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2A1D008E02FA09EE4DB /* StorjImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjImportService.swift; path = AmachHealth/Sources/Vault/StorjImportService.swift; sourceTree = SOURCE_ROOT; };
+		5BABE286DFE7F0B5890D0A76 /* LocalVault.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalVault.swift; path = AmachHealth/Sources/Vault/LocalVault.swift; sourceTree = SOURCE_ROOT; };
+		5BABE24776724043409C4C95 /* HealthKitIngestionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HealthKitIngestionService.swift; path = AmachHealth/Sources/Vault/HealthKitIngestionService.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2651D8A654BBF2D2A8F /* WalletPayloadDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletPayloadDecryptor.swift; path = AmachHealth/Sources/Vault/WalletPayloadDecryptor.swift; sourceTree = SOURCE_ROOT; };
+		5BABE21ED13F18135533009D /* VaultRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultRecords.swift; path = AmachHealth/Sources/Vault/VaultRecords.swift; sourceTree = SOURCE_ROOT; };
+		5BABE20D946FBF14DE8E08B1 /* VaultDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultDatabase.swift; path = AmachHealth/Sources/Vault/VaultDatabase.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2537D29BAFE0DAAD8A1 /* VaultDatabase+Timeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "VaultDatabase+Timeline.swift"; path = "AmachHealth/Sources/Vault/VaultDatabase+Timeline.swift"; sourceTree = SOURCE_ROOT; };
+		5BABE2B6465F668C7461EFB6 /* VaultDatabase+Metrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "VaultDatabase+Metrics.swift"; path = "AmachHealth/Sources/Vault/VaultDatabase+Metrics.swift"; sourceTree = SOURCE_ROOT; };
+		5BABE2D93D47691042994295 /* VaultDatabase+Labs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "VaultDatabase+Labs.swift"; path = "AmachHealth/Sources/Vault/VaultDatabase+Labs.swift"; sourceTree = SOURCE_ROOT; };
+		5BABE2844728FCD24E570DDA /* VaultDatabase+Chat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "VaultDatabase+Chat.swift"; path = "AmachHealth/Sources/Vault/VaultDatabase+Chat.swift"; sourceTree = SOURCE_ROOT; };
+		5BABE2109A0E8AAF921148D4 /* LocalVaultKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LocalVaultKey.swift; path = AmachHealth/Sources/Vault/LocalVaultKey.swift; sourceTree = SOURCE_ROOT; };
+		5BABE21022355134D65EEB76 /* AmachMetric.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AmachMetric.swift; path = AmachHealth/Sources/Vault/AmachMetric.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000001 /* Amach Health.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Amach Health.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = Info.plist; path = AmachHealth/Resources/Info.plist; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000003 /* AmachHealth.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = AmachHealth.entitlements; path = AmachHealth/Resources/AmachHealth.entitlements; sourceTree = SOURCE_ROOT; };
@@ -221,6 +266,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB0000000000000000000003 /* PrivySDK in Frameworks */,
+				5BABE2000000000000000A03 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,6 +291,28 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXGroup section */
+		5BABE2000000000000000000 /* Vault */ = {
+			isa = PBXGroup;
+			children = (
+				5BABE21022355134D65EEB76 /* AmachMetric.swift */,
+				5BABE2109A0E8AAF921148D4 /* LocalVaultKey.swift */,
+				5BABE2844728FCD24E570DDA /* VaultDatabase+Chat.swift */,
+				5BABE2D93D47691042994295 /* VaultDatabase+Labs.swift */,
+				5BABE2B6465F668C7461EFB6 /* VaultDatabase+Metrics.swift */,
+				5BABE2537D29BAFE0DAAD8A1 /* VaultDatabase+Timeline.swift */,
+				5BABE20D946FBF14DE8E08B1 /* VaultDatabase.swift */,
+				5BABE21ED13F18135533009D /* VaultRecords.swift */,
+				5BABE2651D8A654BBF2D2A8F /* WalletPayloadDecryptor.swift */,
+				5BABE24776724043409C4C95 /* HealthKitIngestionService.swift */,
+				5BABE286DFE7F0B5890D0A76 /* LocalVault.swift */,
+				5BABE2A1D008E02FA09EE4DB /* StorjImportService.swift */,
+				5BABE2BFAEF2DF0520208B31 /* StorjObjectImporter.swift */,
+				5BABE2A1E3F8B3E56EB0E3B7 /* VaultDashboardReader.swift */,
+				5BABE2722AEC406FA4FFB80F /* VaultViews.swift */,
+			);
+			name = Vault;
+			sourceTree = "<group>";
+		};
 		AA0000000000000000000400 = {
 			isa = PBXGroup;
 			children = (
@@ -293,6 +361,13 @@
 				E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */,
 				STL000000000000000000012 /* StorjTimelineServiceTests.swift */,
 				5BABE100000000000000C001 /* MerkleLeafV2FieldsTests.swift */,
+				5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */,
+				5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */,
+				5BABE2A8D0EB99BCF1BD1450 /* VaultMigrationTests.swift */,
+				5BABE259E1C6CFBF77535235 /* StorjImportTests.swift */,
+				5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */,
+				5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */,
+				5BABE2309F848DA63D91A833 /* LiveStorjImportTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -319,6 +394,7 @@
 				AA0000000000000000000416 /* Previews */,
 				AA0000000000000000000417 /* Services */,
 				AA0000000000000000000418 /* Views */,
+				5BABE2000000000000000000 /* Vault */,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -486,6 +562,7 @@
 			name = "Amach Health";
 			packageProductDependencies = (
 				BB0000000000000000000002 /* Privy */,
+				5BABE2000000000000000A02 /* GRDB */,
 			);
 			productName = "Amach Health";
 			productReference = AA0000000000000000000001 /* Amach Health.app */;
@@ -533,6 +610,7 @@
 			mainGroup = AA0000000000000000000400;
 			packageReferences = (
 				BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */,
+				5BABE2000000000000000A01 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
 			);
 			productRefGroup = AA0000000000000000000402 /* Products */;
 			projectDirPath = "";
@@ -639,6 +717,21 @@
 				PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */,
 				AIP000000000000000000001 /* AmachAPIClient+AIReportParsing.swift in Sources */,
 				PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */,
+				5BABE281467A839BB9904985 /* AmachMetric.swift in Sources */,
+				5BABE20E9E110C96BDBF8A4C /* LocalVaultKey.swift in Sources */,
+				5BABE253552F344C2FB37482 /* VaultDatabase+Chat.swift in Sources */,
+				5BABE2D1A787DC7B6B9A60E6 /* VaultDatabase+Labs.swift in Sources */,
+				5BABE2F27532E4004FF0FBA0 /* VaultDatabase+Metrics.swift in Sources */,
+				5BABE29D1C883410A2E96633 /* VaultDatabase+Timeline.swift in Sources */,
+				5BABE2006FCC474FB5570DB4 /* VaultDatabase.swift in Sources */,
+				5BABE26E04396C5AE196C745 /* VaultRecords.swift in Sources */,
+				5BABE21D402359A54C906CD7 /* WalletPayloadDecryptor.swift in Sources */,
+				5BABE20FD352F43897F2E4EA /* HealthKitIngestionService.swift in Sources */,
+				5BABE2B3B78A0FF6D2E215E5 /* LocalVault.swift in Sources */,
+				5BABE208DDD4D2541F2A69B3 /* StorjImportService.swift in Sources */,
+				5BABE268C7B271EAD7C3DB81 /* StorjObjectImporter.swift in Sources */,
+				5BABE2454C7C64401228A3F5 /* VaultDashboardReader.swift in Sources */,
+				5BABE2C99FB104BE6C321398 /* VaultViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -666,6 +759,13 @@
 				E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */,
 				STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */,
 				5BABE100000000000000C002 /* MerkleLeafV2FieldsTests.swift in Sources */,
+				5BABE207745533791E8E4732 /* WalletDecryptorFixtures.swift in Sources */,
+				5BABE2D2CD6A91B61814DBE0 /* WalletPayloadDecryptorTests.swift in Sources */,
+				5BABE2B7305459B119D5C615 /* VaultMigrationTests.swift in Sources */,
+				5BABE232140E4B1AB5BD01AF /* StorjImportTests.swift in Sources */,
+				5BABE2FA78A5DE02FD06E7FB /* VaultIngestionTests.swift in Sources */,
+				5BABE2923A783FED0924D45C /* VaultServicesTests.swift in Sources */,
+				5BABE2937A5632A813CFF62A /* LiveStorjImportTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -913,6 +1013,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5BABE2000000000000000A01 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 7.9.0;
+			};
+		};
 		BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/privy-io/privy-ios";
@@ -924,6 +1032,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5BABE2000000000000000A02 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BABE2000000000000000A01 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
 		BB0000000000000000000002 /* Privy */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */;

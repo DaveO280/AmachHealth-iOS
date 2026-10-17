@@ -273,14 +273,23 @@ final class ConversationMemoryStore: ObservableObject {
 
     private var storjUri: String?
 
-    private let storageURL: URL = {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return docs.appendingPathComponent("amach_conversation_memory.json")
-    }()
+    /// Memory lives in the vault (memory_facts / memory_summaries). Without
+    /// a vault (no wallet) it is kept in memory for this run only.
+    private var vault: VaultDatabase? { LocalVault.shared.database }
 
-    private init() {
-        loadFromDisk()
+    private init() {}
+
+    /// Reload from the vault after it opens or closes.
+    func vaultDidChange() {
+        guard let vault else {
+            facts = []
+            summaries = []
+            return
+        }
+        if let payload = try? vault.loadMemory() {
+            facts = payload.facts
+            summaries = payload.summaries
+        }
     }
 
     // MARK: - Upsert with Value-Based Deduplication
@@ -320,6 +329,7 @@ final class ConversationMemoryStore: ObservableObject {
     // MARK: - Storj Sync
 
     func syncToStorj() async {
+        guard VaultFlags.legacyStorjWrites else { return }
         let wallet = WalletService.shared
         guard wallet.isConnected, let key = wallet.encryptionKey else { return }
         guard !facts.isEmpty || !summaries.isEmpty else { return }
@@ -345,6 +355,9 @@ final class ConversationMemoryStore: ObservableObject {
     /// Pull the latest conversation memory from Storj and merge with local data.
     /// Call after Privy auth completes to hydrate memory from a previous device or the web app.
     func pullFromStorj() async {
+        // With a vault, StorjImportService already brought Storj memory in
+        // (decrypted on device); this path sends the key to the server.
+        guard vault == nil else { return }
         let wallet = WalletService.shared
         guard wallet.isConnected, let key = wallet.encryptionKey else { return }
 
@@ -452,7 +465,7 @@ final class ConversationMemoryStore: ObservableObject {
 
     // MARK: - Dedup Helpers
 
-    static func normalizeFactValue(_ value: String) -> String {
+    nonisolated static func normalizeFactValue(_ value: String) -> String {
         value.lowercased()
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -471,13 +484,26 @@ final class ConversationMemoryStore: ObservableObject {
     // MARK: - Merge (Storj pull)
 
     private func mergeRemoteMemory(_ remote: ConversationMemoryStorjPayload) {
-        // Merge facts: dedup by normalized value within category, keep newer
-        var localByKey = Dictionary(
-            uniqueKeysWithValues: facts.map { (Self.factMergeKey($0), $0) }
+        let merged = Self.merge(
+            local: ConversationMemoryStorjPayload(facts: facts, summaries: summaries),
+            remote: remote
         )
+        facts = merged.facts
+        summaries = merged.summaries
+        saveToDisk()
+    }
+
+    /// Merge facts (dedup by category + normalized value, newer wins) and
+    /// summaries (union by id), then apply the retention caps.
+    nonisolated static func merge(
+        local: ConversationMemoryStorjPayload,
+        remote: ConversationMemoryStorjPayload
+    ) -> ConversationMemoryStorjPayload {
+        var localByKey: [String: CriticalFact] = [:]
+        for fact in local.facts { localByKey[factMergeKey(fact)] = fact }
 
         for remoteFact in remote.facts {
-            let key = Self.factMergeKey(remoteFact)
+            let key = factMergeKey(remoteFact)
             if let existing = localByKey[key] {
                 let existingDate = existing.lastConfirmed ?? existing.dateIdentified
                 let remoteDate = remoteFact.lastConfirmed ?? remoteFact.dateIdentified
@@ -488,21 +514,19 @@ final class ConversationMemoryStore: ObservableObject {
                 localByKey[key] = remoteFact
             }
         }
-        facts = Array(localByKey.values)
 
-        // Merge summaries: union by ID
-        var localSummariesById = Dictionary(
-            uniqueKeysWithValues: summaries.map { ($0.id, $0) }
-        )
-        for remoteSummary in remote.summaries {
-            if localSummariesById[remoteSummary.id] == nil {
-                localSummariesById[remoteSummary.id] = remoteSummary
-            }
+        var summariesById: [UUID: SessionSummary] = [:]
+        for summary in local.summaries { summariesById[summary.id] = summary }
+        for remoteSummary in remote.summaries where summariesById[remoteSummary.id] == nil {
+            summariesById[remoteSummary.id] = remoteSummary
         }
-        summaries = Array(localSummariesById.values)
 
-        applyRetentionCaps()
-        saveToDisk()
+        var merged = ConversationMemoryStorjPayload(
+            facts: Array(localByKey.values),
+            summaries: Array(summariesById.values)
+        )
+        applyRetentionCaps(&merged)
+        return merged
     }
 
     #if DEBUG
@@ -519,39 +543,40 @@ final class ConversationMemoryStore: ObservableObject {
     }
     #endif
 
-    private static func factMergeKey(_ fact: CriticalFact) -> String {
+    nonisolated private static func factMergeKey(_ fact: CriticalFact) -> String {
         "\(fact.category.rawValue):\(normalizeFactValue(fact.value))"
     }
 
     // MARK: - Persistence
 
     private func applyRetentionCaps() {
-        facts.sort { $0.dateIdentified < $1.dateIdentified }
-        if facts.count > 200 {
-            facts = Array(facts.suffix(200))
+        var payload = ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
+        Self.applyRetentionCaps(&payload)
+        facts = payload.facts
+        summaries = payload.summaries
+    }
+
+    nonisolated private static func applyRetentionCaps(_ payload: inout ConversationMemoryStorjPayload) {
+        payload.facts.sort { $0.dateIdentified < $1.dateIdentified }
+        if payload.facts.count > 200 {
+            payload.facts = Array(payload.facts.suffix(200))
         }
 
-        summaries.sort { $0.date < $1.date }
-        if summaries.count > 40 {
-            summaries = Array(summaries.suffix(40))
+        payload.summaries.sort { $0.date < $1.date }
+        if payload.summaries.count > 40 {
+            payload.summaries = Array(payload.summaries.suffix(40))
         }
     }
 
     private func saveToDisk() {
-        let payload = ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
-        guard let data = try? JSONEncoder().encode(payload) else { return }
-        try? ProtectedLocalFile.write(data, to: storageURL)
-    }
-
-    private func loadFromDisk() {
-        ProtectedLocalFile.protectExisting(at: storageURL)
-        guard
-            let data = try? Data(contentsOf: storageURL),
-            let payload = try? JSONDecoder().decode(ConversationMemoryStorjPayload.self, from: data)
-        else { return }
-
-        facts = payload.facts
-        summaries = payload.summaries
+        guard let vault else { return }
+        do {
+            try vault.replaceMemory(facts: facts, summaries: summaries)
+        } catch {
+            #if DEBUG
+            print("⚠️ ConversationMemoryStore: vault write failed: \(error.localizedDescription)")
+            #endif
+        }
     }
 }
 

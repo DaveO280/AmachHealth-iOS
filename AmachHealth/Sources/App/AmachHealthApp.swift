@@ -35,6 +35,10 @@ struct AmachHealthApp: App {
                     // In dev-mock mode (Privy SDK not installed), this sets up the dev wallet.
                     wallet.initializePrivy()
 
+                    // Open the local vault from the Keychain-cached key (works
+                    // offline), then follow wallet connects and disconnects.
+                    LocalVault.shared.start(wallet: wallet)
+
                     // Silently request HealthKit on first launch if not yet authorized
                     if healthKit.isHealthKitAvailable && !healthKit.isAuthorized {
                         try? await healthKit.requestAuthorization()

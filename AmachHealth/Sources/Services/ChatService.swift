@@ -3,8 +3,8 @@
 //
 // Manages Luma AI chat sessions:
 // - Real-time message state
-// - Local persistence (documents directory JSON)
-// - Batched Storj saves when sessions grow (every 10 messages) or on new session
+// - Local persistence in the vault (chat_sessions / chat_messages)
+// - Storj save of each archived session while VaultFlags.legacyStorjWrites is on
 
 import Foundation
 import Combine
@@ -31,27 +31,44 @@ final class ChatService: ObservableObject {
     private let api: any AmachAPIClientProtocol
     private let wallet: any WalletServiceProtocol
 
-    private var localStorageURL: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        return docs.appendingPathComponent("amach_chat_sessions.json")
-    }
+    /// Sessions shown in the history list. The vault keeps every session.
+    static let visibleRecentSessions = 30
+
+    /// Where sessions persist. Production reads LocalVault; tests inject one.
+    private let vaultProvider: () -> VaultDatabase?
+    private var vault: VaultDatabase? { vaultProvider() }
 
     private init() {
         self.api = AmachAPIClient.shared
         self.wallet = WalletService.shared
-        loadFromDisk()
+        self.vaultProvider = { LocalVault.shared.database }
+        // Sessions load when the vault opens (vaultDidChange).
     }
 
     // MARK: - Test-only initializer (DEBUG builds only)
     // Injects mock dependencies; never called from production code.
     #if DEBUG
-    init(injectedAPI: any AmachAPIClientProtocol, injectedWallet: any WalletServiceProtocol) {
+    init(
+        injectedAPI: any AmachAPIClientProtocol,
+        injectedWallet: any WalletServiceProtocol,
+        injectedVault: VaultDatabase? = nil
+    ) {
         self.api = injectedAPI
         self.wallet = injectedWallet
-        // Skip loadFromDisk() for isolated test instances
+        self.vaultProvider = { injectedVault }
+        loadFromVault()
     }
     #endif
+
+    /// Called by LocalVault when the vault opens or closes.
+    func vaultDidChange() {
+        if vault == nil {
+            currentSession = ChatSession()
+            recentSessions = []
+        } else {
+            loadFromVault()
+        }
+    }
 
     // MARK: - Cancel
 
@@ -372,13 +389,13 @@ final class ChatService: ObservableObject {
         error = nil
         let sessionToArchive = currentSession
 
-        // Archive current to recent sessions — keep only the last 3 visible.
-        // Older sessions have already had their facts extracted into
-        // ConversationMemoryStore when they were archived.
+        // Archive current to recent sessions. The vault keeps every session;
+        // the list shows the most recent ones.
         recentSessions.insert(sessionToArchive, at: 0)
-        if recentSessions.count > 3 {
-            recentSessions = Array(recentSessions.prefix(3))
+        if recentSessions.count > Self.visibleRecentSessions {
+            recentSessions = Array(recentSessions.prefix(Self.visibleRecentSessions))
         }
+        currentSession = ChatSession()
         saveToDisk()
 
         // Summarize health content, extract memory, and sync to Storj.
@@ -387,8 +404,6 @@ final class ChatService: ObservableObject {
             await self?.summarizeAndArchive(sessionToArchive)
             await self?.syncSessionToStorj(sessionToArchive)
         }
-
-        currentSession = ChatSession()
     }
 
     func loadSession(_ session: ChatSession) {
@@ -554,7 +569,7 @@ final class ChatService: ObservableObject {
         guard shouldExtractMemory(from: session) else { return }
 
         let messages = session.messages
-        var conversationText = messages.map { message in
+        var conversationText = messages.map { message -> String in
             let roleLabel = message.role == .user ? "User" : "Assistant"
             return "\(roleLabel): \(message.content)"
         }.joined(separator: "\n\n")
@@ -730,7 +745,7 @@ final class ChatService: ObservableObject {
 
         Task {
             let messagesToSummarize = Array(currentSession.messages.dropLast(8))
-            var text = messagesToSummarize.map { msg in
+            var text = messagesToSummarize.map { msg -> String in
                 let role = msg.role == .user ? "User" : "Assistant"
                 return "\(role): \(msg.content)"
             }.joined(separator: "\n\n")
@@ -839,22 +854,22 @@ final class ChatService: ObservableObject {
         if let idx = recentSessions.firstIndex(where: { $0.id == currentSession.id }) {
             recentSessions[idx] = currentSession
         }
+        guard let vault else { return }
         let all = [currentSession] + recentSessions.filter { $0.id != currentSession.id }
-        guard let data = try? JSONEncoder().encode(all) else { return }
-        try? ProtectedLocalFile.write(data, to: localStorageURL)
+        do {
+            try vault.saveChatSessions(all.filter { !$0.messages.isEmpty || $0.id == currentSession.id },
+                                       currentId: currentSession.id)
+        } catch {
+            #if DEBUG
+            print("⚠️ ChatService: vault write failed: \(error.localizedDescription)")
+            #endif
+        }
     }
 
-    private func loadFromDisk() {
-        ProtectedLocalFile.protectExisting(at: localStorageURL)
-        guard
-            let data = try? Data(contentsOf: localStorageURL),
-            let sessions = try? JSONDecoder().decode([ChatSession].self, from: data),
-            !sessions.isEmpty
-        else { return }
-
-        // First entry is the active session, rest are history (cap at 3)
-        currentSession = sessions[0]
-        recentSessions = Array(sessions.dropFirst().prefix(3))
+    private func loadFromVault() {
+        guard let vault, let stored = try? vault.loadChatSessions(recentLimit: Self.visibleRecentSessions) else { return }
+        currentSession = stored.current ?? ChatSession()
+        recentSessions = stored.recent.filter { $0.id != currentSession.id }
     }
 
     // MARK: - Storj Sync
@@ -871,6 +886,7 @@ final class ChatService: ObservableObject {
     #endif
 
     private func syncSessionToStorj(_ session: ChatSession) async {
+        guard VaultFlags.legacyStorjWrites else { return }
         guard !session.messages.isEmpty else { return }
         guard wallet.isConnected, let key = wallet.encryptionKey else { return }
 

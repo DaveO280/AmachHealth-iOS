@@ -41,6 +41,13 @@ final class HealthDataSyncService: ObservableObject {
         // Default to 1 year of data if no start date
         let start = startDate ?? Calendar.current.date(byAdding: .year, value: -1, to: endDate)!
 
+        // The vault keeps HealthKit history on the phone either way; this
+        // upload is the legacy Storj copy that Phase 3 replaces.
+        guard VaultFlags.legacyStorjWrites else {
+            syncState = .error("Storj uploads are off. Your health data is kept in the vault on this phone.")
+            return
+        }
+
         syncState = .syncing(progress: 0, message: "Starting sync...")
 
         do {

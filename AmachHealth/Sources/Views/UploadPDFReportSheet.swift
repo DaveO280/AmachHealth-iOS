@@ -218,10 +218,12 @@ struct UploadPDFReportSheet: View {
                 .font(AmachType.tiny)
                 .foregroundStyle(Color.amachTextSecondary)
 
-            Text(result.storjUri)
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
-                .lineLimit(2)
+            if !result.storjUri.isEmpty {
+                Text(result.storjUri)
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
+                    .lineLimit(2)
+            }
 
             Button {
                 Task {
