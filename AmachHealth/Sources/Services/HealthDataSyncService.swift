@@ -2,7 +2,9 @@
 // AmachHealth
 //
 // Orchestrates the full health data sync flow:
-// HealthKit -> Aggregation -> Storj Upload -> On-chain Attestation
+// HealthKit -> Aggregation -> completeness tier -> encrypted backup (if on).
+// The vault already holds HealthKit history (HealthKitIngestionService);
+// nothing here uploads health data or sends the encryption key.
 
 import Foundation
 import Combine
@@ -15,14 +17,10 @@ final class HealthDataSyncService: ObservableObject {
 
     private let healthKit = HealthKitService.shared
     private let wallet = WalletService.shared
-    private let api = AmachAPIClient.shared
 
     @Published var syncState: SyncState = .idle
     @Published var lastSyncDate: Date?
     @Published var lastSyncResult: SyncResult?
-
-    // Stored data for retry
-    private var pendingPayload: AppleHealthStorjPayload?
 
     private init() {
         // Load last sync date from UserDefaults
@@ -33,7 +31,8 @@ final class HealthDataSyncService: ObservableObject {
 
     // MARK: - Full Sync Flow
 
-    /// Perform a full health data sync to Storj
+    /// Read HealthKit, score completeness, and back up the vault if
+    /// encrypted backup is on.
     func performFullSync(
         from startDate: Date? = nil,
         to endDate: Date = Date()
@@ -41,18 +40,11 @@ final class HealthDataSyncService: ObservableObject {
         // Default to 1 year of data if no start date
         let start = startDate ?? Calendar.current.date(byAdding: .year, value: -1, to: endDate)!
 
-        // The vault keeps HealthKit history on the phone either way; this
-        // upload is the legacy Storj copy that Phase 3 replaces.
-        guard VaultFlags.legacyStorjWrites else {
-            syncState = .error("Storj uploads are off. Your health data is kept in the vault on this phone.")
-            return
-        }
-
         syncState = .syncing(progress: 0, message: "Starting sync...")
 
         do {
             // Step 1: Check wallet connection
-            guard wallet.isConnected, let encryptionKey = wallet.encryptionKey else {
+            guard wallet.isConnected else {
                 throw SyncError.walletNotConnected
             }
 
@@ -94,53 +86,26 @@ final class HealthDataSyncService: ObservableObject {
                 rawData: rawData
             )
 
-            // Step 6: Create payload
-            let payload = AppleHealthStorjPayload(
-                manifest: manifest,
-                dailySummaries: dailySummaries
-            )
+            // Step 6: Back up the vault (encrypted on this phone) if it's on.
+            syncState = .syncing(progress: 0.8, message: "Backing up...")
+            var backedUp = false
+            if BackupService.shared.isEnabled {
+                backedUp = await BackupService.shared.runBackup()
+            }
 
-            // Store for potential retry
-            self.pendingPayload = payload
-
-            // Step 7: Upload to Storj
-            syncState = .syncing(progress: 0.6, message: "Encrypting and uploading to Storj...")
-
-            let storeResult = try await api.storeHealthData(
-                payload: payload,
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
-
-            // Step 8: Record attestation on-chain via backend.
-            syncState = .syncing(progress: 0.9, message: "Creating on-chain attestation...")
-
-            let attestation = try? await api.createAttestation(
-                storjUri: storeResult.storjUri,
-                dataType: "apple-health-full-export",
-                action: "store",
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey,
-                metadata: [
-                    "tier": manifest.completeness.tier,
-                    "score": String(manifest.completeness.score),
-                    "dateRange": "\(manifest.dateRange.start)_\(manifest.dateRange.end)"
-                ]
-            )
-
-            // Step 9: Complete!
             syncState = .syncing(progress: 1.0, message: "Sync complete!")
 
             let result = SyncResult(
                 success: true,
-                storjUri: storeResult.storjUri,
-                contentHash: storeResult.contentHash,
+                storjUri: nil,
+                contentHash: nil,
                 tier: manifest.completeness.tier,
                 score: manifest.completeness.score,
                 metricsCount: metricsPresent.count,
                 daysCovered: completeness.daysCovered,
-                attestationTxHash: attestation?.txHash,
-                error: nil
+                attestationTxHash: nil,
+                error: nil,
+                backedUp: backedUp
             )
 
             // Save sync date
@@ -148,10 +113,8 @@ final class HealthDataSyncService: ObservableObject {
             UserDefaults.standard.set(lastSyncDate!.timeIntervalSince1970, forKey: "lastHealthSyncDate")
 
             lastSyncResult = result
-            pendingPayload = nil
 
             // Feed new readings into Luma's anomaly detector and personal baselines.
-            // Runs after upload so the UI sync state is already at 100%.
             LumaProactiveService.shared.evaluateAndStage(dailySummaries: dailySummaries)
 
             // Delay before setting idle to show completion
@@ -178,56 +141,7 @@ final class HealthDataSyncService: ObservableObject {
 
     /// Retry last failed sync
     func retrySync() async {
-        guard let payload = pendingPayload,
-              let encryptionKey = wallet.encryptionKey else {
-            syncState = .error("No pending sync to retry")
-            return
-        }
-
-        syncState = .syncing(progress: 0.6, message: "Retrying upload...")
-
-        do {
-            let storeResult = try await api.storeHealthData(
-                payload: payload,
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
-
-            let attestation = try? await api.createAttestation(
-                storjUri: storeResult.storjUri,
-                dataType: "apple-health-full-export",
-                action: "store",
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey,
-                metadata: [
-                    "tier": payload.manifest.completeness.tier,
-                    "score": String(payload.manifest.completeness.score),
-                    "dateRange": "\(payload.manifest.dateRange.start)_\(payload.manifest.dateRange.end)"
-                ]
-            )
-
-            let result = SyncResult(
-                success: true,
-                storjUri: storeResult.storjUri,
-                contentHash: storeResult.contentHash,
-                tier: payload.manifest.completeness.tier,
-                score: payload.manifest.completeness.score,
-                metricsCount: payload.manifest.metricsPresent.count,
-                daysCovered: payload.manifest.completeness.daysCovered,
-                attestationTxHash: attestation?.txHash,
-                error: nil
-            )
-
-            lastSyncDate = Date()
-            UserDefaults.standard.set(lastSyncDate!.timeIntervalSince1970, forKey: "lastHealthSyncDate")
-
-            lastSyncResult = result
-            pendingPayload = nil
-            syncState = .idle
-
-        } catch {
-            syncState = .error(error.localizedDescription)
-        }
+        await performFullSync()
     }
 
     // MARK: - Background Sync
@@ -363,6 +277,8 @@ struct SyncResult: Equatable {
     let daysCovered: Int?
     let attestationTxHash: String?
     let error: String?
+    /// The vault was backed up (encrypted) as part of this sync.
+    var backedUp: Bool = false
 }
 
 // MARK: - Errors

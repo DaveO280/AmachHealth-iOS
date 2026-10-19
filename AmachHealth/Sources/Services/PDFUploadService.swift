@@ -1,16 +1,14 @@
 // PDFUploadService.swift
 // AmachHealth
 //
-// Orchestrates the PDF → Storj pipeline:
+// Orchestrates the PDF → vault pipeline:
 //   1. Extract text with PDFKit
-//   2. Normalize to BloodworkReportData or DexaReportData
-//   3. Compute fingerprint for duplicate detection
-//   4. Check for existing upload (by fingerprint in metadata)
-//   5. Convert to FHIR DiagnosticReport
-//   6. Store on Storj (dataType: bloodwork-report-fhir or dexa-report-fhir)
-//   7. Optionally create ZKsync attestation
+//   2. Parse (AI first, local regex fallback) into a ParsedHealthReport
+//   3. Save the report in the vault; duplicates are found by fingerprint
+//   4. Keep the original PDF on the phone (lab_pdfs) so encrypted backup
+//      carries it too
 //
-// Matches the website's StorjReportService.ts logic.
+// Nothing is uploaded to Storj and the encryption key isn't used.
 
 import Foundation
 
@@ -46,14 +44,13 @@ final class PDFUploadService: ObservableObject {
 
     // MARK: - Public
 
-    /// Parse a PDF and upload it to Storj as a FHIR report.
-    /// Reports already on Storj (matched by fingerprint) are returned directly without re-upload.
-    func upload(
-        pdfData: Data,
-        filename: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> PDFUploadResult {
+    /// Parse a PDF and save it in the vault. Reports already in the vault
+    /// (matched by fingerprint) are returned as duplicates.
+    func upload(pdfData: Data, filename: String) async throws -> PDFUploadResult {
+        guard let vault = LocalVault.shared.database else {
+            throw PDFUploadError.uploadFailed("Connect your wallet to save reports on this phone.")
+        }
+
         // Step 1: Extract text from PDF
         state = .extracting
         let text = await Task.detached(priority: .userInitiated) {
@@ -94,103 +91,26 @@ final class PDFUploadService: ObservableObject {
             throw PDFUploadError.unrecognizedContent
         }
 
-        let (fhirReport, dataType, fingerprint, reportId) = buildFhirPayload(from: report)
-
-        // Vault first. A report already in the vault is a duplicate; with
-        // legacy writes off, the vault copy is the only one.
-        var savedInVault = false
-        if let vault = LocalVault.shared.database {
-            let item = Self.vaultItem(for: report, id: reportId, pdfSHA256: LabVaultMapping.sha256Hex(pdfData))
-            switch try vault.saveLabReport(item) {
-            case .duplicate(let existingId):
-                let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: existingId,
-                                             report: report, wasDuplicate: true)
-                state = .done(result)
-                return result
-            case .inserted:
-                savedInVault = true
-            }
-            if !VaultFlags.legacyStorjWrites {
-                let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: reportId,
-                                             report: report, wasDuplicate: false)
-                state = .done(result)
-                return result
-            }
+        // Step 3: Save in the vault
+        state = .uploading(progress: 0.5)
+        let reportId = Self.reportId(for: report)
+        let item = Self.vaultItem(for: report, id: reportId, pdfSHA256: LabVaultMapping.sha256Hex(pdfData))
+        let savedId: String
+        let duplicate: Bool
+        switch try vault.saveLabReport(item) {
+        case .duplicate(let existingId):
+            savedId = existingId
+            duplicate = true
+        case .inserted:
+            savedId = reportId
+            duplicate = false
         }
 
-        do {
-            return try await uploadToStorj(
-                report: report, fhirReport: fhirReport, dataType: dataType, fingerprint: fingerprint,
-                reportId: reportId, walletAddress: walletAddress, encryptionKey: encryptionKey
-            )
-        } catch where savedInVault {
-            // Saved on the phone; the Storj copy is best-effort.
-            let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: reportId,
-                                         report: report, wasDuplicate: false)
-            state = .done(result)
-            return result
-        }
-    }
+        // Step 4: Keep the original PDF (backed up as its own object).
+        try vault.saveLabPdf(pdfData, reportId: savedId, filename: filename)
 
-    /// Legacy Storj upload (dedup check, store, attestation). Phase 3 replaces it.
-    private func uploadToStorj(
-        report: ParsedHealthReport,
-        fhirReport: FhirDiagnosticReport,
-        dataType: String,
-        fingerprint: String,
-        reportId: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> PDFUploadResult {
-        // Step 3: Dedup check
-        let existing = try? await checkForDuplicate(
-            fingerprint: fingerprint,
-            dataType: dataType,
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey
-        )
-        if let dup = existing {
-            let result = PDFUploadResult(
-                storjUri: dup.storjUri,
-                contentHash: dup.contentHash,
-                reportId: dup.reportId ?? reportId,
-                report: report,
-                wasDuplicate: true
-            )
-            state = .done(result)
-            return result
-        }
-
-        // Step 4: Upload
-        state = .uploading(progress: 0.1)
-        let metadata = buildMetadata(report: report, fingerprint: fingerprint, reportId: reportId)
-        let storeResult = try await AmachAPIClient.shared.storeFhirReport(
-            fhirReport: fhirReport,
-            dataType: dataType,
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            metadata: metadata
-        )
-        state = .uploading(progress: 0.8)
-
-        // Step 5: Attestation (fire-and-forget)
-        _ = try? await AmachAPIClient.shared.createAttestation(
-            storjUri: storeResult.storjUri,
-            dataType: dataType,
-            action: "store",
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            metadata: metadata
-        )
-
-        state = .uploading(progress: 1.0)
-        let result = PDFUploadResult(
-            storjUri: storeResult.storjUri,
-            contentHash: storeResult.contentHash,
-            reportId: reportId,
-            report: report,
-            wasDuplicate: false
-        )
+        let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: savedId,
+                                     report: report, wasDuplicate: duplicate)
         state = .done(result)
         return result
     }
@@ -210,86 +130,19 @@ final class PDFUploadService: ObservableObject {
 
     // MARK: - Helpers
 
-    private func buildFhirPayload(from report: ParsedHealthReport) -> (FhirDiagnosticReport, String, String, String) {
+    static func reportId(for report: ParsedHealthReport) -> String {
         switch report {
-        case .bloodwork(let bw):
-            let fhir = FhirConverter.convertBloodworkToFhir(bw)
-            let fingerprint = FhirConverter.fingerprintBloodwork(bw)
-            let reportId = "bloodwork-\(bw.reportDate ?? timestampString())-\(shortRandom())"
-            return (fhir, "bloodwork-report-fhir", fingerprint, reportId)
-        case .dexa(let dexa):
-            let fhir = FhirConverter.convertDexaToFhir(dexa)
-            let fingerprint = FhirConverter.fingerprintDexa(dexa)
-            let reportId = "dexa-\(dexa.scanDate ?? timestampString())-\(shortRandom())"
-            return (fhir, "dexa-report-fhir", fingerprint, reportId)
-        case .medicalRecord(let mr):
-            let fhir = FhirConverter.convertMedicalRecordToFhir(mr)
-            let fingerprint = FhirConverter.fingerprintMedicalRecord(mr)
-            let reportId = "medical-record-\(mr.reportDate ?? timestampString())-\(shortRandom())"
-            return (fhir, "medical-record-fhir", fingerprint, reportId)
+        case .bloodwork(let bw): return "bloodwork-\(bw.reportDate ?? timestampString())-\(shortRandom())"
+        case .dexa(let dexa): return "dexa-\(dexa.scanDate ?? timestampString())-\(shortRandom())"
+        case .medicalRecord(let mr): return "medical-record-\(mr.reportDate ?? timestampString())-\(shortRandom())"
         }
     }
 
-    private func checkForDuplicate(
-        fingerprint: String,
-        dataType: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> (storjUri: String, contentHash: String, reportId: String?)? {
-        let items = try await AmachAPIClient.shared.listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: dataType
-        )
-        for item in items {
-            let md = item.metadata ?? [:]
-            let fp = md["reportfingerprint"] ?? md["reportFingerprint"] ?? ""
-            guard !fp.isEmpty, fp == fingerprint else { continue }
-            return (item.uri, item.contentHash, md["reportid"] ?? md["reportId"])
-        }
-        return nil
-    }
-
-    private func buildMetadata(
-        report: ParsedHealthReport,
-        fingerprint: String,
-        reportId: String
-    ) -> [String: String] {
-        var metadata: [String: String] = [
-            "reportid": reportId,
-            "format": "fhir-r4",
-            "reportfingerprint": fingerprint,
-            "platform": "ios",
-        ]
-        switch report {
-        case .bloodwork(let bw):
-            metadata["reporttype"] = "bloodwork"
-            if let date = bw.reportDate { metadata["reportdate"] = date }
-            if let src = bw.source { metadata["source"] = src }
-            metadata["confidence"] = String(bw.confidence)
-            metadata["metriccount"] = String(bw.metrics.count)
-        case .dexa(let dexa):
-            metadata["reporttype"] = "dexa"
-            if let date = dexa.scanDate { metadata["scandate"] = date }
-            if let src = dexa.source { metadata["source"] = src }
-            metadata["confidence"] = String(dexa.confidence)
-            metadata["regioncount"] = String(dexa.regions.count)
-        case .medicalRecord(let mr):
-            metadata["reporttype"] = "medical-record"
-            if let date = mr.reportDate { metadata["reportdate"] = date }
-            if let src = mr.source { metadata["source"] = src }
-            if let docType = mr.documentType { metadata["documenttype"] = docType }
-            if let title = mr.title { metadata["title"] = title }
-            metadata["confidence"] = String(mr.confidence)
-        }
-        return metadata
-    }
-
-    private func timestampString() -> String {
+    private static func timestampString() -> String {
         String(Int(Date().timeIntervalSince1970))
     }
 
-    private func shortRandom() -> String {
+    private static func shortRandom() -> String {
         String(Int.random(in: 100_000_000...999_999_999), radix: 36)
     }
 }

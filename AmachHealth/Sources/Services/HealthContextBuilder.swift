@@ -185,73 +185,7 @@ struct HealthContextBuilder {
         }
     }
 
-    // Fetch most recent bloodwork record from pre-filtered list items
-    private static func fetchLatestBloodwork(
-        items: [StorjListItem],
-        api: AmachAPIClient,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        formatter: DateFormatter
-    ) async -> LabResultSummary? {
-        guard let latest = items.max(by: { $0.uploadedAt < $1.uploadedAt }) else { return nil }
-        do {
-            if latest.dataType == "bloodwork-report-fhir" {
-                let report = try await api.retrieveBloodworkReport(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey
-                )
-                return labResultSummary(fromReport: report, formatter: formatter)
-            } else {
-                let record = try await api.retrieveStoredData(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey,
-                    as: LabRecord.self
-                )
-                return labResultSummary(from: record, formatter: formatter)
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 [LabContext] bloodwork fetch error: \(error.localizedDescription)")
-            #endif
-            return nil
-        }
-    }
 
-    // Fetch most recent DEXA record from pre-filtered list items
-    private static func fetchLatestDexa(
-        items: [StorjListItem],
-        api: AmachAPIClient,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        formatter: DateFormatter
-    ) async -> DexaResultSummary? {
-        guard let latest = items.max(by: { $0.uploadedAt < $1.uploadedAt }) else { return nil }
-        do {
-            if latest.dataType == "dexa-report-fhir" {
-                let report = try await api.retrieveDexaReport(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey
-                )
-                return dexaResultSummary(fromReport: report, formatter: formatter)
-            } else {
-                let record = try await api.retrieveStoredData(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey,
-                    as: LabRecord.self
-                )
-                return dexaResultSummary(from: record, formatter: formatter)
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 [LabContext] dexa fetch error: \(error.localizedDescription)")
-            #endif
-            return nil
-        }
-    }
 
     // MARK: - Summary builders from legacy LabRecord
 

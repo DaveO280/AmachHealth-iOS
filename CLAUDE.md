@@ -140,7 +140,9 @@ Named: `cardPadding 24` / `cardGap 16` / `sectionSpacing 32` / `screenEdge 16` /
 | `WalletService` | `Services/WalletService.swift` | Privy SDK integration, encryption key derivation |
 | `AmachAPIClient` | `API/AmachAPIClient.swift` | Backend API client (shared routes with web) |
 | `HealthDataSyncService` | `Services/HealthDataSyncService.swift` | Full sync orchestration, background support |
-| `ChatService` | `ChatService.shared` | Singleton — local JSON persistence + batched Storj sync every 10 messages. History: 18 messages (9 exchanges). Current session + 30 archived. |
+| `ChatService` | `ChatService.shared` | Singleton — sessions live in the vault (no Storj sync). History: 18 messages (9 exchanges). Current session + 30 archived. |
+| `LocalVault` / `VaultDatabase` | `Vault/` | On-device GRDB vault per wallet (SCHEMA.md) |
+| `BackupService` | `Vault/Backup/` | Opt-in encrypted backup to Storj, encrypted on the phone (BACKUP-FORMAT.md, PROJECT_STATE.md) |
 
 ### iOS Tech Stack
 
@@ -167,13 +169,18 @@ Named: `cardPadding 24` / `cardGap 16` / `sectionSpacing 32` / `screenEdge 16` /
 
 ## Backend API (shared iOS ↔ web)
 
+The wallet encryption key and its derivation signature never leave the phone (`OutboundSecretGuard` enforces it). Routes the app uses:
+
 | Endpoint | Action | Description |
 |---|---|---|
-| `POST /api/storj` | `storage/store` | Upload encrypted health data |
-| `POST /api/storj` | `storage/list` | List stored health data |
-| `POST /api/storj` | `storage/retrieve` | Retrieve and decrypt data |
-| `POST /api/health/summary` | — | Health summary for AI |
-| `POST /api/attestations` | — | User's attestations |
+| `POST /api/backup/credentials` | `challenge` / `session` / `presign` | Signed-challenge access to the user's opaque backup folder; presigned Storj URLs |
+| `POST /api/storj` | `storage/list-raw`, `storage/download-raw` | Keyless reads of the legacy bucket (one-time import) |
+| `POST /api/storj` | `storage/delete-raw` | Legacy cleanup after a verified backup (backup session token, owner-checked) |
+| `POST /api/ai/chat` | — | Luma chat (health context goes to private enclave models) |
+| `POST /api/health/parse-report` | — | AI parsing of uploaded PDF text |
+| `POST /api/attestations` | — | User's attestations (address only) |
+
+`/api/merkle/genesis` and `/api/proofs/*` are off (`FeatureFlags.zkServerFlowsDisabled`) until Phase 6.
 
 ---
 

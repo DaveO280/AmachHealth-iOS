@@ -25,7 +25,9 @@ final class WalletService: ObservableObject {
 
     @Published var isConnected = false
     @Published var address: String?
-    @Published var encryptionKey: WalletEncryptionKey?
+    @Published var encryptionKey: WalletEncryptionKey? {
+        didSet { if let encryptionKey { OutboundSecretGuard.register(encryptionKey) } }
+    }
     @Published var isLoading = false
     @Published var error: String?
     /// Email pending OTP verification (set by sendEmailCode, cleared on success/failure).
@@ -537,7 +539,9 @@ final class WalletService: ObservableObject {
         }
 
         let decoder = JSONDecoder()
-        return try decoder.decode(WalletEncryptionKey.self, from: data)
+        let key = try decoder.decode(WalletEncryptionKey.self, from: data)
+        OutboundSecretGuard.register(key)
+        return key
     }
 
     /// Delete encryption key from Keychain.

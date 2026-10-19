@@ -26,10 +26,10 @@ final class VaultMigrationTests: XCTestCase {
 
     // MARK: - Schema
 
-    func test_v1_creates_every_table_and_records_version() throws {
+    func test_migrations_create_every_table_and_record_version() throws {
         let vault = try VaultDatabase.inMemory()
-        XCTAssertEqual(try vault.schemaVersion(), 1)
-        XCTAssertEqual(VaultDatabase.currentSchemaVersion, 1)
+        XCTAssertEqual(try vault.schemaVersion(), 2)
+        XCTAssertEqual(VaultDatabase.currentSchemaVersion, 2)
         let tables = try vault.dbQueue.read { db in
             try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table'")
         }
@@ -38,19 +38,51 @@ final class VaultMigrationTests: XCTestCase {
             "timeline_events", "journal_entries", "chat_sessions", "chat_messages",
             "memory_facts", "memory_summaries", "merkle_leaves", "merkle_roots",
             "backup_state", "healthkit_sync", "storj_imports",
+            "lab_pdfs", "backup_objects",
         ] {
             XCTAssertTrue(tables.contains(table), "missing \(table)")
         }
     }
 
-    func test_migrator_is_idempotent_and_v1_is_registered() throws {
+    func test_migrator_is_idempotent_and_every_version_is_registered() throws {
         let vault = try VaultDatabase.inMemory()
         try vault.migrate()
         try vault.migrate()
-        XCTAssertEqual(try vault.schemaVersion(), 1)
+        XCTAssertEqual(try vault.schemaVersion(), 2)
         let applied = try vault.dbQueue.read { db in try VaultDatabase.migrator.appliedIdentifiers(db) }
-        XCTAssertEqual(applied, ["v1"])
-        XCTAssertEqual(try vault.dbQueue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM schema_version") }, 1)
+        XCTAssertEqual(applied, ["v1", "v2"])
+        XCTAssertEqual(try vault.dbQueue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM schema_version") }, 2)
+    }
+
+    func test_v2_on_a_v1_vault_queues_existing_storj_imports_for_backup() throws {
+        let queue = try DatabaseQueue()
+        var v1Only = DatabaseMigrator()
+        v1Only.registerMigration("v1") { db in
+            try db.execute(sql: VaultDatabase.Schema.v1)
+            try VaultDatabase.recordSchemaVersion(1, in: db)
+        }
+        try v1Only.migrate(queue)
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO storj_imports (object_key, data_type, uploaded_at, size, status, imported_at)
+                VALUES ('timeline-event/1-a.enc', 'timeline-event', 1, 10, 'archived', 2)
+                """)
+        }
+        try VaultDatabase.migrator.migrate(queue)
+        let pending = try queue.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT local_version - backed_up_version FROM backup_state
+                WHERE record_type = 'storj_imports' AND record_id = 'timeline-event/1-a.enc'
+                """)
+        }
+        XCTAssertEqual(pending, 1)
+        try queue.write { db in
+            try db.execute(sql: "INSERT INTO lab_pdfs (sha256, byte_count, created_at) VALUES ('ab', 3, 0)")
+        }
+        let pdfVersion = try queue.read { db in
+            try Int.fetchOne(db, sql: "SELECT local_version FROM backup_state WHERE record_type = 'lab_pdfs' AND record_id = 'ab'")
+        }
+        XCTAssertEqual(pdfVersion, 1)
     }
 
     func test_lab_kind_is_constrained() throws {
@@ -109,7 +141,7 @@ final class VaultMigrationTests: XCTestCase {
 
         let reopened = try VaultDatabase.open(key: key, directory: tempDir)
         XCTAssertEqual(try reopened.dailyMetric(metric: "steps", day: "2025-10-01")?.total, 5)
-        XCTAssertEqual(try reopened.schemaVersion(), 1)
+        XCTAssertEqual(try reopened.schemaVersion(), 2)
     }
 
     func test_vault_file_with_wrong_key_check_refuses_to_open() throws {

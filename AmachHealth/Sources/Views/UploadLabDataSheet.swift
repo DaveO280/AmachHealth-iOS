@@ -142,7 +142,7 @@ struct UploadLabDataSheet: View {
     }
 
     private func save() async {
-        guard let encryptionKey = wallet.encryptionKey else {
+        guard let vault = LocalVault.shared.database else {
             error = "Connect your wallet before uploading lab data."
             return
         }
@@ -174,22 +174,7 @@ struct UploadLabDataSheet: View {
         )
 
         do {
-            // Vault first; the Storj copy only while legacy writes are on.
-            if let vault = LocalVault.shared.database {
-                try vault.saveLabReport(LabVaultMapping.legacy(record, origin: "device"))
-            }
-            if VaultFlags.legacyStorjWrites {
-                do {
-                    _ = try await AmachAPIClient.shared.storeLabRecord(
-                        data: record,
-                        dataType: mode.dataType,
-                        walletAddress: encryptionKey.walletAddress,
-                        encryptionKey: encryptionKey
-                    )
-                } catch where LocalVault.shared.isOpen {
-                    // Saved locally; the Storj copy is best-effort.
-                }
-            }
+            try vault.saveLabReport(LabVaultMapping.legacy(record, origin: "device"))
             await onSaved()
             LabContextService.shared.invalidate()
             AmachHaptics.success()
@@ -201,23 +186,14 @@ struct UploadLabDataSheet: View {
 }
 
 struct LabRecordDetailView: View {
-    /// A Storj item (no vault) or a vault report. Vault reports open offline.
-    private let item: StorjListItem?
-    private let vaultItem: LabReportWithMarkers?
-
-    init(item: StorjListItem) {
-        self.item = item
-        self.vaultItem = nil
-    }
+    /// A vault report. Opens offline.
+    private let vaultItem: LabReportWithMarkers
 
     init(vaultItem: LabReportWithMarkers) {
-        self.item = nil
         self.vaultItem = vaultItem
     }
 
-    private var txHash: String? { item?.attestationTxHash ?? vaultItem?.report.attestationTxHash }
-
-    @EnvironmentObject private var wallet: WalletService
+    private var txHash: String? { vaultItem.report.attestationTxHash }
 
     @State private var record: LabRecord?
     @State private var bloodworkReport: RemoteBloodworkReport?
@@ -382,7 +358,7 @@ struct LabRecordDetailView: View {
                             .padding(AmachSpacing.lg)
                             .amachCard()
 
-                            if let regions = vaultItem?.dexaRegions, !regions.isEmpty {
+                            if case let regions = vaultItem.dexaRegions, !regions.isEmpty {
                                 dexaRegionsCard(regions)
                             }
 
@@ -501,55 +477,12 @@ struct LabRecordDetailView: View {
         isLoading = true
         defer { isLoading = false }
 
-        if let vaultItem {
-            switch vaultItem.report.kindValue {
-            case .bloodwork: bloodworkReport = vaultItem.asBloodwork
-            case .dexa: dexaReport = vaultItem.asDexa
-            case .medical: medicalRecord = vaultItem.asMedicalRecord
-            }
-            error = nil
-            return
+        switch vaultItem.report.kindValue {
+        case .bloodwork: bloodworkReport = vaultItem.asBloodwork
+        case .dexa: dexaReport = vaultItem.asDexa
+        case .medical: medicalRecord = vaultItem.asMedicalRecord
         }
-        guard let item else { return }
-
-        do {
-            let encryptionKey = try await wallet.ensureEncryptionKey()
-            record = nil
-            bloodworkReport = nil
-            dexaReport = nil
-            medicalRecord = nil
-
-            switch item.dataType {
-            case "bloodwork-report-fhir":
-                bloodworkReport = try await AmachAPIClient.shared.retrieveBloodworkReport(
-                    storjUri: item.uri,
-                    walletAddress: encryptionKey.walletAddress,
-                    encryptionKey: encryptionKey
-                )
-            case "dexa-report-fhir":
-                dexaReport = try await AmachAPIClient.shared.retrieveDexaReport(
-                    storjUri: item.uri,
-                    walletAddress: encryptionKey.walletAddress,
-                    encryptionKey: encryptionKey
-                )
-            case "medical-record-fhir":
-                medicalRecord = try await AmachAPIClient.shared.retrieveMedicalRecord(
-                    storjUri: item.uri,
-                    walletAddress: encryptionKey.walletAddress,
-                    encryptionKey: encryptionKey
-                )
-            default:
-                record = try await AmachAPIClient.shared.retrieveStoredData(
-                    storjUri: item.uri,
-                    walletAddress: encryptionKey.walletAddress,
-                    encryptionKey: encryptionKey,
-                    as: LabRecord.self
-                )
-            }
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-        }
+        error = nil
     }
 
     private func formatted(_ value: Double) -> String {

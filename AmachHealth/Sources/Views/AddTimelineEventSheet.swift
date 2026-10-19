@@ -199,7 +199,7 @@ struct AddTimelineEventSheet: View {
 
     private func saveEvent() async {
         guard let selectedType else { return }
-        guard let encryptionKey = wallet.encryptionKey else {
+        guard LocalVault.shared.isOpen else {
             error = "Connect your wallet before saving timeline events."
             return
         }
@@ -230,11 +230,7 @@ struct AddTimelineEventSheet: View {
                 attestationTxHash: existing.attestationTxHash
             )
             do {
-                try await timeline.updateEvent(
-                    updatedEvent,
-                    walletAddress: encryptionKey.walletAddress,
-                    encryptionKey: encryptionKey
-                )
+                try await timeline.updateEvent(updatedEvent)
                 AmachHaptics.success()
                 dismiss()
             } catch {
@@ -253,11 +249,7 @@ struct AddTimelineEventSheet: View {
                 )
             )
             do {
-                try await timeline.addEvent(
-                    event,
-                    walletAddress: encryptionKey.walletAddress,
-                    encryptionKey: encryptionKey
-                )
+                try await timeline.addEvent(event)
                 AmachHaptics.success()
                 dismiss()
             } catch {

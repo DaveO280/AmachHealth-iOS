@@ -12,15 +12,12 @@
 import Foundation
 import Combine
 
-/// Phase 2 switch for the old Storj uploads (health sync, labs, timeline,
-/// chat, memory). Phase 3 replaces them; until then they stay on by default.
-enum VaultFlags {
-    private static let legacyStorjWritesKey = "amach_legacy_storj_writes"
-
-    static var legacyStorjWrites: Bool {
-        get { UserDefaults.standard.object(forKey: legacyStorjWritesKey) as? Bool ?? true }
-        set { UserDefaults.standard.set(newValue, forKey: legacyStorjWritesKey) }
-    }
+/// Server flows that need the encryption key or plaintext health data on
+/// the server: Merkle genesis (/api/merkle/genesis) and proofs
+/// (/api/proofs/*). Off until Phase 6 rebuilds them on the device; their UI
+/// is hidden while this is true.
+enum FeatureFlags {
+    static let zkServerFlowsDisabled = true
 }
 
 @MainActor
@@ -82,6 +79,7 @@ final class LocalVault: ObservableObject {
 
     func close(forget: Bool) {
         HealthKitIngestionService.shared.stop()
+        BackupService.shared.vaultDidClose()
         database = nil
         walletKey = nil
         if forget { UserDefaults.standard.removeObject(forKey: lastWalletKey) }
@@ -97,7 +95,8 @@ final class LocalVault: ObservableObject {
         TimelineService.shared.vaultDidChange()
         LabContextService.shared.invalidate()
         HealthKitIngestionService.shared.start(vault: vault)
-        StorjImportService.shared.runIfNeeded(vault: vault, walletKey: walletKey)
+        // Restores a backup on a new phone, then runs the one-time Storj import.
+        BackupService.shared.vaultDidOpen(vault, walletKey: walletKey)
         Task { await DashboardService.shared.load(force: true) }
     }
 }

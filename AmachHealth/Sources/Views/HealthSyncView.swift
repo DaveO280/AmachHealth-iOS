@@ -15,7 +15,6 @@ struct HealthSyncView: View {
     @State private var showingUploadLabData = false
     @State private var showingImportPDF = false
     @State private var syncStartDate = Calendar.current.date(byAdding: .year, value: -1, to: Date())!
-    @State private var labItems: [StorjListItem] = []
     @State private var vaultLabs: [LabReportWithMarkers] = []
     @ObservedObject private var vault = LocalVault.shared
     @ObservedObject private var importer = StorjImportService.shared
@@ -38,7 +37,6 @@ struct HealthSyncView: View {
                             lastSyncSection
                             syncControlSection
                             labRecordsSection
-                            storageLink
                         } else {
                             walletGateCard
                         }
@@ -87,7 +85,7 @@ struct HealthSyncView: View {
                 if wallet.isConnected || vault.isOpen {
                     await loadLabRecords()
                 } else {
-                    labItems = []
+                    vaultLabs = []
                     labError = nil
                 }
             }
@@ -401,8 +399,8 @@ struct HealthSyncView: View {
                 )
             }
             .disabled(!canSync)
-
-            genesisAndCoverageCard
+            // Merkle genesis and coverage proofs are off until Phase 6 rebuilds
+            // them on the phone (FeatureFlags.zkServerFlowsDisabled).
         }
     }
 
@@ -420,215 +418,6 @@ struct HealthSyncView: View {
         }
         .presentationDetents([.medium])
         .presentationBackground(Color.amachSurface)
-    }
-
-    // MARK: - Genesis + Coverage Proof
-
-    @StateObject private var merkleService = MerkleGenesisService.shared
-    @State private var coverageStatus: String?
-    @State private var hasGenesis: Bool? = nil  // nil = unchecked
-
-    private var genesisAndCoverageCard: some View {
-        let genesisConfirmed: Bool = hasGenesis == true
-        let genesisIcon     = genesisConfirmed ? "checkmark.circle.fill" : "tree.fill"
-        let genesisLabel    = genesisConfirmed ? "Genesis Root ✓" : "Create Merkle Genesis Root"
-        let genesisBgOpacity: Double = genesisConfirmed ? 0.1 : 0.2
-
-        return VStack(spacing: 12) {
-
-            // Step 1 — Genesis Root
-            Button {
-                Task {
-                    do {
-                        let result = try await merkleService.generateGenesisRoot()
-                        hasGenesis = result.onChainTxHash != nil || result.leafCount > 0
-                    } catch {
-                        coverageStatus = "Genesis failed: \(error.localizedDescription)"
-                    }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: genesisIcon)
-                        .font(.system(size: 16, weight: .semibold))
-                    Text(genesisLabel)
-                        .font(.headline)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.amachPrimary.opacity(genesisBgOpacity))
-                .foregroundStyle(Color.amachPrimaryBright)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.amachPrimaryBright.opacity(0.3), lineWidth: 1)
-                )
-            }
-
-            // Step 2 — Coverage Proof (only enabled once genesis exists)
-            Button {
-                Task {
-                    do {
-                        guard let key = wallet.encryptionKey, let address = wallet.address else {
-                            coverageStatus = "Connect wallet first"
-                            return
-                        }
-                        // Align window with last genesis result when available.
-                        let startDayId: UInt32
-                        let endDayId: UInt32
-                        if let g = merkleService.lastResult {
-                            startDayId = g.startDayId
-                            endDayId = g.endDayId
-                        } else {
-                            startDayId = 1
-                            endDayId = 36500
-                        }
-
-                        coverageStatus = "Generating proof…"
-                        let generated = try await AmachAPIClient.shared.generateCoverageProof(
-                            walletAddress: address,
-                            encryptionKey: key,
-                            startDayId: startDayId,
-                            endDayId: endDayId,
-                            minDays: UInt32(20)
-                        )
-
-                        guard generated.verified else {
-                            coverageStatus = "Coverage proof invalid (backend)"
-                            return
-                        }
-
-                        coverageStatus = "Submitting to registry…"
-                        let onChain = try await ZKSyncAttestationService.shared.submitCoverageProof(
-                            ZKSyncAttestationService.CoverageProofInput(
-                                a: generated.proof.a,
-                                b: generated.proof.b,
-                                c: generated.proof.c,
-                                publicSignals: generated.publicSignals
-                            )
-                        )
-                        coverageStatus = onChain.onChainVerified
-                            ? "Coverage proof stored on-chain ✓"
-                            : "Coverage proof submitted (pending)"
-                    } catch {
-                        coverageStatus = "Coverage proof failed: \(error.localizedDescription)"
-                    }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                    Text("Generate Coverage Proof")
-                        .font(.headline)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.amachPrimary.opacity(genesisConfirmed ? 0.16 : 0.06))
-                .foregroundStyle(genesisConfirmed ? Color.amachPrimaryBright : Color.amachTextSecondary)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.amachPrimaryBright.opacity(genesisConfirmed ? 0.25 : 0.1), lineWidth: 1)
-                )
-            }
-            .disabled(!genesisConfirmed)
-
-            if let coverageStatus {
-                Text(coverageStatus)
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-            }
-
-            // Progress bar + result
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(merkleService.progress.message)
-                        .font(.caption)
-                        .foregroundStyle(Color.amachTextSecondary)
-                    Spacer()
-                    if merkleService.progress != .idle && merkleService.progress != .complete {
-                        Text("\(Int(merkleService.progress.progressFraction * 100))%")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.amachPrimaryBright)
-                    }
-                }
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.amachPrimary.opacity(0.12))
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.amachPrimaryBright)
-                            .frame(width: geo.size.width * merkleService.progress.progressFraction)
-                            .animation(.easeInOut(duration: 0.3), value: merkleService.progress.progressFraction)
-                    }
-                }
-                .frame(height: 4)
-
-                if let result = merkleService.lastResult {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let txHash = result.onChainTxHash {
-                            Text("TX: \(shortHash(txHash))")
-                                .font(AmachType.dataMono)
-                                .foregroundStyle(Color.amachPrimaryBright)
-                        }
-                        Text("Days \(result.startDayId)–\(result.endDayId) · \(result.leafCount) leaves")
-                            .font(AmachType.dataMono)
-                            .foregroundStyle(Color.amachTextSecondary)
-                    }
-                }
-            }
-            .padding(10)
-            .background(Color.amachSurface.opacity(0.6))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .padding(10)
-        .background(Color.amachBg.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.amachPrimaryBright.opacity(0.15), lineWidth: 1)
-        )
-        .task {
-            // Check on-chain genesis state when view appears.
-            guard let address = wallet.address else { return }
-            hasGenesis = (try? await ZKSyncAttestationService.shared.hasGenesisRoot(address: address)) ?? false
-        }
-    }
-
-    // MARK: - Storage Link
-
-    private var storageLink: some View {
-        NavigationLink {
-            StorageListView()
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.amachPrimary.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "externaldrive.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.amachPrimaryBright)
-                }
-                Text("View Stored Data")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.amachTextPrimary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-            }
-            .padding(14)
-            .background(Color.amachSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.amachPrimary.opacity(0.1), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Lab Records
@@ -700,23 +489,6 @@ struct HealthSyncView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                    }
-                }
-            } else if labItems.isEmpty {
-                Text("No DEXA or bloodwork records stored yet.")
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-                    .padding(.vertical, 6)
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(labItems) { item in
-                        NavigationLink {
-                            LabRecordDetailView(item: item)
-                                .environmentObject(wallet)
-                        } label: {
-                            LabRecordCard(item: item)
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -840,73 +612,8 @@ struct HealthSyncView: View {
     }
 
     private func loadLabRecords() async {
-        if let database = vault.database {
-            vaultLabs = (try? database.labReports()) ?? []
-            labError = nil
-            return
-        }
-        guard wallet.isConnected else {
-            labItems = []
-            labError = nil
-            return
-        }
-
-        isLoadingLabRecords = true
-        defer { isLoadingLabRecords = false }
-
-        do {
-            let encryptionKey = try await wallet.ensureEncryptionKey()
-            labItems = try await loadLabRecords(
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
-            labError = nil
-        } catch {
-            labItems = []
-            labError = error.localizedDescription
-        }
-    }
-
-    private func loadLabRecords(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> [StorjListItem] {
-        do {
-            return try await AmachAPIClient.shared.listLabRecords(
-                walletAddress: walletAddress,
-                encryptionKey: encryptionKey
-            )
-        } catch {
-            guard shouldRetryLabRecordsWithFreshSignature(error) else {
-                throw error
-            }
-
-            let refreshedKey = try await wallet.ensureEncryptionKey(forceRefresh: true)
-            return try await AmachAPIClient.shared.listLabRecords(
-                walletAddress: refreshedKey.walletAddress,
-                encryptionKey: refreshedKey
-            )
-        }
-    }
-
-    private func shouldRetryLabRecordsWithFreshSignature(_ error: Error) -> Bool {
-        if wallet.encryptionKey == nil {
-            return true
-        }
-
-        let message = error.localizedDescription.lowercased()
-        let retryTriggers = [
-            "encryption",
-            "decrypt",
-            "decryption",
-            "signature",
-            "key mismatch",
-            "invalid key",
-            "failed to decode",
-            "substring"
-        ]
-
-        return retryTriggers.contains { message.contains($0) }
+        vaultLabs = (try? vault.database?.labReports()) ?? []
+        labError = nil
     }
 
     private func shortHash(_ hash: String) -> String {
@@ -915,204 +622,6 @@ struct HealthSyncView: View {
     }
 }
 
-// MARK: - Storage List View
-
-struct StorageListView: View {
-    @State private var items: [StorjListItem] = []
-    @State private var isLoading = false
-    @State private var error: String?
-
-    var body: some View {
-        ZStack {
-            Color.amachBg.ignoresSafeArea()
-
-            Group {
-                if isLoading {
-                    ProgressView().tint(Color.amachPrimaryBright)
-                } else if let error {
-                    Text(error)
-                        .foregroundStyle(Color.amachDestructive)
-                        .padding()
-                } else if items.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "externaldrive")
-                            .font(.system(size: 40))
-                            .foregroundStyle(Color.amachTextSecondary)
-                        Text("No stored data yet")
-                            .foregroundStyle(Color.amachTextSecondary)
-                        Text("Sync health data to see it here")
-                            .font(.caption)
-                            .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 10) {
-                            ForEach(items) { item in
-                                NavigationLink {
-                                    StorageDetailView(item: item)
-                                        .environmentObject(WalletService.shared)
-                                        .environmentObject(HealthDataSyncService.shared)
-                                } label: {
-                                    StorageItemCard(item: item)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-                }
-            }
-        }
-        .navigationTitle("Stored Data")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .task { await loadItems() }
-        .refreshable { await loadItems() }
-    }
-
-    private func loadItems() async {
-        guard let key = WalletService.shared.encryptionKey else {
-            error = "Wallet not connected"
-            return
-        }
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            items = try await AmachAPIClient.shared.listHealthData(
-                walletAddress: key.walletAddress,
-                encryptionKey: key,
-                dataType: "apple-health-full-export"
-            )
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}
-
-struct StorageItemCard: View {
-    let item: StorjListItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.amachPrimaryBright)
-                        .frame(width: 26, height: 26)
-                        .background(Color.amachPrimary.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-
-                    Text("Apple Health Export")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.amachTextPrimary)
-                }
-                Spacer()
-                if let tier = item.tier {
-                    TierBadge(tier: tier)
-                }
-            }
-
-            if let range = item.dateRange {
-                Text("\(range.start) → \(range.end)")
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-            }
-
-            HStack {
-                if let count = item.metricsCount {
-                    Text("\(count) metrics")
-                        .font(.caption)
-                        .foregroundStyle(Color.amachTextSecondary)
-                }
-                Spacer()
-                Text(item.uploadDate, style: .relative)
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-            }
-        }
-        .padding(14)
-        .background(Color.amachSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.amachPrimary.opacity(0.1), lineWidth: 1)
-        )
-    }
-}
-
-struct LabRecordCard: View {
-    let item: StorjListItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: isDexa ? "figure.stand" : "drop.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(isDexa ? Color.amachAccent : Color.amachPrimaryBright)
-                        .frame(width: 26, height: 26)
-                        .background((isDexa ? Color.amachAccent : Color.amachPrimary).opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 7))
-
-                    Text(title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.amachTextPrimary)
-                }
-
-                Spacer()
-
-                Text(item.uploadDate, style: .date)
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-            }
-
-            let summaries = [item.metadata?["summary1"], item.metadata?["summary2"]].compactMap { $0 }
-            if summaries.isEmpty {
-                Text("Stored securely on Storj")
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-            } else {
-                Text(summaries.joined(separator: "  •  "))
-                    .font(.caption)
-                    .foregroundStyle(Color.amachTextSecondary)
-                    .multilineTextAlignment(.leading)
-            }
-
-            if item.attestationTxHash != nil {
-                Label("Verified on ZKsync", systemImage: "checkmark.seal.fill")
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachSuccess)
-            }
-        }
-        .padding(14)
-        .background(Color.amachBg.opacity(0.35))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.amachPrimary.opacity(0.08), lineWidth: 1)
-        )
-    }
-
-    private var isDexa: Bool {
-        item.dataType == "dexa" || item.dataType == "dexa-report-fhir"
-    }
-
-    private var title: String {
-        switch item.dataType {
-        case "dexa", "dexa-report-fhir":
-            return "DEXA Scan"
-        case "bloodwork", "bloodwork-report-fhir":
-            return "Bloodwork"
-        default:
-            return item.dataType
-        }
-    }
-}
 
 // MARK: - Preview
 

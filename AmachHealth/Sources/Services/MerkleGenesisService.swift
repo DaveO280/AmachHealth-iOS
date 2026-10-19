@@ -115,129 +115,10 @@ final class MerkleGenesisService: ObservableObject {
         daysBack: Int = 90,
         endDate: Date = Date()
     ) async throws -> GenesisRootResult {
-        progress = .normalizing(progress: 0)
-
-        // ─── Step 0: Validate prerequisites ──────────────────────────
-        guard wallet.isConnected, let encryptionKey = wallet.encryptionKey else {
-            throw GenesisError.walletNotConnected
-        }
-
-        guard let walletAddress = wallet.address else {
-            throw GenesisError.walletNotConnected
-        }
-
-        // Parse wallet address bytes for leaf normalization
-        let walletBytes = parseWalletAddress(walletAddress)
-
-        // ─── Step 1: Fetch HealthKit data ─────────────────────────────
-        let startDate = Calendar.current.date(byAdding: .day, value: -daysBack, to: endDate)!
-        progress = .normalizing(progress: 0.1)
-
-        let rawSamples = try await fetchHealthKitSamples(from: startDate, to: endDate)
-        progress = .normalizing(progress: 0.5)
-
-        // ─── Step 2: Normalize into leaves ───────────────────────────
-        let normalizationService = MerkleNormalizationService(walletAddress: walletBytes)
-        let leaves = normalizationService.normalize(
-            samples: rawSamples.quantities,
-            workouts: rawSamples.workouts,
-            restingHRSamples: rawSamples.restingHR,
-            start: startDate,
-            end: endDate,
-            timezone: .current
-        )
-
-        guard !leaves.isEmpty else {
-            throw GenesisError.noHealthData
-        }
-
-        progress = .normalizing(progress: 1.0)
-        #if DEBUG
-        print("🌿 [Genesis] Normalized \(leaves.count) leaves")
-        #endif
-
-        // ─── Step 3-5: Server-side hash + tree + Storj ────────────────
-        progress = .hashing(progress: 0.2)
-        let requestLeaves = leaves.map { leaf in
-            MerkleGenesisLeafRequest(
-                dayId: leaf.dayId,
-                steps: leaf.steps,
-                activeEnergy: leaf.activeEnergy,
-                exerciseMinutes: leaf.exerciseMins,
-                hrvAvg: leaf.hrv,
-                restingHR: leaf.restingHR,
-                sleepMinutes: leaf.sleepMins,
-                stepDayCount: 1,
-                energyDayCount: 1,
-                exerciseDayCount: leaf.workoutCount > 0 ? 1 : 0,
-                hrvDayCount: leaf.hrvPresent ? 1 : 0,
-                restingHrDayCount: leaf.restingHRPresent ? 1 : 0,
-                sleepDayCount: leaf.sleepMins > 0 ? 1 : 0,
-                dataFlags: leaf.dataFlags,
-                timezone: Int16(TimeZone.current.secondsFromGMT() / 60),
-                sourceHash: leaf.sourceHash.hexString()
-            )
-        }
-        progress = .buildingTree(progress: 0.5)
-        let remote = try await api.generateGenesisRoot(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            leaves: requestLeaves
-        )
-        progress = .uploadingToStorj
-        let treeResult = MerkleTreeResult(
-            root: remote.root,
-            rootPadded: remote.rootPadded,
-            leafCount: remote.leafCount,
-            treeDepth: remote.treeDepth,
-            treeSize: 0,
-            startDayId: remote.startDayId,
-            endDayId: remote.endDayId,
-            generatedAt: Date(),
-            tree: [],
-            leafHashes: []
-        )
-        let treeStorjUri: String? = remote.storjPaths.tree
-        let leavesStorjUri: String? = remote.storjPaths.leaves
-
-        // ─── Step 6: Commit root on-chain ─────────────────────────────
-        progress = .submittingOnChain
-
-        var onChainTxHash: String?
-        do {
-            onChainTxHash = try await submitGenesisRootOnChain(
-                treeResult: treeResult,
-                walletAddress: walletAddress,
-                remote: remote
-            )
-            #if DEBUG
-            print("⛓️ [Genesis] On-chain root committed: \(onChainTxHash ?? "no hash")")
-            #endif
-        } catch {
-            #if DEBUG
-            print("⚠️ [Genesis] On-chain commitment failed: \(error.localizedDescription)")
-            #endif
-            throw GenesisError.attestationFailed(error.localizedDescription)
-        }
-
-        // ─── Done ──────────────────────────────────────────────────────
-        progress = .complete
-
-        let result = GenesisRootResult(
-            root: treeResult.root,
-            rootPadded: treeResult.rootPadded,
-            leafCount: treeResult.leafCount,
-            treeDepth: treeResult.treeDepth,
-            startDayId: treeResult.startDayId,
-            endDayId: treeResult.endDayId,
-            storjTreeUri: treeStorjUri,
-            storjLeavesUri: leavesStorjUri,
-            onChainTxHash: onChainTxHash,
-            generatedAt: Date()
-        )
-
-        lastResult = result
-        return result
+        // The server pipeline (/api/merkle/genesis) needed the encryption key.
+        // Off until Phase 6 builds the leaves and tree on the phone.
+        progress = .error(GenesisError.serverFlowsDisabled.localizedDescription)
+        throw GenesisError.serverFlowsDisabled
     }
 
     // MARK: - HealthKit Fetching
@@ -363,9 +244,12 @@ enum GenesisError: LocalizedError {
     case treeBuildFailed(String)
     case storjUploadFailed(String)
     case attestationFailed(String)
+    case serverFlowsDisabled
 
     var errorDescription: String? {
         switch self {
+        case .serverFlowsDisabled:
+            return "Genesis roots are being rebuilt to run on your phone and are off for now."
         case .walletNotConnected:
             return "Connect your wallet before generating the genesis root"
         case .noHealthData:

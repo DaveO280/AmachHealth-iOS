@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Covers the methods ChatService and HealthDataSyncService rely on.
+/// Covers the chat methods ChatService relies on.
 /// Extend as needed when new API surface is added.
 protocol AmachAPIClientProtocol {
     // MARK: - Chat
@@ -28,59 +28,12 @@ protocol AmachAPIClientProtocol {
     ) -> AsyncThrowingStream<String, Error>
 
     func submitChatFeedback(rating: String, screen: String?, comment: String?) async throws
-
-    // MARK: - Storj / Chat Session
-    func storeChatSession(
-        _ session: ChatSession,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> String
-
-    func storeConversationMemory(
-        facts: [CriticalFact],
-        summaries: [SessionSummary],
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> String
-
-    func listHealthData(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        dataType: String?
-    ) async throws -> [StorjListItem]
-
-    // MARK: - Health Summary
-    func getHealthSummary(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        dailySummaries: [String: DailySummary],
-        period: String
-    ) async throws -> HealthSummary
-
-    // MARK: - Profile
-    func readProfile(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> ResolvedProfile?
 }
 
 // Default parameter values for protocol methods.
 // Swift protocols don't support default values directly, so we provide
 // them via an extension to match AmachAPIClient's concrete defaults.
 extension AmachAPIClientProtocol {
-    func getHealthSummary(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        dailySummaries: [String: DailySummary]
-    ) async throws -> HealthSummary {
-        try await getHealthSummary(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dailySummaries: dailySummaries,
-            period: "week"
-        )
-    }
-
     func sendChatMessage(
         _ message: String,
         history: [AIChatHistoryMessage],

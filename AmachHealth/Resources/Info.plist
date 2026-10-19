@@ -63,6 +63,13 @@
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>
+        <string>processing</string>
+    </array>
+
+    <!-- Encrypted backup catch-up (BackupService) -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.amach.health.backup</string>
     </array>
 
     <!-- App Transport Security -->

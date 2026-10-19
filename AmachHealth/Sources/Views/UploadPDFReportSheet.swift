@@ -159,7 +159,7 @@ struct UploadPDFReportSheet: View {
             Text("Upload to Storj")
         }
         .amachPrimaryButtonStyle(isLoading: isUploading)
-        .disabled(isUploading || selectedFileData == nil || wallet.encryptionKey == nil)
+        .disabled(isUploading || selectedFileData == nil || !LocalVault.shared.isOpen)
     }
 
     @ViewBuilder
@@ -294,19 +294,14 @@ struct UploadPDFReportSheet: View {
     private func performUpload() async {
         guard let data = selectedFileData,
               let filename = selectedFileName,
-              let encryptionKey = wallet.encryptionKey else {
+              LocalVault.shared.isOpen else {
             errorMessage = "Connect your wallet before uploading."
             return
         }
 
         errorMessage = nil
         do {
-            _ = try await uploadService.upload(
-                pdfData: data,
-                filename: filename,
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
+            _ = try await uploadService.upload(pdfData: data, filename: filename)
             AmachHaptics.success()
         } catch {
             uploadService.state = .error(error.localizedDescription)

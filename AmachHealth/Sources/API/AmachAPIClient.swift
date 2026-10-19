@@ -28,151 +28,6 @@ final class AmachAPIClient {
         self.session = URLSession(configuration: config)
     }
 
-    // MARK: - Storj Operations
-
-    /// Store health data to Storj (encrypted, via backend)
-    func storeHealthData(
-        payload: AppleHealthStorjPayload,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> StorjStoreResult {
-        let request = StorjRequest(
-            action: "storage/store",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: AnyCodable(payload),
-            dataType: "apple-health-full-export",
-            options: StorjStoreOptions(
-                metadata: [
-                    "version": "1",
-                    "dateRange": "\(payload.manifest.dateRange.start)_\(payload.manifest.dateRange.end)",
-                    "metricsCount": String(payload.manifest.metricsPresent.count),
-                    "completenessScore": String(payload.manifest.completeness.score),
-                    "tier": payload.manifest.completeness.tier,
-                    "platform": "ios"
-                ]
-            )
-        )
-
-        let response: StorjResponse<StorjStoreResult> = try await post(
-            path: "/api/storj",
-            body: request
-        )
-
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Unknown error")
-        }
-
-        return result
-    }
-
-    /// Store raw Data to Storj (used by Merkle genesis pipeline)
-    func storeRawData(
-        data: Data,
-        path: String,
-        encrypt: Bool,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> StorjStoreResult {
-        struct RawDataPayload: Encodable {
-            let content: String   // base64-encoded bytes
-            let path: String
-            let encrypt: Bool
-        }
-        let payload = RawDataPayload(
-            content: data.base64EncodedString(),
-            path: path,
-            encrypt: encrypt
-        )
-        let request = StorjRequest(
-            action: "storage/store",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: AnyCodable(payload),
-            dataType: "merkle-genesis",
-            options: StorjStoreOptions(
-                metadata: [
-                    "path": path,
-                    "encrypt": encrypt ? "true" : "false",
-                    "platform": "ios"
-                ]
-            )
-        )
-        let response: StorjResponse<StorjStoreResult> = try await post(
-            path: "/api/storj",
-            body: request
-        )
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Unknown error")
-        }
-        return result
-    }
-
-    /// List stored health data from Storj
-    func listHealthData(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        dataType: String? = nil
-    ) async throws -> [StorjListItem] {
-        let request = StorjListRequest(
-            action: "storage/list",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: dataType
-        )
-
-        let response: StorjResponse<[StorjListItem]> = try await post(
-            path: "/api/storj",
-            body: request
-        )
-
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Unknown error")
-        }
-
-        return result
-    }
-
-    /// Retrieve health data from Storj
-    func retrieveHealthData(
-        storjUri: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> AppleHealthStorjPayload {
-        try await retrieveStoredData(
-            storjUri: storjUri,
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            as: AppleHealthStorjPayload.self
-        )
-    }
-
-    /// Retrieve and decode any Storj payload type.
-    func retrieveStoredData<T: Decodable>(
-        storjUri: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        as type: T.Type = T.self
-    ) async throws -> T {
-        let request = StorjRetrieveRequest(
-            action: "storage/retrieve",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            storjUri: storjUri
-        )
-
-        let response: StorjResponse<StorjRetrievedData<T>> = try await post(
-            path: "/api/storj",
-            body: request
-        )
-
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Unknown error")
-        }
-
-        return result.data
-    }
-
     // MARK: - Keyless raw access (on-device decryption)
     //
     // storage/list-raw and storage/download-raw take a bucket name the phone
@@ -227,7 +82,9 @@ final class AmachAPIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("AmachHealth-iOS/1.0", forHTTPHeaderField: "User-Agent")
         applyPreviewBypass(&request)
-        request.httpBody = try JSONEncoder().encode(Request(bucketName: bucketName, objectKey: objectKey))
+        let bodyData = try JSONEncoder().encode(Request(bucketName: bucketName, objectKey: objectKey))
+        try OutboundSecretGuard.check(bodyData)
+        request.httpBody = bodyData
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
@@ -240,347 +97,29 @@ final class AmachAPIClient {
         return data
     }
 
-    // MARK: - Timeline Operations
-
-    func storeTimelineEvent(
-        event: TimelineEvent,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> StorjStoreResult {
-        timelineAPIDebug("Storing timeline event \(event.id) for \(walletAddress)")
-        let request = StorjRequest(
-            action: "storage/store",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: AnyCodable(event),
-            dataType: "timeline-event",
-            options: StorjStoreOptions(
-                metadata: [
-                    "eventId": event.id,
-                    "eventType": event.eventType.rawValue,
-                    "timestamp": ISO8601DateFormatter().string(from: event.timestamp),
-                    "platform": "ios"
-                ]
-            )
-        )
-
-        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
-        guard response.success, let result = response.result else {
-            timelineAPIDebug("Timeline store failed: \(response.error ?? "unknown error")")
-            throw APIError.requestFailed(response.error ?? "Timeline store failed")
+    /// Delete one object from the shared Storj account (legacy cleanup after
+    /// an encrypted backup). The server checks the backup session token and
+    /// that the object's recorded owner is this wallet. Returns false when
+    /// the object was already gone.
+    func deleteRawObject(bucketName: String, objectKey: String, backupToken: String) async throws -> Bool {
+        struct Request: Encodable {
+            let action = "storage/delete-raw"
+            let bucketName: String
+            let objectKey: String
+            let backupToken: String
         }
-        timelineAPIDebug("Timeline store succeeded at \(result.storjUri)")
-        return result
-    }
-
-    func listTimelineEvents(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> [TimelineEvent] {
-        timelineAPIDebug("Listing timeline Storj items for \(walletAddress)")
-        let items = try await listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "timeline-event"
-        )
-        timelineAPIDebug("storage/list returned \(items.count) timeline items")
-
-        var events: [TimelineEvent] = []
-        events.reserveCapacity(items.count)
-
-        for item in items.sorted(by: { $0.uploadedAt > $1.uploadedAt }) {
-            do {
-                timelineAPIDebug("Retrieving timeline item \(item.uri)")
-                var event = try await retrieveStoredData(
-                    storjUri: item.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey,
-                    as: TimelineEvent.self
-                )
-                if event.attestationTxHash == nil {
-                    event.attestationTxHash = item.attestationTxHash
-                }
-                timelineAPIDebug("Decoded timeline event \(event.id) of type \(event.eventType.rawValue)")
-                events.append(event)
-            } catch {
-                // Skip individual decode/retrieval failures — don't let one bad event kill the whole load
-                timelineAPIDebug("Skipping timeline item \(item.uri): \(error.localizedDescription)")
-                continue
-            }
-        }
-
-        timelineAPIDebug("Returning \(events.count) decoded timeline events (skipped \(items.count - events.count))")
-        return events.sorted { $0.timestamp > $1.timestamp }
-    }
-
-    /// Delete a single timeline event from Storj by its event ID.
-    /// Finds the Storj object via `metadata["eventId"]` (fast path) or by
-    /// decoding each item as a fallback for legacy events. Idempotent —
-    /// succeeds silently if the event is not found.
-    func deleteTimelineEvent(
-        eventId: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws {
-        timelineAPIDebug("Deleting timeline event \(eventId) for \(walletAddress)")
-        let items = try await listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "timeline-event"
-        )
-
-        // Fast path: match by eventId stored in metadata
-        if let item = items.first(where: { $0.metadata?["eventId"] == eventId }) {
-            timelineAPIDebug("Found timeline event \(eventId) via metadata, deleting \(item.uri)")
-            try await deleteStorjObject(
-                uri: item.uri,
-                walletAddress: walletAddress,
-                encryptionKey: encryptionKey
-            )
-            return
-        }
-
-        // Fallback: decode each item (legacy events without eventId in metadata)
-        for item in items {
-            guard let event = try? await retrieveStoredData(
-                storjUri: item.uri,
-                walletAddress: walletAddress,
-                encryptionKey: encryptionKey,
-                as: TimelineEvent.self
-            ), event.id == eventId else { continue }
-
-            timelineAPIDebug("Found timeline event \(eventId) via decode, deleting \(item.uri)")
-            try await deleteStorjObject(
-                uri: item.uri,
-                walletAddress: walletAddress,
-                encryptionKey: encryptionKey
-            )
-            return
-        }
-
-        timelineAPIDebug("Timeline event \(eventId) not found on Storj — treating as already deleted")
-    }
-
-    private func deleteStorjObject(
-        uri: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws {
-        // Reuse StorjRetrieveRequest shape — same fields, different action
-        let request = StorjRetrieveRequest(
-            action: "storage/delete",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            storjUri: uri
-        )
-        struct DeleteResult: Decodable {
-            let deleted: Bool?
-        }
-        let response: StorjResponse<DeleteResult> = try await post(path: "/api/storj", body: request)
-        guard response.success else {
-            timelineAPIDebug("Storj delete failed for \(uri): \(response.error ?? "unknown error")")
-            throw APIError.requestFailed(response.error ?? "Timeline delete failed")
-        }
-        timelineAPIDebug("Storj delete succeeded for \(uri)")
-    }
-
-    func listLabRecords(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> [StorjListItem] {
-        async let bloodworkLegacy = listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "bloodwork"
-        )
-        async let dexaLegacy = listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "dexa"
-        )
-        async let bloodworkFHIR = listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "bloodwork-report-fhir"
-        )
-        async let dexaFHIR = listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "dexa-report-fhir"
-        )
-
-        let allItems = try await (bloodworkLegacy + dexaLegacy + bloodworkFHIR + dexaFHIR)
-        let deduped = dedupeLabItems(allItems)
-        if !deduped.isEmpty {
-            return deduped
-        }
-
-        let fallbackItems = try await listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: nil
-        )
-
-        return dedupeLabItems(
-            fallbackItems.filter { item in
-                let normalizedType = item.dataType.lowercased()
-                if normalizedType.contains("bloodwork") || normalizedType.contains("dexa") {
-                    return true
-                }
-
-                let reportType = item.metadata?["reporttype"]?.lowercased()
-                    ?? item.metadata?["type"]?.lowercased()
-                return reportType == "bloodwork" || reportType == "dexa"
-            }
-        )
-    }
-
-    func storeLabRecord(
-        data: LabRecord,
-        dataType: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> StorjStoreResult {
-        let request = StorjRequest(
-            action: "storage/store",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: AnyCodable(data),
-            dataType: dataType,
-            options: StorjStoreOptions(
-                metadata: labRecordMetadata(for: data, dataType: dataType)
-            )
-        )
-
-        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Lab store failed")
-        }
-
-        _ = try? await createAttestation(
-            storjUri: result.storjUri,
-            dataType: dataType,
-            action: "store",
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey
-        )
-
-        return result
-    }
-
-    func retrieveBloodworkReport(
-        storjUri: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> RemoteBloodworkReport {
-        let request = ReportRetrieveRequest(
-            action: "report/retrieve",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            storjUri: storjUri,
-            reportType: "bloodwork"
-        )
-
-        let response: StorjResponse<RemoteBloodworkReport> = try await post(
+        struct Result: Decodable { let deleted: Bool }
+        let response: StorjResponse<Result> = try await post(
             path: "/api/storj",
-            body: request
+            body: Request(bucketName: bucketName, objectKey: objectKey, backupToken: backupToken)
         )
-
         guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Failed to retrieve bloodwork report")
+            throw APIError.requestFailed(response.error ?? "Delete failed")
         }
-
-        return result
-    }
-
-    func retrieveDexaReport(
-        storjUri: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> RemoteDexaReport {
-        let request = ReportRetrieveRequest(
-            action: "report/retrieve",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            storjUri: storjUri,
-            reportType: "dexa"
-        )
-
-        let response: StorjResponse<RemoteDexaReport> = try await post(
-            path: "/api/storj",
-            body: request
-        )
-
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Failed to retrieve DEXA report")
-        }
-
-        return result
-    }
-
-    func retrieveMedicalRecord(
-        storjUri: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> RemoteMedicalRecord {
-        let request = ReportRetrieveRequest(
-            action: "report/retrieve",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            storjUri: storjUri,
-            reportType: "medical-record"
-        )
-
-        let response: StorjResponse<RemoteMedicalRecord> = try await post(
-            path: "/api/storj",
-            body: request
-        )
-
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Failed to retrieve medical record")
-        }
-
-        return result
+        return result.deleted
     }
 
     // MARK: - Health Summary API
-
-    /// Get health summary for AI context.
-    ///
-    /// Converts aggregated `DailySummary` data (keyed by ISO date string) into the
-    /// `Record<string, HealthSample[]>` shape the backend expects, then calls
-    /// `/api/health/summary` to generate per-metric stats and trend analysis.
-    ///
-    /// - Parameters:
-    ///   - walletAddress: User's wallet address for auth.
-    ///   - encryptionKey: Derived encryption key.
-    ///   - dailySummaries: Date-keyed map of aggregated daily health data from HealthKit.
-    ///   - period: Aggregation window — "week" (≤7 days), "month" (≤31 days), or "month".
-    func getHealthSummary(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        dailySummaries: [String: DailySummary],
-        period: String = "week"
-    ) async throws -> HealthSummary {
-        let data = Self.buildHealthSampleData(from: dailySummaries)
-        let request = HealthSummaryRequest(
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: data,
-            period: period
-        )
-
-        let response: HealthSummaryResponse = try await post(
-            path: "/api/health/summary",
-            body: request
-        )
-
-        guard response.success, let summary = response.summary else {
-            throw APIError.requestFailed(response.error ?? "No summary available")
-        }
-
-        return summary
-    }
 
     /// Converts `[date: DailySummary]` to `[metricType: [WebHealthSample]]` for the backend.
     /// Each daily aggregate becomes one `WebHealthSample` per metric type, dated at midnight UTC.
@@ -722,68 +261,6 @@ final class AmachAPIClient {
         }
     }
 
-    /// Save distilled conversation memory (facts + summaries) to Storj.
-    /// Lightweight payload — typically under 50KB vs 100KB+ for raw chat sessions.
-    func storeConversationMemory(
-        facts: [CriticalFact],
-        summaries: [SessionSummary],
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> String {
-        let payload = ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
-        let request = StorjRequest(
-            action: "storage/store",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: AnyCodable(payload),
-            dataType: "conversation-memory",
-            options: StorjStoreOptions(
-                metadata: [
-                    "factCount": String(facts.count),
-                    "summaryCount": String(summaries.count),
-                    "platform": "ios"
-                ]
-            )
-        )
-
-        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Failed to store conversation memory")
-        }
-        return result.storjUri
-    }
-
-    /// Save a chat session to Storj (encrypted)
-    func storeChatSession(
-        _ session: ChatSession,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> String {
-        let request = StorjRequest(
-            action: "storage/store",
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            data: AnyCodable(session),
-            dataType: "chat-session",
-            options: StorjStoreOptions(
-                metadata: [
-                    "sessionId": session.id.uuidString,
-                    "messageCount": String(session.messages.count),
-                    "createdAt": ISO8601DateFormatter().string(from: session.createdAt),
-                    "platform": "ios"
-                ]
-            )
-        )
-
-        let response: StorjResponse<StorjStoreResult> = try await post(path: "/api/storj", body: request)
-
-        guard response.success, let result = response.result else {
-            throw APIError.requestFailed(response.error ?? "Failed to store chat session")
-        }
-
-        return result.storjUri
-    }
-
     // MARK: - Attestation API
 
     /// Get user's attestations from chain
@@ -802,66 +279,16 @@ final class AmachAPIClient {
         return response.attestations
     }
 
-    func createAttestation(
-        storjUri: String,
-        dataType: String,
-        action: String,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        metadata: [String: String] = [:]
-    ) async throws -> AttestationResult {
-        let request = CreateAttestationRequest(
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            storjUri: storjUri,
-            dataType: dataType,
-            action: action,
-            metadata: metadata,
-            platform: "ios"
-        )
+    // MARK: - Health Metric Proofs (off: FeatureFlags.zkServerFlowsDisabled)
 
-        let response: CreateAttestationResponse = try await post(
-            path: "/api/attestations",
-            body: request
-        )
-
-        guard response.success, let result = response.attestation else {
-            throw APIError.requestFailed(response.error ?? "Attestation failed")
-        }
-
-        return result
-    }
-
-    // MARK: - Profile
-
-    func readProfile(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey
-    ) async throws -> ResolvedProfile? {
-        let request = ProfileReadRequest(
-            userAddress: walletAddress,
-            encryptionKey: encryptionKey
-        )
-
-        let response: ProfileReadResponse = try await post(
-            path: "/api/profile/read",
-            body: request
-        )
-
-        guard response.success else {
-            throw APIError.requestFailed(response.error ?? "Profile read failed")
-        }
-
-        return response.profile
-    }
-
-    // MARK: - Health Metric Proofs
+    static let zkServerFlowsOff = APIError.requestFailed("Proofs are being rebuilt to run on your phone and are off for now.")
 
     /// Ask the backend to generate a signed, on-chain anchored proof document.
     func generateHealthMetricProof(
         claim: HealthMetricClaim,
         walletAddress: String
     ) async throws -> HealthMetricProofDocument {
+        guard !FeatureFlags.zkServerFlowsDisabled else { throw Self.zkServerFlowsOff }
         struct ProofRequest: Encodable {
             let claim: HealthMetricClaim
             let walletAddress: String
@@ -881,6 +308,7 @@ final class AmachAPIClient {
     func verifyHealthMetricProof(
         proof: HealthMetricProofDocument
     ) async throws -> HealthMetricProofVerificationResult {
+        guard !FeatureFlags.zkServerFlowsDisabled else { throw Self.zkServerFlowsOff }
         struct VerifyRequest: Encodable {
             let proof: HealthMetricProofDocument
         }
@@ -891,86 +319,12 @@ final class AmachAPIClient {
         )
     }
 
-    // MARK: - ZK Coverage (Dev)
-
-    func generateGenesisRoot(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        leaves: [MerkleGenesisLeafRequest]
-    ) async throws -> MerkleGenesisResponse {
-        struct GenesisRequest: Encodable {
-            let walletAddress: String
-            let leaves: [MerkleGenesisLeafRequest]
-            let encryptionKey: WalletEncryptionKey
-        }
-        return try await post(
-            path: "/api/merkle/genesis",
-            body: GenesisRequest(
-                walletAddress: walletAddress,
-                leaves: leaves,
-                encryptionKey: encryptionKey
-            )
-        )
-    }
-
-    /// Upload a baseline-window or finish-window v2 leaf bundle for the
-    /// improvement-proof flow (no caller since Spring Push was removed). The server serializes each
-    /// leaf into its canonical 124-byte form, Poseidon4-hashes it, and
-    /// stores `{ leaves: [{ serializedHex, hashDec, ...fields }] }` to
-    /// Storj under the dataType the web-side proof builder reads from
-    /// (`merkle-v2-baseline-leaves` or `merkle-v2-finish-leaves`).
-    func uploadMerkleV2Leaves(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        window: MerkleV2UploadWindow,
-        leaves: [MerkleLeafV2Fields]
-    ) async throws -> MerkleV2UploadResponse {
-        struct UploadRequest: Encodable {
-            let walletAddress: String
-            let encryptionKey: WalletEncryptionKey
-            let window: String
-            let leaves: [MerkleLeafV2Fields]
-        }
-        return try await post(
-            path: "/api/merkle/v2/upload",
-            body: UploadRequest(
-                walletAddress: walletAddress,
-                encryptionKey: encryptionKey,
-                window: window.rawValue,
-                leaves: leaves
-            )
-        )
-    }
-
-    func generateCoverageProof(
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        startDayId: UInt32,
-        endDayId: UInt32,
-        minDays: UInt32
-    ) async throws -> CoverageProofGenerateResponse {
-        struct CoverageRequest: Encodable {
-            let walletAddress: String
-            let startDayId: UInt32
-            let endDayId: UInt32
-            let minDays: UInt32
-            let encryptionKey: WalletEncryptionKey
-        }
-        return try await post(
-            path: "/api/proofs/coverage/generate",
-            body: CoverageRequest(
-                walletAddress: walletAddress,
-                startDayId: startDayId,
-                endDayId: endDayId,
-                minDays: minDays,
-                encryptionKey: encryptionKey
-            )
-        )
-    }
+    // MARK: - ZK Coverage (off: FeatureFlags.zkServerFlowsDisabled)
 
     func verifyCoverageProof(
         proof: CoverageProof
     ) async throws -> CoverageProofVerifyResponse {
+        guard !FeatureFlags.zkServerFlowsDisabled else { throw Self.zkServerFlowsOff }
         struct VerifyCoverageRequest: Encodable {
             let proof: CoverageProofPayload
             let publicSignals: [String]
@@ -1024,7 +378,9 @@ final class AmachAPIClient {
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        request.httpBody = try encoder.encode(body)
+        let bodyData = try encoder.encode(body)
+        try OutboundSecretGuard.check(bodyData)
+        request.httpBody = bodyData
 
         #if DEBUG
         print("📡 [API] POST \(url.absoluteString) (\(request.httpBody?.count ?? 0) bytes)")
@@ -1082,90 +438,12 @@ final class AmachAPIClient {
         }
     }
 
-    private func labRecordMetadata(for record: LabRecord, dataType: String) -> [String: String] {
-        var metadata: [String: String] = [
-            "date": ISO8601DateFormatter().string(from: record.date),
-            "platform": "ios",
-            "type": dataType
-        ]
-
-        let formatter = NumberFormatter()
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 0
-
-        let summaryPairs = record.values
-            .sorted { $0.key < $1.key }
-            .prefix(2)
-            .compactMap { key, value -> String? in
-                guard let rendered = formatter.string(from: NSNumber(value: value)) else { return nil }
-                let unit = record.units[key].map { " \($0)" } ?? ""
-                return "\(key): \(rendered)\(unit)"
-            }
-
-        if let first = summaryPairs.first {
-            metadata["summary1"] = first
-        }
-        if summaryPairs.count > 1 {
-            metadata["summary2"] = Array(summaryPairs)[1]
-        }
-
-        return metadata
-    }
-
-    private func dedupeLabItems(_ items: [StorjListItem]) -> [StorjListItem] {
-        let uniqueByURI = Dictionary(items.map { ($0.uri, $0) }, uniquingKeysWith: { current, _ in current })
-        return uniqueByURI.values.sorted { $0.uploadedAt > $1.uploadedAt }
-    }
-
-    private func timelineAPIDebug(_ message: String) {
-        #if DEBUG
-        print("📚 [TimelineAPI] \(message)")
-        #endif
-    }
 }
 
 // MARK: - Request Types
 
-struct StorjRequest: Encodable {
-    let action: String
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-    let data: AnyCodable
-    let dataType: String
-    let options: StorjStoreOptions?
-}
-
-struct StorjListRequest: Encodable {
-    let action: String
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-    let dataType: String?
-}
-
-struct StorjRetrieveRequest: Encodable {
-    let action: String
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-    let storjUri: String
-}
-
-struct ReportRetrieveRequest: Encodable {
-    let action: String
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-    let storjUri: String
-    let reportType: String
-}
-
 struct StorjStoreOptions: Encodable {
     let metadata: [String: String]
-}
-
-struct HealthSummaryRequest: Encodable {
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-    let data: [String: [WebHealthSample]]
-    let period: String
 }
 
 /// A single health measurement sample — matches the web backend's `HealthSample` type.
@@ -1194,11 +472,6 @@ struct WebHealthSample: Encodable {
     }
 }
 
-struct ProfileReadRequest: Encodable {
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-}
-
 /// Request body for /api/venice/ streaming endpoint.
 struct VeniceChatRequest: Encodable {
     let message: String
@@ -1217,22 +490,6 @@ struct SSEChunk: Decodable {
 
 struct AttestationRequest: Encodable {
     let userAddress: String
-}
-
-struct TimelineRequest: Encodable {
-    let action: String
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-}
-
-struct CreateAttestationRequest: Encodable {
-    let userAddress: String
-    let encryptionKey: WalletEncryptionKey
-    let storjUri: String
-    let dataType: String
-    let action: String
-    let metadata: [String: String]
-    let platform: String
 }
 
 // MARK: - Response Types
@@ -1740,6 +997,43 @@ struct WalletEncryptionKey: Codable {
     }
 }
 
+// MARK: - Outbound secret guard
+
+/// Refuses to send any request whose body contains the wallet encryption
+/// key or the key-derivation signature. Those never leave the phone; this
+/// makes a regression fail loudly instead of leaking.
+enum OutboundSecretGuard {
+    private static let lock = NSLock()
+    private static var secrets: [Data] = []
+
+    /// Called by WalletService whenever a key is derived or loaded.
+    static func register(_ key: WalletEncryptionKey) {
+        var values = [key.encryptionKey]
+        if key.signature.count > 8 { values.append(key.signature) }
+        // Hex in either case, with or without 0x.
+        let forms = values.flatMap { v -> [String] in
+            let bare = v.hasPrefix("0x") ? String(v.dropFirst(2)) : v
+            return [bare.lowercased(), bare.uppercased()]
+        }
+        lock.lock(); defer { lock.unlock() }
+        for form in forms where form.count >= 32 {
+            let data = Data(form.utf8)
+            if !secrets.contains(data) { secrets.append(data) }
+        }
+    }
+
+    static func check(_ body: Data) throws {
+        lock.lock(); let current = secrets; lock.unlock()
+        for secret in current where body.range(of: secret) != nil {
+            throw APIError.secretInRequest
+        }
+    }
+
+    static func resetForTesting() {
+        lock.lock(); secrets = []; lock.unlock()
+    }
+}
+
 // MARK: - API Errors
 
 enum APIError: LocalizedError {
@@ -1751,6 +1045,9 @@ enum APIError: LocalizedError {
     /// Every private (enclave) AI model was at capacity (HTTP 503
     /// `enclave_busy`). The server never falls back to a non-private model.
     case enclaveBusy
+    /// A request body contained the wallet key or derivation signature and
+    /// was not sent (OutboundSecretGuard).
+    case secretInRequest
 
     static let enclaveBusyCode = "enclave_busy"
 
@@ -1768,6 +1065,8 @@ enum APIError: LocalizedError {
             return "Failed to decode response"
         case .enclaveBusy:
             return "The private AI enclave is busy. Please try again in a moment."
+        case .secretInRequest:
+            return "Blocked a request that contained your encryption key"
         }
     }
 }
