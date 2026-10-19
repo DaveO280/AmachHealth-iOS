@@ -405,7 +405,7 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "today_partial", content: todayPartialContent))
         }
 
-        // 3. labs_bloodwork + labs_dexa — separate blocks for targeted queries
+        // 3. labs_bloodwork, labs_trends, labs_dexa, labs_medical — separate blocks for targeted queries
         blocks += labBlocks()
 
         // 4. goals — conversation-extracted active goals (separate from memory for clarity)
@@ -478,6 +478,14 @@ struct HealthContextBuilder {
         if mode == .quick {
             if !intent.includesLabData {
                 blocks.removeAll { $0.type == "labs_bloodwork" || $0.type == "labs_dexa" }
+            }
+            // Bloodwork history is for lab questions; body-comp questions only need the DEXA.
+            if !intent.includesLabData || intent == .bodyComp {
+                blocks.removeAll { $0.type == "labs_trends" }
+            }
+            // Medical documents also carry medications and diagnoses.
+            if !intent.includesLabData && !intent.includesTimelineEvents {
+                blocks.removeAll { $0.type == "labs_medical" }
             }
             if !intent.includesTimelineEvents {
                 blocks.removeAll { $0.type == "timeline" }
@@ -659,7 +667,13 @@ struct HealthContextBuilder {
         return parts.joined(separator: "\n")
     }
 
-    /// The latest bloodwork and DEXA from the vault, as context blocks.
+    /// Size caps for the lab history blocks, in characters.
+    static let maxTrendsChars = 3_000
+    static let maxMedicalChars = 4_000
+    private static let maxMedicalItemChars = 300
+
+    /// The latest bloodwork and DEXA from the vault, earlier values of
+    /// repeating markers, and recent medical documents, as context blocks.
     /// Included even when specific values are nil: the structure still helps
     /// and avoids "empty response" failures.
     static func labBlocks() -> [ContextBlock] {
@@ -668,10 +682,59 @@ struct HealthContextBuilder {
         if let bw = labs.bloodwork {
             blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
         }
+        if let trends = formatTrends(labs.bloodworkTrends) {
+            blocks.append(ContextBlock(type: "labs_trends", content: trends))
+        }
         if let dx = labs.dexa {
             blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
         }
+        if let medical = formatMedicalDocuments(labs.medicalDocuments) {
+            blocks.append(ContextBlock(type: "labs_medical", content: medical))
+        }
         return blocks
+    }
+
+    /// Appends lines up to `limit` characters, then notes how many were left out.
+    private static func capped(header: String, _ lines: [String], limit: Int) -> String {
+        var out = header
+        for (i, line) in lines.enumerated() {
+            if out.count + line.count + 1 > limit {
+                out += "\n  (\(lines.count - i) more not shown)"
+                break
+            }
+            out += "\n" + line
+        }
+        return out
+    }
+
+    private static func formatTrends(_ trends: [LabMarkerTrend]) -> String? {
+        guard !trends.isEmpty else { return nil }
+        let lines = trends.map { t in
+            "  - \(t.name): " + t.points.map { p in
+                "\(LabReportWithMarkers.format(p.value))\(p.unit.map { " \($0)" } ?? "")\(p.date.map { " (\($0))" } ?? "")"
+            }.joined(separator: " ← ")
+        }
+        return capped(header: "Bloodwork history for markers measured more than once (newest first):",
+                      lines, limit: maxTrendsChars)
+    }
+
+    private static func formatMedicalDocuments(_ docs: [LabMedicalDocumentContext]) -> String? {
+        guard !docs.isEmpty else { return nil }
+        func clip(_ text: String) -> String {
+            text.count > maxMedicalItemChars ? String(text.prefix(maxMedicalItemChars)) + "…" : text
+        }
+        var lines: [String] = []
+        for doc in docs {
+            var header = "  - \(doc.title ?? "Medical document")"
+            if let type = doc.documentType, !type.isEmpty { header += " [\(type)]" }
+            if let date = doc.date { header += " (\(date))" }
+            lines.append(header)
+            if let summary = doc.summary, !summary.isEmpty { lines.append("    Summary: " + clip(summary)) }
+            if !doc.findings.isEmpty { lines.append("    Findings: " + clip(doc.findings.joined(separator: "; "))) }
+            if !doc.diagnoses.isEmpty { lines.append("    Diagnoses: " + clip(doc.diagnoses.joined(separator: "; "))) }
+            if !doc.medications.isEmpty { lines.append("    Medications: " + clip(doc.medications.joined(separator: "; "))) }
+        }
+        return capped(header: "Medical documents (newest first):", lines, limit: maxMedicalChars)
     }
 
     private static func formatBloodwork(_ bw: LabBloodworkContext) -> String {
@@ -705,6 +768,15 @@ struct HealthContextBuilder {
         if let v = dx.androidGynoidRatio { lines.append("  • Android/Gynoid ratio: \(v)") }
         if let v = dx.boneDensityTScore  { lines.append("  • Bone density T-score: \(v)") }
         if let v = dx.boneDensityZScore  { lines.append("  • Bone density Z-score: \(v)") }
+        if !dx.regions.isEmpty {
+            lines.append("  Regions:")
+            for r in dx.regions {
+                let values = r.values.map { v in
+                    "\(v.label) \(LabReportWithMarkers.format(v.value))\(v.unit.map { $0 == "%" ? "%" : " \($0)" } ?? "")"
+                }
+                lines.append("  - \(r.region): " + values.joined(separator: ", "))
+            }
+        }
         if let notes = dx.notes, !notes.isEmpty {
             lines.append("  Notes: " + notes.joined(separator: "; "))
         }

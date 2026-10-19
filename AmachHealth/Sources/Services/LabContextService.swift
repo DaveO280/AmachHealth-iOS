@@ -50,14 +50,86 @@ final class LabContextService: ObservableObject {
 
     // MARK: - Vault
 
-    /// Latest bloodwork and DEXA in the vault, in the shape Luma reads.
+    /// Values kept per repeating marker, including the latest one.
+    static let trendPointsPerMarker = 3
+    /// Repeating markers kept; those in the latest report come first.
+    static let maxTrendMarkers = 40
+    /// Medical documents kept, newest first.
+    static let maxMedicalDocuments = 5
+
+    /// Latest bloodwork and DEXA in the vault, plus earlier values of repeating
+    /// bloodwork markers and recent medical documents, in the shape Luma reads.
     static func context(from vault: VaultDatabase) -> LabResultsContext? {
-        let bloodwork = (try? vault.labReports(kind: .bloodwork))?.first
+        let bloodworkReports = (try? vault.labReports(kind: .bloodwork)) ?? []
         let dexa = (try? vault.labReports(kind: .dexa))?.first
-        let bw = bloodwork.flatMap { shared.convertBloodworkReport($0.asBloodwork) }
-        let dx = dexa.map { shared.convertDexaReport($0.asDexa) } ?? nil
-        guard bw != nil || dx != nil else { return nil }
-        return LabResultsContext(bloodwork: bw, dexa: dx)
+        let bw = bloodworkReports.first.flatMap { shared.convertBloodworkReport($0.asBloodwork) }
+        var dx = dexa.flatMap { shared.convertDexaReport($0.asDexa) }
+        if let dexa { dx?.regions = dexaRegions(dexa) }
+        let trends = bloodworkTrends(bloodworkReports)
+        let medical = medicalDocuments((try? vault.labReports(kind: .medical)) ?? [])
+        guard bw != nil || dx != nil || !trends.isEmpty || !medical.isEmpty else { return nil }
+        return LabResultsContext(bloodwork: bw, dexa: dx, bloodworkTrends: trends, medicalDocuments: medical)
+    }
+
+    /// Markers with numeric values in two or more reports (matched by
+    /// canonical name), with their last few values. `reports` is newest first.
+    static func bloodworkTrends(_ reports: [LabReportWithMarkers]) -> [LabMarkerTrend] {
+        guard reports.count > 1 else { return [] }
+        var order: [String] = []
+        var names: [String: String] = [:]
+        var points: [String: [LabMarkerTrend.Point]] = [:]
+        for report in reports {
+            var seen = Set<String>()
+            for m in report.markers {
+                guard let value = m.value ?? m.valueText.flatMap(Double.init),
+                      seen.insert(m.canonicalName).inserted else { continue }
+                if names[m.canonicalName] == nil {
+                    order.append(m.canonicalName)
+                    names[m.canonicalName] = m.name
+                }
+                guard points[m.canonicalName, default: []].count < trendPointsPerMarker else { continue }
+                points[m.canonicalName, default: []].append(
+                    .init(date: report.report.reportDate, value: value, unit: m.unit))
+            }
+        }
+        return order
+            .compactMap { key -> LabMarkerTrend? in
+                guard let list = points[key], list.count > 1 else { return nil }
+                return LabMarkerTrend(name: names[key] ?? key, points: list)
+            }
+            .prefix(maxTrendMarkers)
+            .map { $0 }
+    }
+
+    static func dexaRegions(_ report: LabReportWithMarkers) -> [LabDexaRegionContext] {
+        let labels: [String: String] = [
+            "body_fat_percent": "body fat", "lean_mass_kg": "lean", "fat_mass_kg": "fat",
+            "bone_density_g_cm2": "BMD", "bone_t_score": "T-score", "bone_z_score": "Z-score"
+        ]
+        return report.dexaRegions.compactMap { group in
+            let values = group.markers.compactMap { m -> LabDexaRegionContext.Value? in
+                guard let v = m.value else { return nil }
+                return .init(label: labels[m.canonicalName] ?? m.name, value: v, unit: m.unit)
+            }
+            guard !values.isEmpty else { return nil }
+            return LabDexaRegionContext(region: group.region.replacingOccurrences(of: "_", with: " "), values: values)
+        }
+    }
+
+    /// Recent medical documents, skipping ones the parser found no medical content in.
+    static func medicalDocuments(_ reports: [LabReportWithMarkers]) -> [LabMedicalDocumentContext] {
+        reports.lazy
+            .map(\.asMedicalRecord)
+            .filter { $0.summary != MedicalRecordData.noMedicalContentNote }
+            .map { r in
+                LabMedicalDocumentContext(
+                    title: r.title, date: r.reportDate, documentType: r.documentType, summary: r.summary,
+                    findings: r.keyFindings ?? [], diagnoses: r.diagnoses ?? [], medications: r.medications ?? []
+                )
+            }
+            .filter { $0.summary != nil || !$0.findings.isEmpty || !$0.diagnoses.isEmpty || !$0.medications.isEmpty }
+            .prefix(maxMedicalDocuments)
+            .map { $0 }
     }
 
     // MARK: - Private Fetch Helpers

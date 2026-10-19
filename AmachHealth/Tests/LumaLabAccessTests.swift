@@ -3,7 +3,9 @@
 //
 // A report saved through PDF import must reach Luma: its values appear in
 // the labs blocks of the next message's context, a newer report replaces the
-// older one, and this works before any health metrics have loaded.
+// older one, and this works before any health metrics have loaded. Earlier
+// values of repeating markers, DEXA regions and medical documents reach Luma
+// too, within size caps and quick-mode pruning.
 //
 // Optional real-data check: set TEST_RUNNER_AMACH_LIVE_REPORT_JSON to one or
 // more parse-report responses (colon-separated paths). Only counts are
@@ -99,6 +101,118 @@ final class LumaLabAccessTests: XCTestCase {
         save(.bloodwork(MockPDFReports.mockBloodworkReport()))
         let labData = await HealthContextBuilder.buildLabContext()
         XCTAssertNotNil(labData?.bloodwork, "vault opened offline: lab data should still reach Luma")
+    }
+
+    private func medical(title: String, date: String, summary: String?) -> MedicalRecordData {
+        MedicalRecordData(type: "medical-record", source: "Clinic", reportDate: date, documentType: "imaging",
+                          title: title, summary: summary, keyFindings: ["Mild degenerative change at L4-L5"],
+                          medications: ["Ibuprofen 400 mg as needed"], diagnoses: ["Lumbar spondylosis"],
+                          rawText: "medical \(title) \(date)", confidence: 0.9)
+    }
+
+    private func bloodwork(date: String, markers: [(String, Double)]) -> BloodworkReportData {
+        let metrics = markers.map {
+            BloodworkMetric(name: $0.0, value: $0.1, valueText: nil, unit: "mg/dL", referenceRange: nil,
+                            panel: nil, collectedAt: nil, flag: nil, interpretationNotes: nil)
+        }
+        return BloodworkReportData(type: "bloodwork", source: "Lab", reportDate: date, laboratory: nil, panels: [:],
+                                   metrics: metrics, notes: nil, rawText: "custom \(date) \(markers.count)", confidence: 1)
+    }
+
+    // MARK: - History, regions, medical documents
+
+    func test_repeating_markers_reach_luma_with_their_last_three_values() throws {
+        save(.bloodwork(bloodwork(date: "2024-01-10", ldl: 150)), name: "a.pdf")
+        save(.bloodwork(bloodwork(date: "2025-06-01", ldl: 131)), name: "b.pdf")
+        save(.bloodwork(bloodwork(date: "2025-12-01", ldl: 110)), name: "c.pdf")
+        save(.bloodwork(bloodwork(date: "2026-05-21", ldl: 98)), name: "d.pdf")
+
+        let content = try XCTUnwrap(block("labs_trends"), "Luma got no bloodwork history")
+        XCTAssertTrue(content.contains(
+            "LDL Cholesterol: 98 mg/dL (2026-05-21) ← 110 mg/dL (2025-12-01) ← 131 mg/dL (2025-06-01)"), content)
+        XCTAssertFalse(content.contains("2024-01-10"), "only the last 3 values per marker")
+        XCTAssertTrue(content.contains("HbA1c: 5.2 %"), content)
+    }
+
+    func test_markers_measured_once_have_no_history() throws {
+        save(.bloodwork(bloodwork(date: "2025-06-01", markers: [("Glucose", 90), ("Ferritin", 80)])), name: "a.pdf")
+        XCTAssertNil(block("labs_trends"), "a single report has no history")
+
+        save(.bloodwork(bloodwork(date: "2026-01-01", markers: [("Glucose", 95), ("Homocysteine", 9)])), name: "b.pdf")
+        let content = try XCTUnwrap(block("labs_trends"))
+        XCTAssertTrue(content.contains("Glucose: 95 mg/dL (2026-01-01) ← 90 mg/dL (2025-06-01)"), content)
+        XCTAssertFalse(content.contains("Ferritin"), content)
+        XCTAssertFalse(content.contains("Homocysteine"), content)
+    }
+
+    func test_bloodwork_history_is_capped() throws {
+        let names = (1...80).map { "Very long marker name number \($0) for size testing" }
+        save(.bloodwork(bloodwork(date: "2025-01-01", markers: names.map { ($0, 1) })), name: "a.pdf")
+        save(.bloodwork(bloodwork(date: "2025-06-01", markers: names.map { ($0, 2) })), name: "b.pdf")
+        save(.bloodwork(bloodwork(date: "2026-01-01", markers: names.map { ($0, 3) })), name: "c.pdf")
+
+        let content = try XCTUnwrap(block("labs_trends"))
+        XCTAssertLessThanOrEqual(content.count, HealthContextBuilder.maxTrendsChars + 40)
+        let lines = content.split(separator: "\n").filter { $0.hasPrefix("  - ") }.count
+        XCTAssertLessThanOrEqual(lines, LabContextService.maxTrendMarkers)
+        XCTAssertTrue(content.contains("more not shown"), content)
+        XCTAssertTrue(content.contains("number 1 for size testing: 3 mg/dL"), "latest report's markers come first")
+    }
+
+    func test_dexa_regions_reach_luma_next_to_the_totals() throws {
+        save(.dexa(MockPDFReports.mockDexaReport()), name: "dexa.pdf")
+        let content = try XCTUnwrap(block("labs_dexa", intent: .bodyComp))
+        XCTAssertTrue(content.contains("Body fat: 17.0%"), content)
+        XCTAssertTrue(content.contains("  - left arm: body fat 15.6%, lean 3.58 kg, fat 0.68 kg"), content)
+        XCTAssertTrue(content.contains("  - trunk: body fat 15.6%, lean 29.65 kg, fat 5.62 kg"), content)
+        for region in MockPDFReports.mockDexaReport().regions {
+            XCTAssertTrue(content.contains("  - \(region.region):"), "missing \(region.region)")
+        }
+    }
+
+    func test_medical_documents_reach_luma_and_non_medical_ones_do_not() throws {
+        save(.medicalRecord(medical(title: "Lumbar MRI", date: "2026-03-02", summary: "MRI of the lower back.")),
+             name: "mri.pdf")
+        save(.medicalRecord(medical(title: "Gym invoice", date: "2026-04-01",
+                                    summary: MedicalRecordData.noMedicalContentNote)), name: "invoice.pdf")
+
+        let content = try XCTUnwrap(block("labs_medical"), "Luma got no medical documents")
+        XCTAssertTrue(content.contains("Lumbar MRI [imaging] (2026-03-02)"), content)
+        XCTAssertTrue(content.contains("Summary: MRI of the lower back."), content)
+        XCTAssertTrue(content.contains("Findings: Mild degenerative change at L4-L5"), content)
+        XCTAssertTrue(content.contains("Diagnoses: Lumbar spondylosis"), content)
+        XCTAssertTrue(content.contains("Medications: Ibuprofen 400 mg as needed"), content)
+        XCTAssertFalse(content.contains("Gym invoice"), content)
+    }
+
+    func test_medical_documents_are_limited_to_the_most_recent() throws {
+        for i in 1...7 {
+            save(.medicalRecord(medical(title: "Visit \(i)", date: "2026-0\(i)-01", summary: "Visit note \(i)")),
+                 name: "visit-\(i).pdf")
+        }
+        let content = try XCTUnwrap(block("labs_medical"))
+        XCTAssertTrue(content.contains("Visit 7"), content)
+        XCTAssertFalse(content.contains("Visit 2 "), content)
+        XCTAssertLessThanOrEqual(content.count, HealthContextBuilder.maxMedicalChars + 40)
+    }
+
+    func test_quick_mode_prunes_lab_history_by_intent_and_deep_mode_keeps_it() throws {
+        save(.bloodwork(bloodwork(date: "2025-06-01", ldl: 131)), name: "a.pdf")
+        save(.bloodwork(bloodwork(date: "2026-05-21", ldl: 98)), name: "b.pdf")
+        save(.dexa(MockPDFReports.mockDexaReport()), name: "dexa.pdf")
+        save(.medicalRecord(medical(title: "Lumbar MRI", date: "2026-03-02", summary: "MRI.")), name: "mri.pdf")
+
+        let all = ["labs_bloodwork", "labs_trends", "labs_dexa", "labs_medical"]
+        func types(_ intent: ChatIntent, _ mode: ChatMode) -> Set<String> {
+            Set((HealthContextBuilder.buildContext(for: intent, mode: mode)?.contextBlocks ?? []).map(\.type))
+                .intersection(all)
+        }
+        XCTAssertEqual(types(.labs, .quick), Set(all))
+        XCTAssertEqual(types(.general, .quick), Set(all))
+        XCTAssertEqual(types(.bodyComp, .quick), ["labs_bloodwork", "labs_dexa", "labs_medical"])
+        XCTAssertEqual(types(.medications, .quick), ["labs_medical"])
+        XCTAssertEqual(types(.sleep, .quick), [])
+        XCTAssertEqual(types(.sleep, .deep), Set(all))
     }
 
     // MARK: - Real data (opt-in)

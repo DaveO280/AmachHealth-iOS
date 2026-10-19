@@ -87,7 +87,7 @@ struct ChatSession: Identifiable, Codable {
 // Adding a new data source (Whoop, CGM, Oura, Android) = new block on iOS,
 // zero backend changes required.
 //
-// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_dexa"
+// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_trends" | "labs_dexa" | "labs_medical"
 //               | "goals" | "memory" | "timeline" | "cgm" | "whoop"
 
 struct ContextBlock: Encodable {
@@ -179,6 +179,42 @@ struct AIChatDateRange: Encodable {
 struct LabResultsContext: Encodable {
     let bloodwork: LabBloodworkContext?
     let dexa: LabDexaContext?
+    /// Earlier values for markers that repeat across bloodwork reports, newest first.
+    var bloodworkTrends: [LabMarkerTrend] = []
+    /// Recent medical documents (imaging, discharge summaries, prescriptions…), newest first.
+    var medicalDocuments: [LabMedicalDocumentContext] = []
+}
+
+/// One marker's last few values across bloodwork reports, newest first.
+struct LabMarkerTrend: Encodable {
+    struct Point: Encodable {
+        let date: String?
+        let value: Double
+        let unit: String?
+    }
+    let name: String
+    let points: [Point]
+}
+
+struct LabMedicalDocumentContext: Encodable {
+    let title: String?
+    let date: String?
+    let documentType: String?
+    let summary: String?
+    let findings: [String]
+    let diagnoses: [String]
+    let medications: [String]
+}
+
+/// A DEXA body region's values (e.g. left arm, trunk).
+struct LabDexaRegionContext: Encodable {
+    struct Value: Encodable {
+        let label: String
+        let value: Double
+        let unit: String?
+    }
+    let region: String
+    let values: [Value]
 }
 
 struct LabBloodworkContext: Encodable {
@@ -208,6 +244,7 @@ struct LabDexaContext: Encodable {
     let boneDensityTScore: Double?
     let boneDensityZScore: Double?
     let notes: [String]?
+    var regions: [LabDexaRegionContext] = []
 }
 
 struct AIChatMemoryCapsule: Encodable {
