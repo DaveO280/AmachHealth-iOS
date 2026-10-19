@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BABE24F1950E7C99A494DF5 /* VaultReportDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE216BFD6B4D804B7FE29 /* VaultReportDeletionTests.swift */; };
+		5BABE2650DCB68092767C92C /* VaultReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE262E1BAF8EB856FE2E6 /* VaultReportsView.swift */; };
 		5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */; };
 		5BABE26160CBA5835600CEAF /* LivePDFImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */; };
 		5BABE2C5C2E0EF0FC510B8AF /* PDFImportFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */; };
@@ -146,6 +148,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5BABE216BFD6B4D804B7FE29 /* VaultReportDeletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultReportDeletionTests.swift; path = AmachHealth/Tests/VaultReportDeletionTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE262E1BAF8EB856FE2E6 /* VaultReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultReportsView.swift; path = AmachHealth/Sources/Vault/VaultReportsView.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaLabAccessTests.swift; path = AmachHealth/Tests/LumaLabAccessTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePDFImportTests.swift; path = AmachHealth/Tests/LivePDFImportTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFImportFlowTests.swift; path = AmachHealth/Tests/PDFImportFlowTests.swift; sourceTree = SOURCE_ROOT; };
@@ -342,6 +346,7 @@
 				5BABE2F56B6E588DDE6B2D12 /* BackupService.swift */,
 				5BABE2A5586FDB55E708724C /* EncryptedBackupSection.swift */,
 				5BABE2429C19F5C62878A3F9 /* SleepSessions.swift */,
+				5BABE262E1BAF8EB856FE2E6 /* VaultReportsView.swift */,
 			);
 			name = Vault;
 			sourceTree = "<group>";
@@ -407,6 +412,7 @@
 				5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */,
 				5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */,
 				5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */,
+				5BABE216BFD6B4D804B7FE29 /* VaultReportDeletionTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -778,6 +784,7 @@
 				5BABE238EE7215408EBA853C /* LumaContextInspector.swift in Sources */,
 				5BABE2F84D2A7E33DC533978 /* LumaInspectorView.swift in Sources */,
 				5BABE271CAAFADB579CCFAFC /* PDFReportReviewCard.swift in Sources */,
+				5BABE2650DCB68092767C92C /* VaultReportsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -818,6 +825,7 @@
 				5BABE2C5C2E0EF0FC510B8AF /* PDFImportFlowTests.swift in Sources */,
 				5BABE26160CBA5835600CEAF /* LivePDFImportTests.swift in Sources */,
 				5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */,
+				5BABE24F1950E7C99A494DF5 /* VaultReportDeletionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

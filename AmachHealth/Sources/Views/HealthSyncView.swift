@@ -482,13 +482,28 @@ struct HealthSyncView: View {
                     VStack(spacing: 10) {
                         ForEach(vaultLabs) { report in
                             NavigationLink {
-                                LabRecordDetailView(vaultItem: report)
+                                LabRecordDetailView(vaultItem: report, onDeleted: { await loadLabRecords() })
                                     .environmentObject(wallet)
                             } label: {
                                 VaultLabReportCard(report: report)
                             }
                             .buttonStyle(.plain)
                         }
+                        NavigationLink {
+                            VaultReportsView(onChange: { await loadLabRecords() })
+                        } label: {
+                            HStack {
+                                Image(systemName: "tray.full")
+                                Text("Manage reports")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.amachPrimaryBright)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
