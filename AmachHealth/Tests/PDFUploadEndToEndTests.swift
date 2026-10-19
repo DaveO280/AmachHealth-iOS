@@ -138,6 +138,46 @@ final class MedicalRecordParsingTests: XCTestCase {
         let result = PDFReportParser.parseText("Healthy", filename: "test.pdf")
         XCTAssertNotNil(result, "Even single-word content should produce a result")
     }
+
+    // MARK: Non-medical note
+
+    func test_real_medical_records_are_not_flagged_non_medical() {
+        let documents = [
+            "Patient Name: John Doe\nASSESSMENT:\nPatient presents with mild hypertension. Blood pressure 142/88.",
+            "PRESCRIPTION\nPatient: Jane Doe\nMetformin 500mg - Take twice daily with meals",
+            "DISCHARGE SUMMARY\nHospital: St. Mary's Medical Center\nDIAGNOSES:\n1. Community-acquired pneumonia",
+            "RADIOLOGY REPORT\nStudy: Chest X-ray PA and Lateral\nIMPRESSION:\nNormal chest radiograph.",
+            "OPERATIVE NOTE\nSurgeon: Dr. Johnson\nPatient placed under general anesthesia.",
+            "Informe Médico\nPaciente presenta dolor abdominal difuso.\nSe solicita ecografía abdominal.",
+        ]
+        for text in documents {
+            let result = PDFReportParser.parseText(text, filename: "record.pdf")
+            if case .medicalRecord(let mr) = result {
+                XCTAssertFalse(mr.appearsNonMedical, "Should not flag: \(text.prefix(40))")
+                XCTAssertNil(mr.summary, "Regex parser leaves summary empty for medical text")
+            } else {
+                XCTFail("Expected medicalRecord for: \(text.prefix(40))")
+            }
+        }
+    }
+
+    func test_non_medical_note_survives_vault_mapping() {
+        guard case .medicalRecord(let mr) = PDFReportParser.parseText("Hello world", filename: "hello.pdf") else {
+            return XCTFail("Expected medicalRecord")
+        }
+        XCTAssertTrue(mr.appearsNonMedical)
+        let item = LabVaultMapping.medical(mr, id: "test-non-medical", origin: "device")
+        XCTAssertTrue(item.markers.contains { $0.panel == "summary" && $0.valueText == MedicalRecordData.noMedicalContentNote })
+        XCTAssertEqual(item.asMedicalRecord.summary, MedicalRecordData.noMedicalContentNote)
+    }
+
+    func test_non_medical_note_survives_fhir_round_trip() {
+        guard case .medicalRecord(let mr) = PDFReportParser.parseText("Hello world", filename: "hello.pdf") else {
+            return XCTFail("Expected medicalRecord")
+        }
+        let decoded = FhirConverter.convertFhirToMedicalRecord(FhirConverter.convertMedicalRecordToFhir(mr))
+        XCTAssertTrue(decoded.appearsNonMedical)
+    }
 }
 
 // MARK: - 2. Medical Record FHIR Round-Trip

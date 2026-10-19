@@ -64,13 +64,26 @@ enum PDFReportParser {
             reportDate: extractFirstDate(from: trimmed),
             documentType: "other",
             title: inferTitle(from: trimmed, filename: filename),
-            summary: nil,
+            summary: hasMedicalSignal(trimmed) ? nil : MedicalRecordData.noMedicalContentNote,
             keyFindings: nil,
             medications: nil,
             diagnoses: nil,
             rawText: trimmed,
             confidence: 0.1
         ))
+    }
+
+    /// Clinical vocabulary used to decide whether a catch-all medical record
+    /// actually looks medical. Generic words that show up in ordinary prose
+    /// ("patient", "lab", "report", "note", "medical") are deliberately left out.
+    private static let medicalSignalPattern = try! NSRegularExpression(
+        pattern: #"\b(?:diagnos|assessment|impression|findings|symptom|prescri|medication|dosage|\d+\s?(?:mg|mcg|ml)\b|tablet|capsule|hospital|clinic|physician|doctor|dr\.|surgeon|surger|surgical|operative|anesthe|admission|discharge|referral|radiolog|x-ray|mri\b|ct scan|ultrasound|imaging|biopsy|patholog|blood pressure|heart rate|vital signs|chief complaint|allerg|vaccin|immuniz|hypertension|diabet|infection|pneumonia|cholesterol|glucose|hemoglobin|dexa|dxa|bone density|body fat|lean mass|médic|diagnóstic|ecograf|hallazgo|receta|ordonnance|analyses)"#,
+        options: [.caseInsensitive]
+    )
+
+    /// True if the text contains at least one clinical term.
+    static func hasMedicalSignal(_ text: String) -> Bool {
+        medicalSignalPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
     /// Extract the first date-like string from text
@@ -206,6 +219,15 @@ enum PDFReportParser {
             options: []
         )
 
+        // Layout G: NAME VALUE REF_RANGE UNIT FLAG? with single-space separators.
+        // PDFKit often collapses column whitespace to one space, which defeats the
+        // 2+ space layouts above. Requiring both a ref range and a unit after the
+        // value keeps prose from matching. Tried last so spaced text is unaffected.
+        let layoutG = try! NSRegularExpression(
+            pattern: #"^([A-Za-z][A-Za-z0-9\s,()\/\-\.%']*?[A-Za-z)])\s+(-?\d+\.?\d*)\s+([<>]?\s*\d+\.?\d*(?:\s*[-–]\s*\d+\.?\d*)?)\s+([A-Za-z%µ][A-Za-z0-9%\/\.µ]*)\s*(H|L|HH|LL|High|Low|HIGH|LOW|Normal|Critical)?\s*$"#,
+            options: []
+        )
+
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
@@ -277,6 +299,12 @@ enum PDFReportParser {
 
             // Try Layout F: NAME  VALUE  UNIT (no ref, no flag)
             if let metric = tryTabular(trimmed, regex: layoutF, groups: (name: 1, value: 2, unit: 3, ref: 0, flag: 0), panel: currentPanel, date: reportDate) {
+                metrics.append(metric)
+                continue
+            }
+
+            // Try Layout G: NAME VALUE REF UNIT FLAG? (whitespace collapsed by PDFKit)
+            if let metric = tryTabular(trimmed, regex: layoutG, groups: (name: 1, value: 2, unit: 4, ref: 3, flag: 5), panel: currentPanel, date: reportDate) {
                 metrics.append(metric)
                 continue
             }
