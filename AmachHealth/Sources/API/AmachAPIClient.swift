@@ -13,6 +13,10 @@ final class AmachAPIClient {
 
     private let baseURL: URL
     private let session: URLSession
+    /// Report parsing runs on private enclave models and a long lab report
+    /// takes about three minutes with no bytes sent until it's done, so it
+    /// gets its own session: the default 180 s idle timeout would cut it off.
+    let parseSession: URLSession
 
     private init() {
         // Configure base URL from environment or default
@@ -26,6 +30,11 @@ final class AmachAPIClient {
         config.timeoutIntervalForRequest = 180
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
+
+        let parseConfig = URLSessionConfiguration.default
+        parseConfig.timeoutIntervalForRequest = 330    // server limit is 300 s
+        parseConfig.timeoutIntervalForResource = 360
+        self.parseSession = URLSession(configuration: parseConfig)
     }
 
     // MARK: - Keyless raw access (on-device decryption)
@@ -362,7 +371,8 @@ final class AmachAPIClient {
 
     func post<T: Encodable, R: Decodable>(
         path: String,
-        body: T
+        body: T,
+        using customSession: URLSession? = nil
     ) async throws -> R {
         // Build URL via string concatenation — appendingPathComponent can
         // add trailing slashes that cause 308 redirects on Next.js
@@ -387,7 +397,7 @@ final class AmachAPIClient {
         #endif
 
         let startTime = Date()
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await (customSession ?? session).data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse

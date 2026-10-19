@@ -450,13 +450,16 @@ final class UploadServiceStateTests: XCTestCase {
         XCTAssertEqual(PDFUploadState.extracting, PDFUploadState.extracting)
     }
 
-    func test_state_equatable_uploading_same_progress() {
-        XCTAssertEqual(PDFUploadState.uploading(progress: 0.5), PDFUploadState.uploading(progress: 0.5))
+    func test_state_equatable_parsing_same_start() {
+        let start = Date()
+        XCTAssertEqual(PDFUploadState.parsing(since: start), PDFUploadState.parsing(since: start))
+        XCTAssertEqual(PDFUploadState.saving, PDFUploadState.saving)
+        XCTAssertEqual(PDFUploadState.aiFailed("x"), PDFUploadState.aiFailed("x"))
     }
 
     func test_state_not_equal_different_types() {
         XCTAssertNotEqual(PDFUploadState.idle, PDFUploadState.extracting)
-        XCTAssertNotEqual(PDFUploadState.extracting, PDFUploadState.parsing)
+        XCTAssertNotEqual(PDFUploadState.extracting, PDFUploadState.parsing(since: Date()))
     }
 
     func test_state_equatable_error() {

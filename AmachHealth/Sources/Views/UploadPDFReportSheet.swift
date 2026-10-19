@@ -1,8 +1,9 @@
 // UploadPDFReportSheet.swift
 // AmachHealth
 //
-// Sheet for importing a PDF report (bloodwork or DEXA scan) from the Files app
-// and uploading it to Storj as a FHIR-formatted health record.
+// Sheet for importing a PDF report (bloodwork, DEXA, other medical documents)
+// from the Files app. The private AI reads it, the user reviews what was
+// found, and only then is it saved in the vault on this phone.
 
 import SwiftUI
 import UniformTypeIdentifiers
@@ -91,7 +92,7 @@ struct UploadPDFReportSheet: View {
                     .foregroundStyle(Color.amachTextSecondary)
             }
 
-            Text("Your PDF is encrypted and stored privately on Storj under your wallet address.")
+            Text("A private AI model reads your report, you check what it found, then it's saved on this phone. Long lab reports take about 3 minutes.")
                 .font(AmachType.tiny)
                 .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
         }
@@ -152,14 +153,17 @@ struct UploadPDFReportSheet: View {
         .amachCard()
     }
 
+    @ViewBuilder
     private var uploadButton: some View {
-        Button {
-            Task { await performUpload() }
-        } label: {
-            Text("Upload to Storj")
+        if case .idle = uploadService.state {
+            Button {
+                Task { await performRead() }
+            } label: {
+                Text("Read report")
+            }
+            .amachPrimaryButtonStyle(isLoading: isUploading)
+            .disabled(isUploading || selectedFileData == nil || !LocalVault.shared.isOpen)
         }
-        .amachPrimaryButtonStyle(isLoading: isUploading)
-        .disabled(isUploading || selectedFileData == nil || !LocalVault.shared.isOpen)
     }
 
     @ViewBuilder
@@ -168,15 +172,34 @@ struct UploadPDFReportSheet: View {
         case .idle:
             EmptyView()
         case .extracting:
-            progressRow(label: "Reading PDF…", icon: "doc.text.magnifyingglass")
-        case .parsing:
-            progressRow(label: "Analyzing health data…", icon: "stethoscope")
-        case .uploading(let progress):
+            progressRow(label: "Reading the PDF…", icon: "doc.text.magnifyingglass")
+        case .parsing(let since):
             VStack(alignment: .leading, spacing: AmachSpacing.sm) {
-                progressRow(label: "Uploading to Storj…", icon: "icloud.and.arrow.up")
-                ProgressView(value: progress)
-                    .tint(Color.amachPrimaryBright)
+                SwiftUI.TimelineView(.periodic(from: since, by: 1)) { context in
+                    progressRow(
+                        label: "Private AI is reading your report… \(Self.clock(context.date.timeIntervalSince(since)))",
+                        icon: "sparkles"
+                    )
+                }
+                Text("Long lab reports take about 3 minutes. Keep Amach open until it's done.")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+                    .padding(.horizontal, AmachSpacing.md)
             }
+        case .aiFailed(let message):
+            aiFailedCard(message)
+        case .review(let result):
+            PDFReportReviewCard(
+                result: result,
+                onSave: {
+                    uploadService.save(result)
+                    if case .done = uploadService.state { AmachHaptics.success() } else { AmachHaptics.error() }
+                },
+                onDiscard: { uploadService.reset() },
+                onTryAI: { Task { await performRead() } }
+            )
+        case .saving:
+            progressRow(label: "Saving to your vault…", icon: "lock.shield")
         case .done(let result):
             uploadSuccessCard(result: result)
         case .error(let message):
@@ -186,6 +209,28 @@ struct UploadPDFReportSheet: View {
                 .padding(AmachSpacing.md)
                 .amachCard()
         }
+    }
+
+    private func aiFailedCard(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(AmachType.caption)
+                .foregroundStyle(Color.amachWarning)
+            Button("Try again") { Task { await performRead() } }
+                .amachPrimaryButtonStyle()
+            Button("Use the offline reader") { Task { await performOfflineRead() } }
+                .amachSecondaryButtonStyle()
+            Text("The offline reader is instant but can miss values on unusual layouts. You'll see what it found before anything is saved.")
+                .font(AmachType.tiny)
+                .foregroundStyle(Color.amachTextSecondary)
+        }
+        .padding(AmachSpacing.md)
+        .amachCard()
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        let s = max(0, Int(seconds))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     private func progressRow(label: String, icon: String) -> some View {
@@ -209,7 +254,7 @@ struct UploadPDFReportSheet: View {
             HStack {
                 Image(systemName: result.wasDuplicate ? "checkmark.circle" : "checkmark.circle.fill")
                     .foregroundStyle(Color.amachSuccess)
-                Text(result.wasDuplicate ? "Already uploaded" : "Upload complete")
+                Text(result.wasDuplicate ? "Already in your vault" : "Saved to your vault")
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachSuccess)
             }
@@ -217,13 +262,6 @@ struct UploadPDFReportSheet: View {
             Text("Report ID: \(result.reportId)")
                 .font(AmachType.tiny)
                 .foregroundStyle(Color.amachTextSecondary)
-
-            if !result.storjUri.isEmpty {
-                Text(result.storjUri)
-                    .font(AmachType.tiny)
-                    .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
-                    .lineLimit(2)
-            }
 
             Button {
                 Task {
@@ -241,12 +279,7 @@ struct UploadPDFReportSheet: View {
 
     // MARK: - Logic
 
-    private var isUploading: Bool {
-        switch uploadService.state {
-        case .extracting, .parsing, .uploading: return true
-        default: return false
-        }
-    }
+    private var isUploading: Bool { uploadService.state.isWorking }
 
     private func handlePickerResult(_ result: Result<[URL], Error>) {
         errorMessage = nil
@@ -291,21 +324,21 @@ struct UploadPDFReportSheet: View {
         }
     }
 
-    private func performUpload() async {
-        guard let data = selectedFileData,
-              let filename = selectedFileName,
-              LocalVault.shared.isOpen else {
-            errorMessage = "Connect your wallet before uploading."
+    private func performRead() async {
+        guard let data = selectedFileData, let filename = selectedFileName, LocalVault.shared.isOpen else {
+            errorMessage = "Connect your wallet before importing."
             return
         }
-
         errorMessage = nil
-        do {
-            _ = try await uploadService.upload(pdfData: data, filename: filename)
-            AmachHaptics.success()
-        } catch {
-            uploadService.state = .error(error.localizedDescription)
-            AmachHaptics.error()
-        }
+        // A long read shouldn't be cut off by auto-lock.
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer { UIApplication.shared.isIdleTimerDisabled = false }
+        await uploadService.read(pdfData: data, filename: filename)
+        if case .aiFailed = uploadService.state { AmachHaptics.error() }
+    }
+
+    private func performOfflineRead() async {
+        guard let data = selectedFileData, let filename = selectedFileName else { return }
+        await uploadService.readOffline(pdfData: data, filename: filename)
     }
 }

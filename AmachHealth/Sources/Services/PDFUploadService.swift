@@ -1,33 +1,70 @@
 // PDFUploadService.swift
 // AmachHealth
 //
-// Orchestrates the PDF → vault pipeline:
-//   1. Extract text with PDFKit
-//   2. Parse (AI first, local regex fallback) into a ParsedHealthReport
-//   3. Save the report in the vault; duplicates are found by fingerprint
-//   4. Keep the original PDF on the phone (lab_pdfs) so encrypted backup
-//      carries it too
+// Orchestrates the PDF → vault pipeline in two steps, so nothing is saved
+// until the user has seen what was read:
+//
+//   read():  extract text with PDFKit, then send it to the website's
+//            private-AI parser (enclave models; about three minutes for a
+//            long lab report). If the AI can't read it, stop and say why —
+//            never fall back silently. The user can try again or use the
+//            phone's offline reader instead.
+//   save():  after review, save the report in the vault (duplicates found by
+//            fingerprint) and keep the original PDF (lab_pdfs) for backup.
 //
 // Nothing is uploaded to Storj and the encryption key isn't used.
 
 import Foundation
 
-// MARK: - Upload state
+// MARK: - Read result
+
+/// A report read from a PDF, waiting for the user to review it.
+struct PDFReadResult {
+    enum Reader: Equatable {
+        /// The website's private enclave model read it.
+        case privateAI(model: String?)
+        /// The AI ran but couldn't map the report; the website's offline parser read it.
+        case serverParser(aiProblem: String?)
+        /// The phone's offline parser read it (the user chose this after the AI failed).
+        case phoneParser
+    }
+
+    let report: ParsedHealthReport
+    let reader: Reader
+    let filename: String
+    let pdfData: Data
+    let seconds: Double
+}
+
+// MARK: - State
 
 enum PDFUploadState: Equatable {
     case idle
     case extracting
-    case parsing
-    case uploading(progress: Double)
+    /// Waiting on the private AI; `since` drives the elapsed-time display.
+    case parsing(since: Date)
+    /// Read; waiting for the user to confirm before anything is saved.
+    case review(PDFReadResult)
+    /// The AI couldn't read it. Nothing was saved.
+    case aiFailed(String)
+    case saving
     case done(PDFUploadResult)
     case error(String)
 
     static func == (lhs: PDFUploadState, rhs: PDFUploadState) -> Bool {
         switch (lhs, rhs) {
-        case (.idle, .idle), (.extracting, .extracting), (.parsing, .parsing): return true
-        case (.uploading(let a), .uploading(let b)): return a == b
+        case (.idle, .idle), (.extracting, .extracting), (.saving, .saving): return true
+        case (.parsing(let a), .parsing(let b)): return a == b
+        case (.aiFailed(let a), .aiFailed(let b)): return a == b
         case (.error(let a), .error(let b)): return a == b
-        case (.done, .done): return true
+        case (.review, .review), (.done, .done): return true
+        default: return false
+        }
+    }
+
+    var isWorking: Bool {
+        switch self {
+        case .extracting, .parsing, .saving: return true
         default: return false
         }
     }
@@ -42,80 +79,114 @@ final class PDFUploadService: ObservableObject {
     static let shared = PDFUploadService()
     private init() {}
 
-    // MARK: - Public
+    /// Tests replace the AI call.
+    var parseWithAI: (String, String) async throws -> AmachAPIClient.AIParseOutcome = { text, filename in
+        try await AmachAPIClient.shared.parseReportWithAI(text: text, sourceName: filename)
+    }
 
-    /// Parse a PDF and save it in the vault. Reports already in the vault
-    /// (matched by fingerprint) are returned as duplicates.
-    func upload(pdfData: Data, filename: String) async throws -> PDFUploadResult {
-        guard let vault = LocalVault.shared.database else {
-            throw PDFUploadError.uploadFailed("Connect your wallet to save reports on this phone.")
-        }
+    // MARK: - Read
 
-        // Step 1: Extract text from PDF
+    /// Extract and read the PDF with the private AI. Ends in `.review` or
+    /// `.aiFailed`; never saves.
+    func read(pdfData: Data, filename: String) async {
         state = .extracting
         let text = await Task.detached(priority: .userInitiated) {
             PDFReportParser.extractText(from: pdfData)
         }.value
-
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw PDFUploadError.unrecognizedContent
+            state = .error(PDFUploadError.noTextLayer.localizedDescription)
+            return
         }
 
-        // Step 2: Parse — try AI first, fall back to local regex
-        state = .parsing
-        var report: ParsedHealthReport?
-
-        // AI path (requires network)
+        let started = Date()
+        state = .parsing(since: started)
         do {
-            report = try await AmachAPIClient.shared.parseReportWithAI(
-                text: text,
-                sourceName: filename
-            )
-            #if DEBUG
-            print("📄 [PDF] AI parsing succeeded")
-            #endif
+            let outcome = try await parseWithAI(text, filename)
+            let seconds = Date().timeIntervalSince(started)
+            guard let report = outcome.report else {
+                state = .aiFailed(Self.aiProblem(outcome.diagnostics?.aiError))
+                return
+            }
+            let reader: PDFReadResult.Reader = outcome.readByAI
+                ? .privateAI(model: outcome.diagnostics?.aiServedBy)
+                : .serverParser(aiProblem: outcome.diagnostics?.aiError)
+            state = .review(PDFReadResult(report: report, reader: reader, filename: filename,
+                                          pdfData: pdfData, seconds: seconds))
         } catch {
-            #if DEBUG
-            print("📄 [PDF] AI parsing failed, falling back to regex: \(error.localizedDescription)")
-            #endif
+            state = .aiFailed(Self.describe(error))
         }
+    }
 
-        // Regex fallback (offline-capable)
-        if report == nil {
-            report = await Task.detached(priority: .userInitiated) {
-                PDFReportParser.parseText(text, filename: filename)
-            }.value
-        }
-
+    /// After an AI failure, read it with the phone's offline parser instead.
+    /// Still ends in `.review`; the user decides whether to save.
+    func readOffline(pdfData: Data, filename: String) async {
+        state = .extracting
+        let started = Date()
+        let report = await Task.detached(priority: .userInitiated) {
+            PDFReportParser.parseText(PDFReportParser.extractText(from: pdfData), filename: filename)
+        }.value
         guard let report else {
-            throw PDFUploadError.unrecognizedContent
+            state = .error(PDFUploadError.unrecognizedContent.localizedDescription)
+            return
         }
+        state = .review(PDFReadResult(report: report, reader: .phoneParser, filename: filename,
+                                      pdfData: pdfData, seconds: Date().timeIntervalSince(started)))
+    }
 
-        // Step 3: Save in the vault
-        state = .uploading(progress: 0.5)
-        let reportId = Self.reportId(for: report)
-        let item = Self.vaultItem(for: report, id: reportId, pdfSHA256: LabVaultMapping.sha256Hex(pdfData))
-        let savedId: String
-        let duplicate: Bool
-        switch try vault.saveLabReport(item) {
-        case .duplicate(let existingId):
-            savedId = existingId
-            duplicate = true
-        case .inserted:
-            savedId = reportId
-            duplicate = false
+    // MARK: - Save
+
+    /// Save a reviewed report in the vault, with its original PDF.
+    func save(_ result: PDFReadResult) {
+        guard let vault = LocalVault.shared.database else {
+            state = .error(PDFUploadError.noVault.localizedDescription)
+            return
         }
-
-        // Step 4: Keep the original PDF (backed up as its own object).
-        try vault.saveLabPdf(pdfData, reportId: savedId, filename: filename)
-
-        let result = PDFUploadResult(storjUri: "", contentHash: "", reportId: savedId,
-                                     report: report, wasDuplicate: duplicate)
-        state = .done(result)
-        return result
+        state = .saving
+        do {
+            let reportId = Self.reportId(for: result.report)
+            let item = Self.vaultItem(for: result.report, id: reportId,
+                                      pdfSHA256: LabVaultMapping.sha256Hex(result.pdfData))
+            let savedId: String
+            let duplicate: Bool
+            switch try vault.saveLabReport(item) {
+            case .duplicate(let existingId): savedId = existingId; duplicate = true
+            case .inserted: savedId = reportId; duplicate = false
+            }
+            try vault.saveLabPdf(result.pdfData, reportId: savedId, filename: result.filename)
+            state = .done(PDFUploadResult(storjUri: "", contentHash: "", reportId: savedId,
+                                          report: result.report, wasDuplicate: duplicate))
+        } catch {
+            state = .error("Couldn't save the report: \(error.localizedDescription)")
+        }
     }
 
     func reset() { state = .idle }
+
+    // MARK: - Messages
+
+    static func describe(_ error: Error) -> String {
+        if case APIError.enclaveBusy = error {
+            return "The private AI is busy right now. Nothing was saved. Try again in a minute."
+        }
+        if case APIError.httpError(let code) = error, code == 504 || code == 502 {
+            return "The private AI took too long to read this report. Nothing was saved."
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return "The private AI took too long to read this report. Nothing was saved."
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "No connection to the private AI. Nothing was saved."
+            default: break
+            }
+        }
+        return "The private AI couldn't read this report (\(error.localizedDescription)). Nothing was saved."
+    }
+
+    static func aiProblem(_ reason: String?) -> String {
+        let detail = reason.map { " (\($0))" } ?? ""
+        return "The private AI couldn't find a report in this PDF\(detail). Nothing was saved."
+    }
 
     static func vaultItem(for report: ParsedHealthReport, id: String, pdfSHA256: String?) -> LabReportWithMarkers {
         switch report {
@@ -151,12 +222,18 @@ final class PDFUploadService: ObservableObject {
 
 enum PDFUploadError: LocalizedError {
     case unrecognizedContent
+    case noTextLayer
+    case noVault
     case uploadFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .unrecognizedContent:
             return "The PDF doesn't appear to contain recognizable bloodwork or DEXA data. Try a different file."
+        case .noTextLayer:
+            return "This PDF has no text to read (it may be a scan). Scanned PDFs aren't supported yet."
+        case .noVault:
+            return "Connect your wallet to save reports on this phone."
         case .uploadFailed(let msg):
             return "Upload failed: \(msg)"
         }
