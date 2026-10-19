@@ -74,6 +74,32 @@ extension VaultDatabase {
         }
     }
 
+    /// Delete a report: its row, its values (cascade) and the original PDF
+    /// kept for it. Backup triggers record the deletions, so an encrypted
+    /// backup drops it on its next run. Returns false if it didn't exist.
+    @discardableResult
+    func deleteLabReport(id: String) throws -> Bool {
+        let removedPdfs: [String]? = try dbQueue.write { db in
+            let shas = try String.fetchAll(db, sql: "SELECT sha256 FROM lab_pdfs WHERE report_id = ?", arguments: [id])
+            try db.execute(sql: "DELETE FROM lab_reports WHERE id = ?", arguments: [id])
+            guard db.changesCount > 0 else { return nil }
+            try db.execute(sql: "DELETE FROM lab_pdfs WHERE report_id = ?", arguments: [id])
+            return shas
+        }
+        guard let removedPdfs else { return false }
+        for sha in removedPdfs {
+            try? FileManager.default.removeItem(at: pdfURL(sha256: sha))
+        }
+        return true
+    }
+
+    /// Whether the original PDF is kept on the phone for this report.
+    func hasOriginalPdf(reportId: String) -> Bool {
+        (try? dbQueue.read { db in
+            try Bool.fetchOne(db, sql: "SELECT EXISTS(SELECT 1 FROM lab_pdfs WHERE report_id = ?)", arguments: [reportId])
+        }) ?? false
+    }
+
     func labReportCount() throws -> Int {
         try dbQueue.read { db in try LabReportRow.fetchCount(db) }
     }

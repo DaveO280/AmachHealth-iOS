@@ -188,10 +188,16 @@ struct UploadLabDataSheet: View {
 struct LabRecordDetailView: View {
     /// A vault report. Opens offline.
     private let vaultItem: LabReportWithMarkers
+    private let onDeleted: () async -> Void
 
-    init(vaultItem: LabReportWithMarkers) {
+    init(vaultItem: LabReportWithMarkers, onDeleted: @escaping () async -> Void = {}) {
         self.vaultItem = vaultItem
+        self.onDeleted = onDeleted
     }
+
+    @Environment(\.dismiss) private var dismissDetail
+    @State private var confirmDelete = false
+    @State private var deleteError: String?
 
     private var txHash: String? { vaultItem.report.attestationTxHash }
 
@@ -477,6 +483,26 @@ struct LabRecordDetailView: View {
         }
         .navigationTitle("Lab Record")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) { confirmDelete = true } label: {
+                    Image(systemName: "trash")
+                }
+                .tint(Color.amachDestructive)
+                .accessibilityLabel("Delete report")
+            }
+        }
+        .confirmationDialog("Delete this report?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete report", role: .destructive) { deleteReport() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(VaultReportActions.deleteExplanation)
+        }
+        .alert("Couldn't delete", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteError ?? "")
+        }
         .task { await loadRecord() }
     }
 
@@ -490,6 +516,18 @@ struct LabRecordDetailView: View {
         case .medical: medicalRecord = vaultItem.asMedicalRecord
         }
         error = nil
+    }
+
+    private func deleteReport() {
+        do {
+            try VaultReportActions.delete(reportId: vaultItem.id)
+            AmachHaptics.success()
+            Task { await onDeleted() }
+            dismissDetail()
+        } catch {
+            deleteError = error.localizedDescription
+            AmachHaptics.error()
+        }
     }
 
     private func formatted(_ value: Double) -> String {
