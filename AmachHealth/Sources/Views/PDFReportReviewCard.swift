@@ -23,11 +23,11 @@ struct PDFReportReviewCard: View {
             }
             summary
             details
-            HStack(spacing: AmachSpacing.sm) {
-                Button("Discard", action: onDiscard)
-                    .amachSecondaryButtonStyle()
+            VStack(spacing: AmachSpacing.sm) {
                 Button("Save to my vault", action: onSave)
                     .amachPrimaryButtonStyle()
+                Button("Discard", action: onDiscard)
+                    .amachSecondaryButtonStyle()
             }
             if let onTryAI, result.reader == .phoneParser {
                 Button("Try the private AI again", action: onTryAI)
