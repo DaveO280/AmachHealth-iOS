@@ -153,6 +153,8 @@ final class PDFUploadService: ObservableObject {
             case .inserted: savedId = reportId; duplicate = false
             }
             try vault.saveLabPdf(result.pdfData, reportId: savedId, filename: result.filename)
+            // Luma's next message should see this report.
+            LabContextService.shared.invalidate()
             state = .done(PDFUploadResult(storjUri: "", contentHash: "", reportId: savedId,
                                           report: result.report, wasDuplicate: duplicate))
         } catch {

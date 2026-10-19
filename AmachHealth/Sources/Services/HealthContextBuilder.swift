@@ -34,8 +34,9 @@ struct HealthContextBuilder {
         // Always include recent timeline events — they're already cached locally
         let recentEvents = buildTimelineEventSummaries(formatter: formatter)
 
-        // Lab records require a wallet connection and a valid encryption key
-        guard wallet.isConnected else {
+        // Lab records live in the vault, which opens from the Keychain even
+        // without a live wallet session.
+        guard wallet.isConnected || LocalVault.shared.isOpen else {
             if recentEvents.isEmpty { return nil }
             return LabDataContext(bloodwork: nil, dexa: nil, recentEvents: recentEvents)
         }
@@ -405,19 +406,7 @@ struct HealthContextBuilder {
         }
 
         // 3. labs_bloodwork + labs_dexa — separate blocks for targeted queries
-        if let labs = LabContextService.shared.context {
-            if let bw = labs.bloodwork {
-                // Always include the block if we decoded a bloodwork object.
-                // Even if specific metric values are nil, the backend can still
-                // use the lab structure/metadata and avoids "empty response"
-                // failures.
-                blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
-            }
-            if let dx = labs.dexa {
-                // Same rationale as bloodwork: include even if values are nil.
-                blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
-            }
-        }
+        blocks += labBlocks()
 
         // 4. goals — conversation-extracted active goals (separate from memory for clarity)
         let goalFacts = ConversationMemoryStore.shared.facts
@@ -478,6 +467,11 @@ struct HealthContextBuilder {
         // Start with base blocks, excluding goals/memory (handled by enrichContext)
         var blocks: [ContextBlock] = (full?.contextBlocks ?? []).filter { block in
             block.type != "goals" && block.type != "memory"
+        }
+        // Labs don't depend on today's health metrics: include them even when
+        // nothing has loaded yet (early morning, no HealthKit, cold start).
+        if full == nil {
+            blocks = [ContextBlock(type: "data_note", content: clockLine())] + labBlocks()
         }
 
         // In quick mode, prune blocks not relevant to the intent
@@ -663,6 +657,21 @@ struct HealthContextBuilder {
         }
         parts.append("Data range: \(dateRange.start) to \(dateRange.end)")
         return parts.joined(separator: "\n")
+    }
+
+    /// The latest bloodwork and DEXA from the vault, as context blocks.
+    /// Included even when specific values are nil: the structure still helps
+    /// and avoids "empty response" failures.
+    static func labBlocks() -> [ContextBlock] {
+        guard let labs = LabContextService.shared.currentContext() else { return [] }
+        var blocks: [ContextBlock] = []
+        if let bw = labs.bloodwork {
+            blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
+        }
+        if let dx = labs.dexa {
+            blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
+        }
+        return blocks
     }
 
     private static func formatBloodwork(_ bw: LabBloodworkContext) -> String {

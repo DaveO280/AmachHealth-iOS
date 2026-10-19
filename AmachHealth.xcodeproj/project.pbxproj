@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */; };
 		5BABE26160CBA5835600CEAF /* LivePDFImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */; };
 		5BABE2C5C2E0EF0FC510B8AF /* PDFImportFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */; };
 		5BABE271CAAFADB579CCFAFC /* PDFReportReviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2186558D21FD7A4DC98 /* PDFReportReviewCard.swift */; };
@@ -145,6 +146,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaLabAccessTests.swift; path = AmachHealth/Tests/LumaLabAccessTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePDFImportTests.swift; path = AmachHealth/Tests/LivePDFImportTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFImportFlowTests.swift; path = AmachHealth/Tests/PDFImportFlowTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2186558D21FD7A4DC98 /* PDFReportReviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportReviewCard.swift; path = AmachHealth/Sources/Views/PDFReportReviewCard.swift; sourceTree = SOURCE_ROOT; };
@@ -404,6 +406,7 @@
 				5BABE257BFF689BF6C5727A9 /* SleepSessionTests.swift */,
 				5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */,
 				5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */,
+				5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -814,6 +817,7 @@
 				5BABE22823F1A19F31374CCB /* SleepSessionTests.swift in Sources */,
 				5BABE2C5C2E0EF0FC510B8AF /* PDFImportFlowTests.swift in Sources */,
 				5BABE26160CBA5835600CEAF /* LivePDFImportTests.swift in Sources */,
+				5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -39,6 +39,15 @@ final class LabContextService: ObservableObject {
         }
     }
 
+    /// The cached context, filled from the vault first if it's empty.
+    /// Synchronous so the chat context builder can always include labs.
+    func currentContext() -> LabResultsContext? {
+        if context == nil, let vault = LocalVault.shared.database {
+            context = Self.context(from: vault)
+        }
+        return context
+    }
+
     // MARK: - Vault
 
     /// Latest bloodwork and DEXA in the vault, in the shape Luma reads.
