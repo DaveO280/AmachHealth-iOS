@@ -19,13 +19,16 @@ import GRDB
 final class VaultDatabase {
     let dbQueue: DatabaseQueue
     let walletAddress: String
+    /// Where this vault keeps files that aren't rows (original lab PDFs).
+    let filesDirectory: URL
 
     /// Highest schema version the migrations below produce.
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
-    private init(dbQueue: DatabaseQueue, walletAddress: String) {
+    private init(dbQueue: DatabaseQueue, walletAddress: String, filesDirectory: URL) {
         self.dbQueue = dbQueue
         self.walletAddress = walletAddress
+        self.filesDirectory = filesDirectory
     }
 
     // MARK: - Opening
@@ -52,7 +55,8 @@ final class VaultDatabase {
         let queue = try DatabaseQueue(path: url.path, configuration: config)
         protectFiles(at: url)
 
-        let vault = VaultDatabase(dbQueue: queue, walletAddress: key.walletAddress)
+        let files = dir.appendingPathComponent("files-\(key.fileIdentifier)", isDirectory: true)
+        let vault = VaultDatabase(dbQueue: queue, walletAddress: key.walletAddress, filesDirectory: files)
         try vault.migrate()
         try vault.verifyKeyCheck(key)
         return vault
@@ -62,7 +66,8 @@ final class VaultDatabase {
     static func inMemory(walletAddress: String = "0xtest") throws -> VaultDatabase {
         var config = Configuration()
         config.foreignKeysEnabled = true
-        let vault = VaultDatabase(dbQueue: try DatabaseQueue(configuration: config), walletAddress: walletAddress)
+        let files = FileManager.default.temporaryDirectory.appendingPathComponent("vault-files-\(UUID().uuidString)")
+        let vault = VaultDatabase(dbQueue: try DatabaseQueue(configuration: config), walletAddress: walletAddress, filesDirectory: files)
         try vault.migrate()
         return vault
     }
@@ -74,7 +79,7 @@ final class VaultDatabase {
         return support.appendingPathComponent("Vault", isDirectory: true)
     }
 
-    private static func prepareDirectory(_ dir: URL) throws {
+    static func prepareDirectory(_ dir: URL) throws {
         let fm = FileManager.default
         if !fm.fileExists(atPath: dir.path) {
             try fm.createDirectory(
@@ -145,7 +150,11 @@ final class VaultDatabase {
             try db.execute(sql: Schema.v1)
             try VaultDatabase.recordSchemaVersion(1, in: db)
         }
-        // Future: migrator.registerMigration("v2") { db in ...; recordSchemaVersion(2, in: db) }
+        migrator.registerMigration("v2") { db in
+            try db.execute(sql: Schema.v2)
+            try VaultDatabase.recordSchemaVersion(2, in: db)
+        }
+        // Future: migrator.registerMigration("v3") { db in ...; recordSchemaVersion(3, in: db) }
         return migrator
     }
 
@@ -165,9 +174,14 @@ final class VaultDatabase {
 
 extension VaultDatabase {
     enum Schema {
-        /// Tables whose rows Phase 3 backs up. Each gets triggers that bump
+        /// Tables whose rows are backed up. Each gets triggers that bump
         /// backup_state.local_version on insert, update and delete.
-        static let backedUpTables: [(table: String, idExpr: (String) -> String)] = [
+        static var backedUpTables: [(table: String, idExpr: (String) -> String)] {
+            v1BackedUpTables + v2BackedUpTables
+        }
+
+        /// Created by v1. Never edit: v1's SQL is built from this list.
+        static let v1BackedUpTables: [(table: String, idExpr: (String) -> String)] = [
             ("daily_metrics", { "\($0).day || '|' || \($0).metric" }),
             ("lab_reports", { "\($0).id" }),
             ("lab_markers", { "CAST(\($0).id AS TEXT)" }),
@@ -182,7 +196,39 @@ extension VaultDatabase {
         ]
 
         static var v1: String {
-            tables + backedUpTables.map { triggers(table: $0.table, idExpr: $0.idExpr) }.joined(separator: "\n")
+            tables + v1BackedUpTables.map { triggers(table: $0.table, idExpr: $0.idExpr) }.joined(separator: "\n")
+        }
+
+        static let v2BackedUpTables: [(table: String, idExpr: (String) -> String)] = [
+            ("lab_pdfs", { "\($0).sha256" }),
+            ("storj_imports", { "\($0).object_key" }),
+        ]
+
+        /// v2 (Phase 3): original lab PDFs and the local copy of the backup index.
+        /// storj_imports gains triggers so archived legacy payloads are backed
+        /// up before old Storj objects can be deleted; its existing rows are
+        /// queued once here.
+        static var v2: String {
+            """
+            CREATE TABLE lab_pdfs (
+                sha256      TEXT PRIMARY KEY NOT NULL,
+                report_id   TEXT,
+                filename    TEXT,
+                byte_count  INTEGER NOT NULL,
+                created_at  INTEGER NOT NULL
+            );
+
+            CREATE TABLE backup_objects (
+                chunk_key   TEXT PRIMARY KEY NOT NULL,
+                entry_json  TEXT NOT NULL,
+                updated_at  INTEGER NOT NULL
+            );
+
+            INSERT INTO backup_state (record_type, record_id, local_version, backed_up_version)
+            SELECT 'storj_imports', object_key, 1, 0 FROM storj_imports WHERE true
+            ON CONFLICT(record_type, record_id) DO UPDATE SET local_version = local_version + 1;
+
+            """ + v2BackedUpTables.map { triggers(table: $0.table, idExpr: $0.idExpr) }.joined(separator: "\n")
         }
 
         private static func triggers(table: String, idExpr: @escaping (String) -> String) -> String {

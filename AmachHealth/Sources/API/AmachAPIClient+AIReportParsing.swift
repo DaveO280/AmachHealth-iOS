@@ -21,6 +21,27 @@ extension AmachAPIClient {
         let success: Bool
         let reports: [ParsedReportSummary]?
         let error: String?
+        let diagnostics: ParseDiagnostics?
+    }
+
+    /// What the server says about how it parsed (see the website's
+    /// src/utils/reportParsers/diagnosticsHook.ts). No report contents.
+    struct ParseDiagnostics: Decodable, Equatable {
+        /// "ai", "local", "medical-record" or "none".
+        let parsedBy: String
+        let apiKeyPresent: Bool?
+        let aiServedBy: String?
+        let aiError: String?
+        let aiMs: Int?
+        let totalMs: Int?
+    }
+
+    struct AIParseOutcome {
+        let report: ParsedHealthReport?
+        let diagnostics: ParseDiagnostics?
+
+        /// The private AI read it (rather than the server's offline parser).
+        var readByAI: Bool { diagnostics?.parsedBy == "ai" }
     }
 
     private struct ParsedReportSummary: Decodable {
@@ -102,13 +123,14 @@ extension AmachAPIClient {
 
     // MARK: - Public
 
-    /// Parse PDF text using the website's AI+regex merge pipeline.
-    /// Returns nil if the endpoint returns no reports.
+    /// Parse PDF text using the website's AI pipeline (private enclave
+    /// models, with the server's own parser as its fallback). Uses the long
+    /// parse session; a big lab report takes about three minutes.
     func parseReportWithAI(
         text: String,
         reportType: String? = nil,
         sourceName: String? = nil
-    ) async throws -> ParsedHealthReport? {
+    ) async throws -> AIParseOutcome {
         let request = ParseReportRequest(
             text: text,
             reportType: reportType,
@@ -117,28 +139,28 @@ extension AmachAPIClient {
 
         let response: ParseReportResponse = try await post(
             path: "/api/health/parse-report",
-            body: request
+            body: request,
+            using: parseSession
         )
 
         guard response.success, let reports = response.reports, let first = reports.first else {
             if let error = response.error {
                 throw APIError.requestFailed(error)
             }
-            return nil
+            return AIParseOutcome(report: nil, diagnostics: response.diagnostics)
         }
 
+        let report: ParsedHealthReport?
         switch first.report.type {
         case "dexa":
-            let dexa = try first.report.decode(as: DexaReportData.self)
-            return .dexa(dexa)
+            report = .dexa(try first.report.decode(as: DexaReportData.self))
         case "bloodwork":
-            let bw = try first.report.decode(as: BloodworkReportData.self)
-            return .bloodwork(bw)
+            report = .bloodwork(try first.report.decode(as: BloodworkReportData.self))
         case "medical-record":
-            let mr = try first.report.decode(as: MedicalRecordData.self)
-            return .medicalRecord(mr)
+            report = .medicalRecord(try first.report.decode(as: MedicalRecordData.self))
         default:
-            return nil
+            report = nil
         }
+        return AIParseOutcome(report: report, diagnostics: response.diagnostics)
     }
 }

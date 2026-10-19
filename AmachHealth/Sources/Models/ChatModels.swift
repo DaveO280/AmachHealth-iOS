@@ -87,7 +87,7 @@ struct ChatSession: Identifiable, Codable {
 // Adding a new data source (Whoop, CGM, Oura, Android) = new block on iOS,
 // zero backend changes required.
 //
-// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_dexa"
+// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_trends" | "labs_dexa" | "labs_medical"
 //               | "goals" | "memory" | "timeline" | "cgm" | "whoop"
 
 struct ContextBlock: Encodable {
@@ -179,6 +179,42 @@ struct AIChatDateRange: Encodable {
 struct LabResultsContext: Encodable {
     let bloodwork: LabBloodworkContext?
     let dexa: LabDexaContext?
+    /// Earlier values for markers that repeat across bloodwork reports, newest first.
+    var bloodworkTrends: [LabMarkerTrend] = []
+    /// Recent medical documents (imaging, discharge summaries, prescriptions…), newest first.
+    var medicalDocuments: [LabMedicalDocumentContext] = []
+}
+
+/// One marker's last few values across bloodwork reports, newest first.
+struct LabMarkerTrend: Encodable {
+    struct Point: Encodable {
+        let date: String?
+        let value: Double
+        let unit: String?
+    }
+    let name: String
+    let points: [Point]
+}
+
+struct LabMedicalDocumentContext: Encodable {
+    let title: String?
+    let date: String?
+    let documentType: String?
+    let summary: String?
+    let findings: [String]
+    let diagnoses: [String]
+    let medications: [String]
+}
+
+/// A DEXA body region's values (e.g. left arm, trunk).
+struct LabDexaRegionContext: Encodable {
+    struct Value: Encodable {
+        let label: String
+        let value: Double
+        let unit: String?
+    }
+    let region: String
+    let values: [Value]
 }
 
 struct LabBloodworkContext: Encodable {
@@ -208,6 +244,7 @@ struct LabDexaContext: Encodable {
     let boneDensityTScore: Double?
     let boneDensityZScore: Double?
     let notes: [String]?
+    var regions: [LabDexaRegionContext] = []
 }
 
 struct AIChatMemoryCapsule: Encodable {
@@ -271,7 +308,6 @@ final class ConversationMemoryStore: ObservableObject {
     @Published private(set) var facts: [CriticalFact] = []
     @Published private(set) var summaries: [SessionSummary] = []
 
-    private var storjUri: String?
 
     /// Memory lives in the vault (memory_facts / memory_summaries). Without
     /// a vault (no wallet) it is kept in memory for this run only.
@@ -326,68 +362,7 @@ final class ConversationMemoryStore: ObservableObject {
         saveToDisk()
     }
 
-    // MARK: - Storj Sync
-
-    func syncToStorj() async {
-        guard VaultFlags.legacyStorjWrites else { return }
-        let wallet = WalletService.shared
-        guard wallet.isConnected, let key = wallet.encryptionKey else { return }
-        guard !facts.isEmpty || !summaries.isEmpty else { return }
-
-        do {
-            let uri = try await AmachAPIClient.shared.storeConversationMemory(
-                facts: facts,
-                summaries: summaries,
-                walletAddress: key.walletAddress,
-                encryptionKey: key
-            )
-            storjUri = uri
-            #if DEBUG
-            print("🧠 ConversationMemoryStore: synced to Storj (\(facts.count) facts, \(summaries.count) summaries)")
-            #endif
-        } catch {
-            #if DEBUG
-            print("⚠️ ConversationMemoryStore: Storj sync failed: \(error.localizedDescription)")
-            #endif
-        }
-    }
-
-    /// Pull the latest conversation memory from Storj and merge with local data.
-    /// Call after Privy auth completes to hydrate memory from a previous device or the web app.
-    func pullFromStorj() async {
-        // With a vault, StorjImportService already brought Storj memory in
-        // (decrypted on device); this path sends the key to the server.
-        guard vault == nil else { return }
-        let wallet = WalletService.shared
-        guard wallet.isConnected, let key = wallet.encryptionKey else { return }
-
-        do {
-            let api = AmachAPIClient.shared
-            let items = try await api.listHealthData(
-                walletAddress: key.walletAddress,
-                encryptionKey: key,
-                dataType: "conversation-memory"
-            )
-
-            guard let latest = items.max(by: { $0.uploadedAt < $1.uploadedAt }) else { return }
-
-            let remote = try await api.retrieveStoredData(
-                storjUri: latest.uri,
-                walletAddress: key.walletAddress,
-                encryptionKey: key,
-                as: ConversationMemoryStorjPayload.self
-            )
-
-            mergeRemoteMemory(remote)
-            #if DEBUG
-            print("🧠 ConversationMemoryStore: pulled from Storj, merged to \(facts.count) facts, \(summaries.count) summaries")
-            #endif
-        } catch {
-            #if DEBUG
-            print("⚠️ ConversationMemoryStore: Storj pull failed: \(error.localizedDescription)")
-            #endif
-        }
-    }
+    // Storj sync removed in Phase 3: memory lives in the vault and in the encrypted backup.
 
     // MARK: - Memory Capsule Builder
 

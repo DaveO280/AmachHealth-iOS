@@ -70,3 +70,18 @@ extension VaultDatabase {
         }
     }
 }
+
+extension VaultDatabase {
+    /// Remove HealthKit sleep rows for these days (imports are left alone).
+    func deleteHealthKitSleepRows(days: [String]) throws {
+        guard !days.isEmpty else { return }
+        try dbQueue.write { db in
+            for day in days {
+                try db.execute(
+                    sql: "DELETE FROM daily_metrics WHERE metric = ? AND day = ? AND source = ?",
+                    arguments: [AmachMetric.sleepId, day, DailyMetricRow.Source.healthKit.rawValue]
+                )
+            }
+        }
+    }
+}

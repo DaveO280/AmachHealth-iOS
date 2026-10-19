@@ -7,6 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */; };
+		5BABE26160CBA5835600CEAF /* LivePDFImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */; };
+		5BABE2C5C2E0EF0FC510B8AF /* PDFImportFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */; };
+		5BABE271CAAFADB579CCFAFC /* PDFReportReviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2186558D21FD7A4DC98 /* PDFReportReviewCard.swift */; };
+		5BABE22823F1A19F31374CCB /* SleepSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE257BFF689BF6C5727A9 /* SleepSessionTests.swift */; };
+		5BABE2F84D2A7E33DC533978 /* LumaInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE215D6DAA0507C78D142 /* LumaInspectorView.swift */; };
+		5BABE238EE7215408EBA853C /* LumaContextInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2EC0D436DDA6A68EEF9 /* LumaContextInspector.swift */; };
+		5BABE28841774C534B5FC2A6 /* SleepSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2429C19F5C62878A3F9 /* SleepSessions.swift */; };
+		5BABE2C84F5EB989E1BC57D3 /* BackupServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2C719E0EC4EA0D4238E /* BackupServiceTests.swift */; };
+		5BABE23350809614395D4A2B /* BackupEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2F75AF0A5BDD0886044 /* BackupEngineTests.swift */; };
+		5BABE2330B9B4E426DD95471 /* BackupCryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2852D1D49F09E5CF293 /* BackupCryptoTests.swift */; };
+		5BABE229BA3BA83C468D3741 /* EncryptedBackupSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2A5586FDB55E708724C /* EncryptedBackupSection.swift */; };
+		5BABE296ABD5FAA7559CC54F /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2F56B6E588DDE6B2D12 /* BackupService.swift */; };
+		5BABE26C250E10CCB54D328E /* BackupEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2494C5C7A84EFB26268 /* BackupEngine.swift */; };
+		5BABE29CCA86FDDF6E2CF3BB /* BackupTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE21574831FC14C55CD7F /* BackupTransport.swift */; };
+		5BABE2B2E72CE4308DFB025E /* BackupFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE200B659CADED2A3AD2B /* BackupFormat.swift */; };
+		5BABE20A2DA71C640E62D1E8 /* BackupCrypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE286C8F10F9070A2A189 /* BackupCrypto.swift */; };
 		5BABE2937A5632A813CFF62A /* LiveStorjImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2309F848DA63D91A833 /* LiveStorjImportTests.swift */; };
 		5BABE2923A783FED0924D45C /* VaultServicesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */; };
 		5BABE2FA78A5DE02FD06E7FB /* VaultIngestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */; };
@@ -73,7 +90,6 @@
 		AA0000000000000000000227 /* TimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000127 /* TimelineService.swift */; };
 		AA0000000000000000000228 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000128 /* TimelineView.swift */; };
 		AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000129 /* AddTimelineEventSheet.swift */; };
-		AA000000000000000000022A /* StorageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012A /* StorageDetailView.swift */; };
 		AA000000000000000000022B /* UploadLabDataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012B /* UploadLabDataSheet.swift */; };
 		AA000000000000000000022C /* ChatIntentClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000012C /* ChatIntentClassifier.swift */; };
 		BB0000000000000000000003 /* PrivySDK in Frameworks */ = {isa = PBXBuildFile; productRef = BB0000000000000000000002 /* Privy */; };
@@ -121,18 +137,32 @@
 		PDF000000000000000000012 /* PDFReportParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000002 /* PDFReportParser.swift */; };
 		PDF000000000000000000013 /* FhirConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000003 /* FhirConverter.swift */; };
 		PDF000000000000000000014 /* PDFUploadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000004 /* PDFUploadService.swift */; };
-		PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */; };
 		AIP000000000000000000001 /* AmachAPIClient+AIReportParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */; };
 		PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000006 /* UploadPDFReportSheet.swift */; };
 		PDF000000000000000000017 /* MockPDFReports.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000007 /* MockPDFReports.swift */; };
 		PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000008 /* PDFReportParserTests.swift */; };
 		PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDF000000000000000000009 /* PDFReportStressTests.swift */; };
 		E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */; };
-		STL000000000000000000001 /* StorjTimelineService.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000011 /* StorjTimelineService.swift */; };
-		STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STL000000000000000000012 /* StorjTimelineServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaLabAccessTests.swift; path = AmachHealth/Tests/LumaLabAccessTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LivePDFImportTests.swift; path = AmachHealth/Tests/LivePDFImportTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFImportFlowTests.swift; path = AmachHealth/Tests/PDFImportFlowTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2186558D21FD7A4DC98 /* PDFReportReviewCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportReviewCard.swift; path = AmachHealth/Sources/Views/PDFReportReviewCard.swift; sourceTree = SOURCE_ROOT; };
+		5BABE257BFF689BF6C5727A9 /* SleepSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SleepSessionTests.swift; path = AmachHealth/Tests/SleepSessionTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE215D6DAA0507C78D142 /* LumaInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaInspectorView.swift; path = AmachHealth/Sources/Views/LumaInspectorView.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2EC0D436DDA6A68EEF9 /* LumaContextInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaContextInspector.swift; path = AmachHealth/Sources/Services/LumaContextInspector.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2429C19F5C62878A3F9 /* SleepSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SleepSessions.swift; path = AmachHealth/Sources/Vault/SleepSessions.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2C719E0EC4EA0D4238E /* BackupServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupServiceTests.swift; path = AmachHealth/Tests/BackupServiceTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2F75AF0A5BDD0886044 /* BackupEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupEngineTests.swift; path = AmachHealth/Tests/BackupEngineTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2852D1D49F09E5CF293 /* BackupCryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupCryptoTests.swift; path = AmachHealth/Tests/BackupCryptoTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2A5586FDB55E708724C /* EncryptedBackupSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EncryptedBackupSection.swift; path = AmachHealth/Sources/Vault/Backup/EncryptedBackupSection.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2F56B6E588DDE6B2D12 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupService.swift; path = AmachHealth/Sources/Vault/Backup/BackupService.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2494C5C7A84EFB26268 /* BackupEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupEngine.swift; path = AmachHealth/Sources/Vault/Backup/BackupEngine.swift; sourceTree = SOURCE_ROOT; };
+		5BABE21574831FC14C55CD7F /* BackupTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupTransport.swift; path = AmachHealth/Sources/Vault/Backup/BackupTransport.swift; sourceTree = SOURCE_ROOT; };
+		5BABE200B659CADED2A3AD2B /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupFormat.swift; path = AmachHealth/Sources/Vault/Backup/BackupFormat.swift; sourceTree = SOURCE_ROOT; };
+		5BABE286C8F10F9070A2A189 /* BackupCrypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BackupCrypto.swift; path = AmachHealth/Sources/Vault/Backup/BackupCrypto.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2309F848DA63D91A833 /* LiveStorjImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveStorjImportTests.swift; path = AmachHealth/Tests/LiveStorjImportTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultServicesTests.swift; path = AmachHealth/Tests/VaultServicesTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultIngestionTests.swift; path = AmachHealth/Tests/VaultIngestionTests.swift; sourceTree = SOURCE_ROOT; };
@@ -206,7 +236,6 @@
 		AA0000000000000000000127 /* TimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineService.swift; path = AmachHealth/Sources/Services/TimelineService.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000128 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimelineView.swift; path = AmachHealth/Sources/Views/TimelineView.swift; sourceTree = SOURCE_ROOT; };
 		AA0000000000000000000129 /* AddTimelineEventSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AddTimelineEventSheet.swift; path = AmachHealth/Sources/Views/AddTimelineEventSheet.swift; sourceTree = SOURCE_ROOT; };
-		AA000000000000000000012A /* StorageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorageDetailView.swift; path = AmachHealth/Sources/Views/StorageDetailView.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012B /* UploadLabDataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadLabDataSheet.swift; path = AmachHealth/Sources/Views/UploadLabDataSheet.swift; sourceTree = SOURCE_ROOT; };
 		AA000000000000000000012C /* ChatIntentClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ChatIntentClassifier.swift; path = AmachHealth/Sources/Services/ChatIntentClassifier.swift; sourceTree = SOURCE_ROOT; };
 		BB0000000000000000000005 /* ConnectWalletSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ConnectWalletSheet.swift; path = AmachHealth/Sources/Views/ConnectWalletSheet.swift; sourceTree = SOURCE_ROOT; };
@@ -249,15 +278,12 @@
 		PDF000000000000000000002 /* PDFReportParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParser.swift; path = AmachHealth/Sources/Services/PDFReportParser.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000003 /* FhirConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FhirConverter.swift; path = AmachHealth/Sources/Services/FhirConverter.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000004 /* PDFUploadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFUploadService.swift; path = AmachHealth/Sources/Services/PDFUploadService.swift; sourceTree = SOURCE_ROOT; };
-		PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AmachAPIClient+PDFReports.swift"; path = "AmachHealth/Sources/API/AmachAPIClient+PDFReports.swift"; sourceTree = SOURCE_ROOT; };
 		AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AmachAPIClient+AIReportParsing.swift"; path = "AmachHealth/Sources/API/AmachAPIClient+AIReportParsing.swift"; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000006 /* UploadPDFReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UploadPDFReportSheet.swift; path = AmachHealth/Sources/Views/UploadPDFReportSheet.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000007 /* MockPDFReports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MockPDFReports.swift; path = AmachHealth/Tests/MockPDFReports.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000008 /* PDFReportParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportParserTests.swift; path = AmachHealth/Tests/PDFReportParserTests.swift; sourceTree = SOURCE_ROOT; };
 		PDF000000000000000000009 /* PDFReportStressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFReportStressTests.swift; path = AmachHealth/Tests/PDFReportStressTests.swift; sourceTree = SOURCE_ROOT; };
 		E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PDFUploadEndToEndTests.swift; path = AmachHealth/Tests/PDFUploadEndToEndTests.swift; sourceTree = SOURCE_ROOT; };
-		STL000000000000000000011 /* StorjTimelineService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjTimelineService.swift; path = AmachHealth/Sources/Services/StorjTimelineService.swift; sourceTree = SOURCE_ROOT; };
-		STL000000000000000000012 /* StorjTimelineServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjTimelineServiceTests.swift; path = AmachHealth/Tests/StorjTimelineServiceTests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -309,6 +335,13 @@
 				5BABE2BFAEF2DF0520208B31 /* StorjObjectImporter.swift */,
 				5BABE2A1E3F8B3E56EB0E3B7 /* VaultDashboardReader.swift */,
 				5BABE2722AEC406FA4FFB80F /* VaultViews.swift */,
+				5BABE286C8F10F9070A2A189 /* BackupCrypto.swift */,
+				5BABE200B659CADED2A3AD2B /* BackupFormat.swift */,
+				5BABE21574831FC14C55CD7F /* BackupTransport.swift */,
+				5BABE2494C5C7A84EFB26268 /* BackupEngine.swift */,
+				5BABE2F56B6E588DDE6B2D12 /* BackupService.swift */,
+				5BABE2A5586FDB55E708724C /* EncryptedBackupSection.swift */,
+				5BABE2429C19F5C62878A3F9 /* SleepSessions.swift */,
 			);
 			name = Vault;
 			sourceTree = "<group>";
@@ -359,7 +392,6 @@
 				PDF000000000000000000008 /* PDFReportParserTests.swift */,
 				PDF000000000000000000009 /* PDFReportStressTests.swift */,
 				E2E000000000000000000010 /* PDFUploadEndToEndTests.swift */,
-				STL000000000000000000012 /* StorjTimelineServiceTests.swift */,
 				5BABE100000000000000C001 /* MerkleLeafV2FieldsTests.swift */,
 				5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */,
 				5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */,
@@ -368,6 +400,13 @@
 				5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */,
 				5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */,
 				5BABE2309F848DA63D91A833 /* LiveStorjImportTests.swift */,
+				5BABE2852D1D49F09E5CF293 /* BackupCryptoTests.swift */,
+				5BABE2F75AF0A5BDD0886044 /* BackupEngineTests.swift */,
+				5BABE2C719E0EC4EA0D4238E /* BackupServiceTests.swift */,
+				5BABE257BFF689BF6C5727A9 /* SleepSessionTests.swift */,
+				5BABE2BB95E0C55B38200627 /* PDFImportFlowTests.swift */,
+				5BABE2DB71D942AF9D18223C /* LivePDFImportTests.swift */,
+				5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -395,6 +434,9 @@
 				AA0000000000000000000417 /* Services */,
 				AA0000000000000000000418 /* Views */,
 				5BABE2000000000000000000 /* Vault */,
+				5BABE2EC0D436DDA6A68EEF9 /* LumaContextInspector.swift */,
+				5BABE215D6DAA0507C78D142 /* LumaInspectorView.swift */,
+				5BABE2186558D21FD7A4DC98 /* PDFReportReviewCard.swift */,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -404,7 +446,6 @@
 			children = (
 				AA0000000000000000000101 /* AmachAPIClient.swift */,
 				EE0000000000000000000001 /* AmachAPIClientProtocol.swift */,
-				PDF000000000000000000005 /* AmachAPIClient+PDFReports.swift */,
 				AIP000000000000000000002 /* AmachAPIClient+AIReportParsing.swift */,
 			);
 			name = API;
@@ -494,7 +535,6 @@
 				DD0000000000000000000002 /* HealthMetricProofService.swift */,
 				AA0000000000000000000118 /* LumaProactiveService.swift */,
 				AA0000000000000000000127 /* TimelineService.swift */,
-				STL000000000000000000011 /* StorjTimelineService.swift */,
 				AA0000000000000000000119 /* WalletService.swift */,
 				EE0000000000000000000002 /* WalletServiceProtocol.swift */,
 				
@@ -525,7 +565,6 @@
 				DD0000000000000000000003 /* ProofGeneratorView.swift */,
 				DD0000000000000000000004 /* ProofDetailView.swift */,
 				AA0000000000000000000120 /* ProfileView.swift */,
-				AA000000000000000000012A /* StorageDetailView.swift */,
 				AA0000000000000000000128 /* TimelineView.swift */,
 				AA0000000000000000000121 /* TrendsView.swift */,
 				AA000000000000000000012B /* UploadLabDataSheet.swift */,
@@ -674,7 +713,6 @@
 				5BABE100000000000000E002 /* ProtectedLocalFile.swift in Sources */,
 				AA0000000000000000000218 /* LumaProactiveService.swift in Sources */,
 				AA0000000000000000000227 /* TimelineService.swift in Sources */,
-				STL000000000000000000001 /* StorjTimelineService.swift in Sources */,
 				AA0000000000000000000219 /* WalletService.swift in Sources */,
 				AA0000000000000000000229 /* AddTimelineEventSheet.swift in Sources */,
 				AA000000000000000000021A /* ChatView.swift in Sources */,
@@ -685,7 +723,6 @@
 				AA000000000000000000021E /* MetricDetailView.swift in Sources */,
 				AA000000000000000000021F /* OnboardingView.swift in Sources */,
 				AA0000000000000000000220 /* ProfileView.swift in Sources */,
-				AA000000000000000000022A /* StorageDetailView.swift in Sources */,
 				AA0000000000000000000228 /* TimelineView.swift in Sources */,
 				AA0000000000000000000221 /* TrendsView.swift in Sources */,
 				AA0000000000000000000222 /* HealthContextBuilder.swift in Sources */,
@@ -714,7 +751,6 @@
 				PDF000000000000000000012 /* PDFReportParser.swift in Sources */,
 				PDF000000000000000000013 /* FhirConverter.swift in Sources */,
 				PDF000000000000000000014 /* PDFUploadService.swift in Sources */,
-				PDF000000000000000000015 /* AmachAPIClient+PDFReports.swift in Sources */,
 				AIP000000000000000000001 /* AmachAPIClient+AIReportParsing.swift in Sources */,
 				PDF000000000000000000016 /* UploadPDFReportSheet.swift in Sources */,
 				5BABE281467A839BB9904985 /* AmachMetric.swift in Sources */,
@@ -732,6 +768,16 @@
 				5BABE268C7B271EAD7C3DB81 /* StorjObjectImporter.swift in Sources */,
 				5BABE2454C7C64401228A3F5 /* VaultDashboardReader.swift in Sources */,
 				5BABE2C99FB104BE6C321398 /* VaultViews.swift in Sources */,
+				5BABE20A2DA71C640E62D1E8 /* BackupCrypto.swift in Sources */,
+				5BABE2B2E72CE4308DFB025E /* BackupFormat.swift in Sources */,
+				5BABE29CCA86FDDF6E2CF3BB /* BackupTransport.swift in Sources */,
+				5BABE26C250E10CCB54D328E /* BackupEngine.swift in Sources */,
+				5BABE296ABD5FAA7559CC54F /* BackupService.swift in Sources */,
+				5BABE229BA3BA83C468D3741 /* EncryptedBackupSection.swift in Sources */,
+				5BABE28841774C534B5FC2A6 /* SleepSessions.swift in Sources */,
+				5BABE238EE7215408EBA853C /* LumaContextInspector.swift in Sources */,
+				5BABE2F84D2A7E33DC533978 /* LumaInspectorView.swift in Sources */,
+				5BABE271CAAFADB579CCFAFC /* PDFReportReviewCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -757,7 +803,6 @@
 				PDF000000000000000000018 /* PDFReportParserTests.swift in Sources */,
 				PDF000000000000000000019 /* PDFReportStressTests.swift in Sources */,
 				E2E000000000000000000020 /* PDFUploadEndToEndTests.swift in Sources */,
-				STL000000000000000000002 /* StorjTimelineServiceTests.swift in Sources */,
 				5BABE100000000000000C002 /* MerkleLeafV2FieldsTests.swift in Sources */,
 				5BABE207745533791E8E4732 /* WalletDecryptorFixtures.swift in Sources */,
 				5BABE2D2CD6A91B61814DBE0 /* WalletPayloadDecryptorTests.swift in Sources */,
@@ -766,6 +811,13 @@
 				5BABE2FA78A5DE02FD06E7FB /* VaultIngestionTests.swift in Sources */,
 				5BABE2923A783FED0924D45C /* VaultServicesTests.swift in Sources */,
 				5BABE2937A5632A813CFF62A /* LiveStorjImportTests.swift in Sources */,
+				5BABE2330B9B4E426DD95471 /* BackupCryptoTests.swift in Sources */,
+				5BABE23350809614395D4A2B /* BackupEngineTests.swift in Sources */,
+				5BABE2C84F5EB989E1BC57D3 /* BackupServiceTests.swift in Sources */,
+				5BABE22823F1A19F31374CCB /* SleepSessionTests.swift in Sources */,
+				5BABE2C5C2E0EF0FC510B8AF /* PDFImportFlowTests.swift in Sources */,
+				5BABE26160CBA5835600CEAF /* LivePDFImportTests.swift in Sources */,
+				5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

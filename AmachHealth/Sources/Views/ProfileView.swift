@@ -21,9 +21,6 @@ struct ProfileView: View {
     @EnvironmentObject private var syncService: HealthDataSyncService
     @EnvironmentObject private var proofService: HealthMetricProofService
 
-    @State private var resolvedProfile: ResolvedProfile?
-    @State private var isLoadingProfile = false
-    @State private var profileError: String?
     @State private var attestations: [AttestationInfo] = []
     @State private var isLoadingAttestations = false
     @State private var showDisconnectAlert = false
@@ -42,11 +39,11 @@ struct ProfileView: View {
 
                 List {
                     profileHeaderSection
-                    profileBasicsSection
                     connectedSourcesSection
                     dataQualitySection
                     attestationsSection
                     lumaSection
+                    EncryptedBackupSection()
                     privacySection
                     aboutSection
                     destructiveSection
@@ -58,17 +55,13 @@ struct ProfileView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .task {
-                await loadProfileBasics()
                 await loadAttestations()
             }
             .onChange(of: wallet.isConnected) { _, isConnected in
                 Task {
                     if isConnected {
-                        await loadProfileBasics()
                         await loadAttestations()
                     } else {
-                        resolvedProfile = nil
-                        profileError = nil
                         attestations = []
                     }
                 }
@@ -79,7 +72,7 @@ struct ProfileView: View {
                     Task { await wallet.disconnect() }
                 }
             } message: {
-                Text("Your data will remain in your Storj vault. You can reconnect anytime.")
+                Text("Your data stays on this phone, and in your encrypted backup if it's on. You can reconnect anytime.")
             }
             .alert("Delete Account", isPresented: $showDeleteAlert) {
                 Button("Cancel", role: .cancel) {}
@@ -95,118 +88,6 @@ struct ProfileView: View {
                     .presentationDetents([.medium])
                     .presentationBackground(Color.amachSurface)
             }
-        }
-    }
-
-    // MARK: - Profile Basics
-
-    private var profileBasicsSection: some View {
-        Section {
-            if !wallet.isConnected {
-                HStack(spacing: AmachSpacing.md) {
-                    Image(systemName: "person.text.rectangle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.amachTextSecondary)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Shared profile unavailable")
-                            .font(AmachType.caption)
-                            .foregroundStyle(Color.amachTextSecondary)
-                        Text("Connect your wallet to read your shared profile.")
-                            .font(AmachType.tiny)
-                            .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
-                    }
-                }
-                .listRowBackground(Color.amachSurface)
-            } else if isLoadingProfile {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .tint(Color.amachPrimaryBright)
-                    Spacer()
-                }
-                .listRowBackground(Color.amachSurface)
-            } else if let resolvedProfile {
-                profileValueRow(
-                    icon: "calendar",
-                    title: "Birth Date",
-                    value: resolvedProfile.birthDate ?? "Not available"
-                )
-                profileValueRow(
-                    icon: "person.fill",
-                    title: "Sex",
-                    value: formattedSex(resolvedProfile.sex)
-                )
-                profileValueRow(
-                    icon: "ruler.fill",
-                    title: "Height",
-                    value: formattedHeight(resolvedProfile.height)
-                )
-                profileValueRow(
-                    icon: "scalemass.fill",
-                    title: "Weight",
-                    value: formattedWeight(resolvedProfile.weight)
-                )
-
-                HStack(spacing: AmachSpacing.md) {
-                    Image(systemName: "externaldrive.badge.icloud")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.amachPrimaryBright)
-                        .frame(width: 28)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Resolved via backend")
-                            .font(AmachType.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(Color.amachTextPrimary)
-
-                        let source = (resolvedProfile.source ?? "on-chain")
-                            .replacingOccurrences(of: "-", with: " ")
-                            .capitalized
-                        let version = resolvedProfile.version.map { "v\($0)" } ?? "v?"
-                        Text("\(source) • \(version)")
-                            .font(AmachType.tiny)
-                            .foregroundStyle(Color.amachTextSecondary)
-                    }
-
-                    Spacer()
-
-                    if resolvedProfile.isActive == true {
-                        HStack(spacing: 3) {
-                            Circle()
-                                .fill(Color.amachSuccess)
-                                .frame(width: 5, height: 5)
-                            Text("Active")
-                                .font(AmachType.tiny)
-                                .foregroundStyle(Color.amachSuccess)
-                        }
-                    }
-                }
-                .listRowBackground(Color.amachSurface)
-            } else {
-                HStack(spacing: AmachSpacing.md) {
-                    Image(systemName: "person.crop.rectangle")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.amachTextSecondary.opacity(0.5))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("No shared profile found")
-                            .font(AmachType.caption)
-                            .foregroundStyle(Color.amachTextSecondary)
-                        Text(profileError ?? "Your wallet does not have a readable shared profile yet.")
-                            .font(AmachType.tiny)
-                            .foregroundStyle(Color.amachTextSecondary.opacity(0.7))
-                    }
-                }
-                .listRowBackground(Color.amachSurface)
-            }
-        } header: {
-            sectionHeader("Profile Basics")
-        } footer: {
-            Text("This section uses the same wallet identity as web and is intended to read your shared encrypted profile through the backend.")
-                .font(AmachType.tiny)
-                .foregroundStyle(Color.amachTextSecondary)
-                .lineSpacing(2)
         }
     }
 
@@ -536,6 +417,8 @@ struct ProfileView: View {
                         .listRowBackground(Color.amachSurface)
                 }
             }
+            // Proofs need the server today; hidden until Phase 6 moves them on device.
+            if !FeatureFlags.zkServerFlowsDisabled {
             NavigationLink {
                 ProofGeneratorView()
                     .environmentObject(wallet)
@@ -555,6 +438,7 @@ struct ProfileView: View {
                     Spacer()
                 }
                 .listRowBackground(Color.amachSurface)
+            }
             }
         } header: {
             sectionHeader("On-Chain Proofs")
@@ -649,6 +533,26 @@ struct ProfileView: View {
                 }
                 .listRowBackground(Color.amachSurface)
             }
+
+            NavigationLink {
+                LumaInspectorView()
+            } label: {
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: "eye")
+                        .foregroundStyle(Color.amachAI)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("What Luma sees")
+                            .font(AmachType.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.amachTextPrimary)
+                        Text("Luma's numbers next to Apple Health, and the last context sent")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                }
+            }
+            .listRowBackground(Color.amachSurface)
         } header: {
             sectionHeader("Luma Intelligence")
         } footer: {
@@ -669,7 +573,7 @@ struct ProfileView: View {
                 icon: "lock.shield.fill",
                 iconColor: Color.amachPrimaryBright,
                 title: "Storage",
-                value: "Storj (AES-256)"
+                value: "On this phone"
             )
 
             settingsRow(
@@ -871,40 +775,6 @@ struct ProfileView: View {
         formatter.minimumFractionDigits = 0
         let rendered = formatter.string(from: NSNumber(value: value)) ?? String(value)
         return "\(rendered) lb"
-    }
-
-    private func loadProfileBasics() async {
-        guard wallet.isConnected else {
-            resolvedProfile = nil
-            profileError = nil
-            return
-        }
-
-        do {
-            isLoadingProfile = true
-            defer { isLoadingProfile = false }
-
-            let encryptionKey = try await wallet.ensureEncryptionKey()
-            resolvedProfile = try await AmachAPIClient.shared.readProfile(
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
-            profileError = nil
-        } catch {
-            resolvedProfile = nil
-            profileError = friendlyProfileError(error.localizedDescription)
-        }
-    }
-
-    private func friendlyProfileError(_ message: String) -> String {
-        let lower = message.lowercased()
-        if lower.contains("404") || lower.contains("not found") {
-            return "Profile read endpoint is not available on the backend yet."
-        }
-        if lower.contains("wallet") || lower.contains("encryption") {
-            return message
-        }
-        return "Couldn't load shared profile right now."
     }
 
     private func loadAttestations() async {

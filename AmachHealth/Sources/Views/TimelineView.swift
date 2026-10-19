@@ -113,14 +113,8 @@ struct TimelineView: View {
     }
 
     private func performDelete(event: TimelineEvent) async {
-        guard wallet.isConnected else { return }
         do {
-            let encryptionKey = try await wallet.ensureEncryptionKey()
-            try await timeline.deleteEvent(
-                id: event.id,
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
+            try await timeline.deleteEvent(id: event.id)
             AmachHaptics.success()
         } catch {
             timeline.error = error.localizedDescription
@@ -264,26 +258,8 @@ struct TimelineView: View {
     }
 
     private func loadEventsIfPossible() async {
-        if vault.isOpen {
-            // Vault-backed: no network, no key needed to read.
-            timeline.vaultDidChange()
-            return
-        }
-        guard wallet.isConnected else { return }
-
-        do {
-            timelineDebug("Starting Timeline load from view")
-            let encryptionKey = try await wallet.ensureEncryptionKey()
-            timelineDebug("Using encryption key for \(encryptionKey.walletAddress)")
-            await timeline.loadEvents(
-                walletAddress: encryptionKey.walletAddress,
-                encryptionKey: encryptionKey
-            )
-            timelineDebug("Timeline load returned \(timeline.events.count) merged events")
-        } catch {
-            timelineDebug("Timeline load failed before service call: \(error.localizedDescription)")
-            timeline.error = error.localizedDescription
-        }
+        // Vault-backed: no network, no key needed to read.
+        await timeline.loadEvents()
     }
 
     private func timelineDebug(_ message: String) {

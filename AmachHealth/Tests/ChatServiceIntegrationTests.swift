@@ -328,23 +328,10 @@ final class ChatServiceStorjSyncTests: XCTestCase {
         sut = ChatService(injectedAPI: mockAPI, injectedWallet: mockWallet)
     }
 
-    func test_syncToStorj_skipped_when_wallet_not_connected() async throws {
-        mockWallet.isConnected = false
-        // Manually trigger a sync; wallet not connected means it should bail out
-        await sut.syncCurrentSessionToStorj()
-        XCTAssertEqual(mockAPI.storeChatSessionCallCount, 0)
-    }
-
-    func test_syncToStorj_called_when_wallet_connected() async throws {
-        // Add content to make session worth saving
+    func test_archiving_a_session_never_calls_the_network_storage_api() async throws {
+        // Phase 3: sessions stay in the vault; encrypted backup moves them.
         sut.currentSession.messages.append(ChatMessage(role: .user, content: "Hello"))
-        await sut.syncCurrentSessionToStorj()
-        XCTAssertEqual(mockAPI.storeChatSessionCallCount, 1)
-    }
-
-    func test_syncToStorj_skipped_for_empty_session() async throws {
-        XCTAssertTrue(sut.currentSession.messages.isEmpty)
-        await sut.syncCurrentSessionToStorj()
+        sut.startNewSession()
         XCTAssertEqual(mockAPI.storeChatSessionCallCount, 0)
     }
 }

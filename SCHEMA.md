@@ -1,4 +1,4 @@
-# Amach vault schema (v1)
+# Amach vault schema (v2)
 
 The on-device vault is the start of the protocol's data format. Names are Amach's, not HealthKit's. HealthKit is one source among several.
 
@@ -24,13 +24,15 @@ The on-device vault is the start of the protocol's data format. Names are Amach'
 - **`schema_version (version, applied_at)`:** one row per applied migration.
 - GRDB's `grdb_migrations` table tracks migration identifiers ("v1", ...).
 - Every change is a new migration. An existing one is never edited.
-- **Current version:** 1.
+- **Current version:** 2.
+  - **v1:** Phase 2, the base schema.
+  - **v2:** Phase 3. Adds `lab_pdfs` and `backup_objects`, and backup triggers on `lab_pdfs` and `storj_imports` (existing `storj_imports` rows are queued once).
 
 ## vault_meta
 
 | Column | Meaning |
 |---|---|
-| key, value | Key/value text. Keys in use:<br>• `key_check`, `wallet_address`<br>• `hk_backfill_from` (oldest day backfilled from HealthKit)<br>• `hk_backfill_complete`<br>• `storj_import_completed` (ISO time)<br>• `storj_import_report` (JSON) |
+| key, value | Key/value text. Keys in use:<br>• `key_check`, `wallet_address`<br>• `hk_backfill_from` (oldest day backfilled from HealthKit)<br>• `hk_backfill_complete`<br>• `storj_import_completed` (ISO time)<br>• `storj_import_report` (JSON)<br>• `backup_enabled` ("1" when encrypted backup is on)<br>• `backup_generation`, `backup_last_success` (ms), `backup_index_body` (JSON part list)<br>• `backup_restore_checked` (ms; the new-phone restore check ran)<br>• `legacy_storj_cleanup` (JSON summary once old Storj objects were deleted) |
 
 ## daily_metrics
 
@@ -197,7 +199,29 @@ Retention is the same as before: 200 facts and 40 summaries.
 | | leaf_count, tree_depth | Tree shape |
 | | created_at | When stored |
 
-## backup_state (for Phase 3)
+## lab_pdfs (v2)
+
+Original PDFs the user uploaded, kept so encrypted backup can carry them. The bytes are a file at `Vault/files-<id>/pdfs/<sha256>.pdf`, with complete protection and excluded from iCloud backup.
+
+| Column | Meaning |
+|---|---|
+| sha256 | SHA-256 of the PDF bytes (primary key and file name) |
+| report_id | → lab_reports.id it was parsed into (not a foreign key; the PDF outlives a deleted report until the user removes it) |
+| filename | Original file name |
+| byte_count | Size |
+| created_at | When it was saved |
+
+## backup_objects (v2)
+
+The phone's copy of the encrypted backup index, one row per chunk ([BACKUP-FORMAT.md](BACKUP-FORMAT.md)). Not itself backed up.
+
+| Column | Meaning |
+|---|---|
+| chunk_key | For example `daily_metrics/2026-09` or `lab_report/<id>` |
+| entry_json | The chunk's index entry: parts, hashes, version, record ids |
+| updated_at | Last write |
+
+## backup_state
 
 | Column | Meaning |
 |---|---|
@@ -206,7 +230,7 @@ Retention is the same as before: 200 facts and 40 summaries.
 | local_version | Incremented by triggers on every insert, update and delete of a backed-up table |
 | backed_up_version | Version last backed up (0 = never) |
 
-A row needs backing up when `local_version > backed_up_version`. A record missing from its table is a deletion.
+A row needs backing up when `local_version > backed_up_version`. A record missing from its table is a deletion. Tables with triggers: every table above from daily_metrics to merkle_roots, plus (v2) `lab_pdfs` (id = sha256) and `storj_imports` (id = object_key).
 
 ## healthkit_sync
 

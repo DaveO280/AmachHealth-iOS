@@ -120,6 +120,7 @@ final class HealthKitIngestionService: ObservableObject {
         if (try? vault.meta(Self.backfillCompleteKey)) != nil {
             // History done; still re-ingest the recent window in case the app was off.
             await refreshRecent()
+            await reaggregateSleepIfNeeded()
             return
         }
 
@@ -158,9 +159,34 @@ final class HealthKitIngestionService: ObservableObject {
         }
 
         if !Task.isCancelled {
+            try? vault.setMeta(Self.sleepSessionsKey, Date().vaultDay)
             try? vault.setMeta(Self.backfillCompleteKey, Date().vaultDay)
             backfill?.isRunning = false
             backfill?.windowsDone = backfill?.windowsTotal ?? 0
+            await DashboardService.shared.load(force: true)
+        }
+    }
+
+    /// Vaults backfilled before sleep sessions split nights at midnight;
+    /// rebuild every sleep row once with the session rules.
+    static let sleepSessionsKey = "hk_sleep_sessions_v1"
+
+    private func reaggregateSleepIfNeeded() async {
+        guard let vault, (try? vault.meta(Self.sleepSessionsKey)) ?? nil == nil else { return }
+        let cal = Calendar.current
+        guard let earliest = await earliestSampleDate(streams: [.sleep]) else {
+            try? vault.setMeta(Self.sleepSessionsKey, Date().vaultDay)
+            return
+        }
+        let earliestStart = cal.startOfDay(for: earliest)
+        var windowEnd = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()
+        while windowEnd > earliestStart, !Task.isCancelled {
+            let windowStart = max(earliestStart, cal.date(byAdding: .day, value: -Self.windowDays, to: windowEnd) ?? earliestStart)
+            guard await ingest(range: windowStart..<windowEnd, streams: [.sleep], into: vault) else { return }
+            windowEnd = windowStart
+        }
+        if !Task.isCancelled {
+            try? vault.setMeta(Self.sleepSessionsKey, Date().vaultDay)
             await DashboardService.shared.load(force: true)
         }
     }
@@ -207,6 +233,14 @@ final class HealthKitIngestionService: ObservableObject {
 
         // Days touched by added samples; deletions carry no dates, so redo the last two days.
         var days = Set(result.days)
+        if stream == .sleep {
+            // A sample before midnight belongs to the night that ends the next day.
+            for day in result.days {
+                if let date = VaultDay.date(day), let next = cal.date(byAdding: .day, value: 1, to: date), next <= Date() {
+                    days.insert(next.vaultDay)
+                }
+            }
+        }
         if result.hadDeletions || anchor == nil {
             days.insert(Date().vaultDay)
             days.insert((cal.date(byAdding: .day, value: -1, to: Date()) ?? Date()).vaultDay)
@@ -238,6 +272,13 @@ final class HealthKitIngestionService: ObservableObject {
         }
         do {
             try vault.upsertDailyMetrics(rows, policy: .overwrite)
+            if streams.contains(.sleep) {
+                // Days in range with no night ending on them lose any old
+                // HealthKit sleep row (e.g. a pre-midnight fragment).
+                let kept = Set(rows.filter { $0.metric == AmachMetric.sleepId }.map(\.day))
+                let stale = Set(stride(from: range.lowerBound, to: range.upperBound, by: 3600).map(\.vaultDay)).subtracting(kept)
+                try vault.deleteHealthKitSleepRows(days: Array(stale))
+            }
             lastError = nil
             return true
         } catch {
@@ -258,8 +299,11 @@ final class HealthKitIngestionService: ObservableObject {
             let values = samples.map { (day: $0.startDate.vaultDay, value: $0.quantity.doubleValue(for: unit) * metric.healthKitScale) }
             return quantityRows(metric: metric, values: values, dedupedTotals: totals)
         case .sleep:
-            let samples = await categorySamples(store: store, type: stream.sampleType, range: range, byEnd: true)
-            return sleepRows(samples.map { (end: $0.endDate, start: $0.startDate, value: $0.value) })
+            // Fetch from a day earlier so a night that ends in range is whole,
+            // then keep only nights that end in range (SleepSessions.swift).
+            let samples = await sleepSamples(store: store, range: range)
+            let days = Set(stride(from: range.lowerBound, to: range.upperBound, by: 3600).map(\.vaultDay))
+            return sleepRows(samples).filter { days.contains($0.day) }
         case .mindful:
             let samples = await categorySamples(store: store, type: stream.sampleType, range: range, byEnd: false)
             return durationRows(metric: AmachMetric.mindfulMinutesId,
@@ -294,24 +338,19 @@ final class HealthKitIngestionService: ObservableObject {
         }
     }
 
-    /// Same stage rules as HealthKitService.aggregateSleepData, in minutes.
-    nonisolated static func sleepRows(_ samples: [(end: Date, start: Date, value: Int)], now: Date = Date()) -> [DailyMetricRow] {
-        Dictionary(grouping: samples) { $0.end.vaultDay }.map { day, items in
-            var inBed = 0.0, awake = 0.0, core = 0.0, deep = 0.0, rem = 0.0
-            for s in items {
-                let minutes = s.end.timeIntervalSince(s.start) / 60
-                switch s.value {
-                case 0: inBed += minutes
-                case 2: awake += minutes
-                case 1, 3: core += minutes   // unspecified asleep counts as core
-                case 4: deep += minutes
-                case 5: rem += minutes
-                default: break
-                }
-            }
+    /// One row per day: every sleep session that ends that day, counting one
+    /// source per night (SleepSessionBuilder). Stage rules as before:
+    /// unspecified asleep counts as core; total = core + deep + REM.
+    nonisolated static func sleepRows(_ samples: [SleepSample], now: Date = Date()) -> [DailyMetricRow] {
+        Dictionary(grouping: SleepSessionBuilder.sessions(samples), by: \.day).map { day, sessions in
+            let inBed = sessions.reduce(0) { $0 + $1.inBedMinutes }
+            let awake = sessions.reduce(0) { $0 + $1.awakeMinutes }
+            let core = sessions.reduce(0) { $0 + $1.coreMinutes }
+            let deep = sessions.reduce(0) { $0 + $1.deepMinutes }
+            let rem = sessions.reduce(0) { $0 + $1.remMinutes }
             let asleep = core + deep + rem
             var row = DailyMetricRow(day: day, metric: AmachMetric.sleepId, total: asleep,
-                                     count: items.count, source: .healthKit, updatedAt: now)
+                                     count: sessions.reduce(0) { $0 + $1.samples.count }, source: .healthKit, updatedAt: now)
             row.sleepInBedMin = inBed
             row.sleepAwakeMin = awake
             row.sleepCoreMin = core
@@ -319,6 +358,28 @@ final class HealthKitIngestionService: ObservableObject {
             row.sleepRemMin = rem
             row.sleepEfficiency = inBed > 0 ? asleep / inBed : nil
             return row
+        }
+    }
+
+    /// Single-source convenience for tests and older callers.
+    nonisolated static func sleepRows(_ samples: [(end: Date, start: Date, value: Int)], now: Date = Date()) -> [DailyMetricRow] {
+        sleepRows(samples.map { SleepSample(start: $0.start, end: $0.end, value: $0.value, source: "test") }, now: now)
+    }
+
+    /// Sleep samples overlapping [range.lowerBound - 1 day, range.upperBound).
+    nonisolated static func sleepSamples(store: HKHealthStore, range: Range<Date>) async -> [SleepSample] {
+        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: range.lowerBound.addingTimeInterval(-86_400),
+                                                    end: range.upperBound, options: [])
+        let samples: [HKCategorySample] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                continuation.resume(returning: samples as? [HKCategorySample] ?? [])
+            }
+            store.execute(query)
+        }
+        return samples.map {
+            SleepSample(start: $0.startDate, end: $0.endDate, value: $0.value,
+                        source: $0.sourceRevision.source.bundleIdentifier)
         }
     }
 

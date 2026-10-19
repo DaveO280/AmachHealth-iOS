@@ -11,7 +11,7 @@ struct VaultStatusSection: View {
     @ObservedObject private var ingestion = HealthKitIngestionService.shared
     @ObservedObject private var importer = StorjImportService.shared
     @ObservedObject private var wallet = WalletService.shared
-    @State private var legacyWrites = VaultFlags.legacyStorjWrites
+    @ObservedObject private var backup = BackupService.shared
     @State private var showFailures = false
 
     var body: some View {
@@ -29,18 +29,16 @@ struct VaultStatusSection: View {
             Divider().overlay(Color.amachPrimary.opacity(0.15))
             importRows
 
-            Toggle(isOn: $legacyWrites) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Also save to Storj")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.amachTextPrimary)
-                    Text("Legacy uploads, on until encrypted backup replaces them.")
-                        .font(.caption)
-                        .foregroundStyle(Color.amachTextSecondary)
-                }
+            Divider().overlay(Color.amachPrimary.opacity(0.15))
+            HStack {
+                Text("Encrypted backup")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.amachTextPrimary)
+                Spacer()
+                Text(EncryptedBackupSection.statusLine(backup))
+                    .font(.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
             }
-            .tint(Color.amachPrimary)
-            .onChange(of: legacyWrites) { _, on in VaultFlags.legacyStorjWrites = on }
         }
         .padding(16)
         .background(Color.amachSurface)

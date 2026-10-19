@@ -34,8 +34,9 @@ struct HealthContextBuilder {
         // Always include recent timeline events — they're already cached locally
         let recentEvents = buildTimelineEventSummaries(formatter: formatter)
 
-        // Lab records require a wallet connection and a valid encryption key
-        guard wallet.isConnected else {
+        // Lab records live in the vault, which opens from the Keychain even
+        // without a live wallet session.
+        guard wallet.isConnected || LocalVault.shared.isOpen else {
             if recentEvents.isEmpty { return nil }
             return LabDataContext(bloodwork: nil, dexa: nil, recentEvents: recentEvents)
         }
@@ -185,73 +186,7 @@ struct HealthContextBuilder {
         }
     }
 
-    // Fetch most recent bloodwork record from pre-filtered list items
-    private static func fetchLatestBloodwork(
-        items: [StorjListItem],
-        api: AmachAPIClient,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        formatter: DateFormatter
-    ) async -> LabResultSummary? {
-        guard let latest = items.max(by: { $0.uploadedAt < $1.uploadedAt }) else { return nil }
-        do {
-            if latest.dataType == "bloodwork-report-fhir" {
-                let report = try await api.retrieveBloodworkReport(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey
-                )
-                return labResultSummary(fromReport: report, formatter: formatter)
-            } else {
-                let record = try await api.retrieveStoredData(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey,
-                    as: LabRecord.self
-                )
-                return labResultSummary(from: record, formatter: formatter)
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 [LabContext] bloodwork fetch error: \(error.localizedDescription)")
-            #endif
-            return nil
-        }
-    }
 
-    // Fetch most recent DEXA record from pre-filtered list items
-    private static func fetchLatestDexa(
-        items: [StorjListItem],
-        api: AmachAPIClient,
-        walletAddress: String,
-        encryptionKey: WalletEncryptionKey,
-        formatter: DateFormatter
-    ) async -> DexaResultSummary? {
-        guard let latest = items.max(by: { $0.uploadedAt < $1.uploadedAt }) else { return nil }
-        do {
-            if latest.dataType == "dexa-report-fhir" {
-                let report = try await api.retrieveDexaReport(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey
-                )
-                return dexaResultSummary(fromReport: report, formatter: formatter)
-            } else {
-                let record = try await api.retrieveStoredData(
-                    storjUri: latest.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey,
-                    as: LabRecord.self
-                )
-                return dexaResultSummary(from: record, formatter: formatter)
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 [LabContext] dexa fetch error: \(error.localizedDescription)")
-            #endif
-            return nil
-        }
-    }
 
     // MARK: - Summary builders from legacy LabRecord
 
@@ -458,7 +393,7 @@ struct HealthContextBuilder {
         var blocks: [ContextBlock] = []
 
         // 1. data_note — partial-day instruction (always first)
-        blocks.append(ContextBlock(type: "data_note", content: dataNote))
+        blocks.append(ContextBlock(type: "data_note", content: clockLine() + " " + dataNote))
 
         // 2. metrics — formatted health metrics text
         blocks.append(ContextBlock(type: "metrics", content: formatMetrics(metrics, dateRange: dateRange)))
@@ -470,20 +405,8 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "today_partial", content: todayPartialContent))
         }
 
-        // 3. labs_bloodwork + labs_dexa — separate blocks for targeted queries
-        if let labs = LabContextService.shared.context {
-            if let bw = labs.bloodwork {
-                // Always include the block if we decoded a bloodwork object.
-                // Even if specific metric values are nil, the backend can still
-                // use the lab structure/metadata and avoids "empty response"
-                // failures.
-                blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
-            }
-            if let dx = labs.dexa {
-                // Same rationale as bloodwork: include even if values are nil.
-                blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
-            }
-        }
+        // 3. labs_bloodwork, labs_trends, labs_dexa, labs_medical — separate blocks for targeted queries
+        blocks += labBlocks()
 
         // 4. goals — conversation-extracted active goals (separate from memory for clarity)
         let goalFacts = ConversationMemoryStore.shared.facts
@@ -545,11 +468,24 @@ struct HealthContextBuilder {
         var blocks: [ContextBlock] = (full?.contextBlocks ?? []).filter { block in
             block.type != "goals" && block.type != "memory"
         }
+        // Labs don't depend on today's health metrics: include them even when
+        // nothing has loaded yet (early morning, no HealthKit, cold start).
+        if full == nil {
+            blocks = [ContextBlock(type: "data_note", content: clockLine())] + labBlocks()
+        }
 
         // In quick mode, prune blocks not relevant to the intent
         if mode == .quick {
             if !intent.includesLabData {
                 blocks.removeAll { $0.type == "labs_bloodwork" || $0.type == "labs_dexa" }
+            }
+            // Bloodwork history is for lab questions; body-comp questions only need the DEXA.
+            if !intent.includesLabData || intent == .bodyComp {
+                blocks.removeAll { $0.type == "labs_trends" }
+            }
+            // Medical documents also carry medications and diagnoses.
+            if !intent.includesLabData && !intent.includesTimelineEvents {
+                blocks.removeAll { $0.type == "labs_medical" }
             }
             if !intent.includesTimelineEvents {
                 blocks.removeAll { $0.type == "timeline" }
@@ -616,14 +552,50 @@ struct HealthContextBuilder {
     }
 
     private static func buildWorkoutsBlock() -> ContextBlock? {
-        let items = DashboardService.shared.recentWorkoutSummaries
-        guard !items.isEmpty else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let lines = ["Recent workouts (last 7 days):"] + items.prefix(14).map { w in
-            "  \(formatter.string(from: w.date)): \(w.activityType) \(Int(w.durationMinutes)) min"
+        formatWorkouts(DashboardService.shared.recentWorkoutSummaries).map {
+            ContextBlock(type: "workouts", content: $0)
         }
-        return ContextBlock(type: "workouts", content: lines.joined(separator: "\n"))
+    }
+
+    /// One line per workout with local start/end times, how long ago, and
+    /// the recording source, so Luma never has to guess when it happened.
+    static func formatWorkouts(_ items: [WorkoutSummaryItem], now: Date = Date(), calendar: Calendar = .current) -> String? {
+        guard !items.isEmpty else { return nil }
+        let day = DateFormatter()
+        day.calendar = calendar
+        day.timeZone = calendar.timeZone
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.dateFormat = "EEE d MMM"
+        let time = DateFormatter()
+        time.calendar = calendar
+        time.timeZone = calendar.timeZone
+        time.locale = Locale(identifier: "en_US_POSIX")
+        time.dateFormat = "HH:mm"
+        let lines = ["Recent workouts, last 7 days (local times; only these workouts exist, do not infer others):"]
+            + items.prefix(14).map { w in
+                var relative = ""
+                if calendar.isDate(w.date, inSameDayAs: now) { relative = "today" }
+                else if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(w.date, inSameDayAs: y) { relative = "yesterday" }
+                else { relative = "\(max(1, calendar.dateComponents([.day], from: calendar.startOfDay(for: w.date), to: calendar.startOfDay(for: now)).day ?? 0)) days ago" }
+                var span = time.string(from: w.date)
+                if let end = w.endDate { span += "–" + time.string(from: end) }
+                var line = "  \(day.string(from: w.date)) (\(relative)) \(span): \(w.activityType), \(Int(w.durationMinutes.rounded())) min"
+                if let source = w.sourceName, !source.isEmpty { line += " [\(source)]" }
+                return line
+            }
+        return lines.joined(separator: "\n")
+    }
+
+    /// The user's local clock, so Luma knows the actual time of day.
+    static func clockLine(now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = timeZone
+        f.dateFormat = "EEEE d MMMM yyyy, HH:mm"
+        let seconds = timeZone.secondsFromGMT(for: now)
+        let sign = seconds < 0 ? "-" : "+"
+        let offset = String(format: "UTC%@%02d:%02d", sign, abs(seconds) / 3600, (abs(seconds) % 3600) / 60)
+        return "User's local time now: \(f.string(from: now)) (\(timeZone.identifier), \(offset))."
     }
 
     private static func buildAnomaliesBlock() -> ContextBlock? {
@@ -695,6 +667,76 @@ struct HealthContextBuilder {
         return parts.joined(separator: "\n")
     }
 
+    /// Size caps for the lab history blocks, in characters.
+    static let maxTrendsChars = 3_000
+    static let maxMedicalChars = 4_000
+    private static let maxMedicalItemChars = 300
+
+    /// The latest bloodwork and DEXA from the vault, earlier values of
+    /// repeating markers, and recent medical documents, as context blocks.
+    /// Included even when specific values are nil: the structure still helps
+    /// and avoids "empty response" failures.
+    static func labBlocks() -> [ContextBlock] {
+        guard let labs = LabContextService.shared.currentContext() else { return [] }
+        var blocks: [ContextBlock] = []
+        if let bw = labs.bloodwork {
+            blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
+        }
+        if let trends = formatTrends(labs.bloodworkTrends) {
+            blocks.append(ContextBlock(type: "labs_trends", content: trends))
+        }
+        if let dx = labs.dexa {
+            blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
+        }
+        if let medical = formatMedicalDocuments(labs.medicalDocuments) {
+            blocks.append(ContextBlock(type: "labs_medical", content: medical))
+        }
+        return blocks
+    }
+
+    /// Appends lines up to `limit` characters, then notes how many were left out.
+    private static func capped(header: String, _ lines: [String], limit: Int) -> String {
+        var out = header
+        for (i, line) in lines.enumerated() {
+            if out.count + line.count + 1 > limit {
+                out += "\n  (\(lines.count - i) more not shown)"
+                break
+            }
+            out += "\n" + line
+        }
+        return out
+    }
+
+    private static func formatTrends(_ trends: [LabMarkerTrend]) -> String? {
+        guard !trends.isEmpty else { return nil }
+        let lines = trends.map { t in
+            "  - \(t.name): " + t.points.map { p in
+                "\(LabReportWithMarkers.format(p.value))\(p.unit.map { " \($0)" } ?? "")\(p.date.map { " (\($0))" } ?? "")"
+            }.joined(separator: " ← ")
+        }
+        return capped(header: "Bloodwork history for markers measured more than once (newest first):",
+                      lines, limit: maxTrendsChars)
+    }
+
+    private static func formatMedicalDocuments(_ docs: [LabMedicalDocumentContext]) -> String? {
+        guard !docs.isEmpty else { return nil }
+        func clip(_ text: String) -> String {
+            text.count > maxMedicalItemChars ? String(text.prefix(maxMedicalItemChars)) + "…" : text
+        }
+        var lines: [String] = []
+        for doc in docs {
+            var header = "  - \(doc.title ?? "Medical document")"
+            if let type = doc.documentType, !type.isEmpty { header += " [\(type)]" }
+            if let date = doc.date { header += " (\(date))" }
+            lines.append(header)
+            if let summary = doc.summary, !summary.isEmpty { lines.append("    Summary: " + clip(summary)) }
+            if !doc.findings.isEmpty { lines.append("    Findings: " + clip(doc.findings.joined(separator: "; "))) }
+            if !doc.diagnoses.isEmpty { lines.append("    Diagnoses: " + clip(doc.diagnoses.joined(separator: "; "))) }
+            if !doc.medications.isEmpty { lines.append("    Medications: " + clip(doc.medications.joined(separator: "; "))) }
+        }
+        return capped(header: "Medical documents (newest first):", lines, limit: maxMedicalChars)
+    }
+
     private static func formatBloodwork(_ bw: LabBloodworkContext) -> String {
         var lines: [String] = []
         var header = "Bloodwork lab results"
@@ -726,6 +768,15 @@ struct HealthContextBuilder {
         if let v = dx.androidGynoidRatio { lines.append("  • Android/Gynoid ratio: \(v)") }
         if let v = dx.boneDensityTScore  { lines.append("  • Bone density T-score: \(v)") }
         if let v = dx.boneDensityZScore  { lines.append("  • Bone density Z-score: \(v)") }
+        if !dx.regions.isEmpty {
+            lines.append("  Regions:")
+            for r in dx.regions {
+                let values = r.values.map { v in
+                    "\(v.label) \(LabReportWithMarkers.format(v.value))\(v.unit.map { $0 == "%" ? "%" : " \($0)" } ?? "")"
+                }
+                lines.append("  - \(r.region): " + values.joined(separator: ", "))
+            }
+        }
         if let notes = dx.notes, !notes.isEmpty {
             lines.append("  Notes: " + notes.joined(separator: "; "))
         }
@@ -735,14 +786,10 @@ struct HealthContextBuilder {
     /// Today's running totals for cumulative metrics — matches what the dashboard shows.
     /// Only includes metrics with a non-zero value to keep the block concise.
     private static func formatTodayPartial(_ today: DashboardTodayData) -> String {
-        let now = Date()
-        let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: now)
-        let secondsElapsed = now.timeIntervalSince(startOfDay)
-        let hoursElapsed = secondsElapsed / 3600
-        let timeLabel = String(format: "%.1f hrs into the day", hoursElapsed)
-
-        var lines: [String] = ["Today's running totals (\(timeLabel)):"]
+        let time = DateFormatter()
+        time.locale = Locale(identifier: "en_US_POSIX")
+        time.dateFormat = "HH:mm"
+        var lines: [String] = ["Today's running totals since midnight (as of \(time.string(from: Date())) local time):"]
         if today.steps > 0 {
             lines.append(String(format: "  - Steps: %.0f (so far today)", today.steps))
         }

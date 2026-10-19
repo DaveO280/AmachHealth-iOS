@@ -146,6 +146,7 @@ final class ChatService: ObservableObject {
         // gets labs_bloodwork / labs_dexa in `contextBlocks` for this turn.
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
+        LumaContextInspector.shared.record(finalContext, intent: intent, mode: chatMode)
 
         let userMsg = ChatMessage(role: .user, content: trimmed)
         currentSession.messages.append(userMsg)
@@ -239,6 +240,7 @@ final class ChatService: ObservableObject {
 
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
+        LumaContextInspector.shared.record(finalContext, intent: intent, mode: chatMode)
 
         let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
         let historyMessages = currentSession.messages
@@ -398,11 +400,11 @@ final class ChatService: ObservableObject {
         currentSession = ChatSession()
         saveToDisk()
 
-        // Summarize health content, extract memory, and sync to Storj.
+        // Summarize health content and extract memory. The vault keeps the
+        // session; encrypted backup (if on) carries it off the phone.
         // Use Task.detached so this survives view dismissal / session reset.
         Task.detached { [weak self] in
             await self?.summarizeAndArchive(sessionToArchive)
-            await self?.syncSessionToStorj(sessionToArchive)
         }
     }
 
@@ -648,8 +650,6 @@ final class ChatService: ObservableObject {
             guard let sessionSummary = summary else { return }
 
             ConversationMemoryStore.shared.upsert(facts: facts, summary: sessionSummary)
-
-            await ConversationMemoryStore.shared.syncToStorj()
         } catch {
             // Non-critical — chat still works without long-term memory
         }
@@ -870,41 +870,6 @@ final class ChatService: ObservableObject {
         guard let vault, let stored = try? vault.loadChatSessions(recentLimit: Self.visibleRecentSessions) else { return }
         currentSession = stored.current ?? ChatSession()
         recentSessions = stored.recent.filter { $0.id != currentSession.id }
-    }
-
-    // MARK: - Storj Sync
-    //
-    // Raw session sync is now archive-only (not every 10 messages).
-    // The distilled ConversationMemoryStore syncs after fact extraction,
-    // which is the high-value, low-size data that matters cross-platform.
-
-    /// Test-accessible wrapper. Exposes syncSessionToStorj for ChatServiceIntegrationTests.
-    #if DEBUG
-    func syncCurrentSessionToStorj() async {
-        await syncSessionToStorj(currentSession)
-    }
-    #endif
-
-    private func syncSessionToStorj(_ session: ChatSession) async {
-        guard VaultFlags.legacyStorjWrites else { return }
-        guard !session.messages.isEmpty else { return }
-        guard wallet.isConnected, let key = wallet.encryptionKey else { return }
-
-        do {
-            let uri = try await api.storeChatSession(
-                session,
-                walletAddress: key.walletAddress,
-                encryptionKey: key
-            )
-            if session.id == currentSession.id {
-                currentSession.storjUri = uri
-                saveToDisk()
-            }
-        } catch {
-            #if DEBUG
-            print("⚠️ ChatService: Storj session sync failed: \(error.localizedDescription)")
-            #endif
-        }
     }
 }
 

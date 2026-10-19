@@ -17,6 +17,11 @@ struct AmachHealthApp: App {
 
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // BGTaskScheduler handlers must be registered before launch finishes.
+        BackupService.registerBackgroundTask()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -53,6 +58,11 @@ struct AmachHealthApp: App {
                     // notification). RootView reacts to pendingDelivery being set.
                     if newPhase == .active {
                         LumaProactiveService.shared.checkAndDeliverPendingInsight()
+                    }
+                    // Leaving the app: hand any unfinished backup to the
+                    // background scheduler.
+                    if newPhase == .background {
+                        BackupService.shared.scheduleBackgroundCatchUp()
                     }
                 }
                 // Keep AppState in sync with service state changes mid-session.

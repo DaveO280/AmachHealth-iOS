@@ -17,9 +17,6 @@ final class HealthMetricProofService: ObservableObject {
     private let dashboard = DashboardService.shared
     private let wallet = WalletService.shared
     private let api = AmachAPIClient.shared
-    private var cachedStorjDailySummaries: [String: DailySummary]?
-    private var cachedStorjWalletAddress: String?
-    private var cachedStorjLoadedAt: Date?
 
     @Published private(set) var lastGeneratedProof: HealthMetricProofDocument?
 
@@ -737,49 +734,13 @@ final class HealthMetricProofService: ObservableObject {
     }
     #endif
 
+    /// Read the old Storj health exports through the server. Removed in
+    /// Phase 3 (it sent the encryption key); Phase 6 reads the vault instead.
     private func loadStorjDailySummaries(
         walletAddress: String,
         encryptionKey: WalletEncryptionKey
     ) async throws -> [String: DailySummary] {
-        let now = Date()
-        if cachedStorjWalletAddress == walletAddress,
-           let cached = cachedStorjDailySummaries,
-           let loadedAt = cachedStorjLoadedAt,
-           now.timeIntervalSince(loadedAt) < 300 {
-            return cached
-        }
-
-        let items = try await api.listHealthData(
-            walletAddress: walletAddress,
-            encryptionKey: encryptionKey,
-            dataType: "apple-health-full-export"
-        )
-        .sorted { $0.uploadedAt < $1.uploadedAt }
-
-        var merged: [String: DailySummary] = [:]
-        for item in items {
-            do {
-                let payload = try await api.retrieveHealthData(
-                    storjUri: item.uri,
-                    walletAddress: walletAddress,
-                    encryptionKey: encryptionKey
-                )
-                for (day, summary) in payload.dailySummaries {
-                    merged[day] = summary
-                }
-            } catch {
-                continue
-            }
-        }
-
-        if merged.isEmpty {
-            throw ProofError.insufficientData
-        }
-
-        cachedStorjWalletAddress = walletAddress
-        cachedStorjDailySummaries = merged
-        cachedStorjLoadedAt = now
-        return merged
+        throw AmachAPIClient.zkServerFlowsOff
     }
 
     private func metricValue(for metricID: String, from summary: DailySummary) -> Double? {

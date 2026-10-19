@@ -7,7 +7,7 @@
 // Load lifecycle:
 //   • Triggered when ChatView appears; reads the vault, so it works offline
 //   • Results cached in-memory until invalidate() (new upload, vault change)
-//   • Without a vault (no wallet) it falls back to fetching from Storj
+//   • Without a vault (no wallet) there are no lab results
 //
 // Luma receives the cached context on every message via HealthContextBuilder.
 
@@ -20,197 +20,119 @@ final class LabContextService: ObservableObject {
     @Published private(set) var context: LabResultsContext? = nil
     @Published private(set) var isLoading = false
 
-    private let api = AmachAPIClient.shared
-
     private init() {}
 
-    /// Clear the in-memory cache so the next `load()` re-fetches from Storj.
+    /// Clear the in-memory cache so the next `load()` re-reads the vault.
     func invalidate() {
         context = nil
     }
 
     // MARK: - Public API
 
-    /// Load lab results for Luma context.
-    /// Fetches from Storj once per app session then reuses the in-memory cache.
-    /// Pass `force: true` to re-fetch (e.g. after the user uploads new labs).
+    /// Load lab results for Luma context from the vault, cached in memory.
+    /// Pass `force: true` to re-read (e.g. after the user uploads new labs).
     func load(wallet: WalletService, force: Bool = false) async {
         guard !isLoading else { return }
-
-        // Already cached — skip the round-trip entirely.
         if !force, context != nil { return }
-
         if let vault = LocalVault.shared.database {
             context = Self.context(from: vault)
-            return
         }
+    }
 
-        guard wallet.isConnected else {
-            #if DEBUG
-            print("🧪 LabContextService: wallet not connected — skipping lab fetch")
-            #endif
-            return
+    /// The cached context, filled from the vault first if it's empty.
+    /// Synchronous so the chat context builder can always include labs.
+    func currentContext() -> LabResultsContext? {
+        if context == nil, let vault = LocalVault.shared.database {
+            context = Self.context(from: vault)
         }
-
-        isLoading = true
-        defer {
-            isLoading = false
-        }
-
-        do {
-            let key = try await wallet.ensureEncryptionKey()
-            #if DEBUG
-            print("🧪 LabContextService: fetching lab records for \(key.walletAddress.prefix(8))…")
-            #endif
-
-            let items = try await api.listLabRecords(
-                walletAddress: key.walletAddress,
-                encryptionKey: key
-            )
-            #if DEBUG
-            print("🧪 LabContextService: found \(items.count) lab items: \(items.map { "\($0.dataType)@\($0.uploadDate)" })")
-            #endif
-
-            let latestBloodwork = mostRecent(from: items, preferredType: "bloodwork-report-fhir", fallbackType: "bloodwork")
-            let latestDexa      = mostRecent(from: items, preferredType: "dexa-report-fhir",      fallbackType: "dexa")
-            #if DEBUG
-            print("🧪 LabContextService: bloodwork candidate = \(latestBloodwork?.uri ?? "none"), dexa = \(latestDexa?.uri ?? "none")")
-            #endif
-
-            async let bloodworkCtx = fetchBloodwork(item: latestBloodwork, key: key)
-            async let dexaCtx      = fetchDexa(item: latestDexa, key: key)
-
-            let bw = await bloodworkCtx
-            let dx = await dexaCtx
-            #if DEBUG
-            print("🧪 LabContextService: bloodwork decoded = \(bw != nil), dexa decoded = \(dx != nil)")
-            #endif
-
-            if bw != nil || dx != nil {
-                context = LabResultsContext(bloodwork: bw, dexa: dx)
-                #if DEBUG
-                print("🧪 LabContextService: context set ✅")
-                #endif
-            } else {
-                #if DEBUG
-                print("🧪 LabContextService: no data decoded — context remains nil")
-                #endif
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 LabContextService: load failed — \(error)")
-            #endif
-        }
+        return context
     }
 
     // MARK: - Vault
 
-    /// Latest bloodwork and DEXA in the vault, in the shape Luma reads.
+    /// Values kept per repeating marker, including the latest one.
+    static let trendPointsPerMarker = 3
+    /// Repeating markers kept; those in the latest report come first.
+    static let maxTrendMarkers = 40
+    /// Medical documents kept, newest first.
+    static let maxMedicalDocuments = 5
+
+    /// Latest bloodwork and DEXA in the vault, plus earlier values of repeating
+    /// bloodwork markers and recent medical documents, in the shape Luma reads.
     static func context(from vault: VaultDatabase) -> LabResultsContext? {
-        let bloodwork = (try? vault.labReports(kind: .bloodwork))?.first
+        let bloodworkReports = (try? vault.labReports(kind: .bloodwork)) ?? []
         let dexa = (try? vault.labReports(kind: .dexa))?.first
-        let bw = bloodwork.flatMap { shared.convertBloodworkReport($0.asBloodwork) }
-        let dx = dexa.map { shared.convertDexaReport($0.asDexa) } ?? nil
-        guard bw != nil || dx != nil else { return nil }
-        return LabResultsContext(bloodwork: bw, dexa: dx)
+        let bw = bloodworkReports.first.flatMap { shared.convertBloodworkReport($0.asBloodwork) }
+        var dx = dexa.flatMap { shared.convertDexaReport($0.asDexa) }
+        if let dexa { dx?.regions = dexaRegions(dexa) }
+        let trends = bloodworkTrends(bloodworkReports)
+        let medical = medicalDocuments((try? vault.labReports(kind: .medical)) ?? [])
+        guard bw != nil || dx != nil || !trends.isEmpty || !medical.isEmpty else { return nil }
+        return LabResultsContext(bloodwork: bw, dexa: dx, bloodworkTrends: trends, medicalDocuments: medical)
+    }
+
+    /// Markers with numeric values in two or more reports (matched by
+    /// canonical name), with their last few values. `reports` is newest first.
+    static func bloodworkTrends(_ reports: [LabReportWithMarkers]) -> [LabMarkerTrend] {
+        guard reports.count > 1 else { return [] }
+        var order: [String] = []
+        var names: [String: String] = [:]
+        var points: [String: [LabMarkerTrend.Point]] = [:]
+        for report in reports {
+            var seen = Set<String>()
+            for m in report.markers {
+                guard let value = m.value ?? m.valueText.flatMap(Double.init),
+                      seen.insert(m.canonicalName).inserted else { continue }
+                if names[m.canonicalName] == nil {
+                    order.append(m.canonicalName)
+                    names[m.canonicalName] = m.name
+                }
+                guard points[m.canonicalName, default: []].count < trendPointsPerMarker else { continue }
+                points[m.canonicalName, default: []].append(
+                    .init(date: report.report.reportDate, value: value, unit: m.unit))
+            }
+        }
+        return order
+            .compactMap { key -> LabMarkerTrend? in
+                guard let list = points[key], list.count > 1 else { return nil }
+                return LabMarkerTrend(name: names[key] ?? key, points: list)
+            }
+            .prefix(maxTrendMarkers)
+            .map { $0 }
+    }
+
+    static func dexaRegions(_ report: LabReportWithMarkers) -> [LabDexaRegionContext] {
+        let labels: [String: String] = [
+            "body_fat_percent": "body fat", "lean_mass_kg": "lean", "fat_mass_kg": "fat",
+            "bone_density_g_cm2": "BMD", "bone_t_score": "T-score", "bone_z_score": "Z-score"
+        ]
+        return report.dexaRegions.compactMap { group in
+            let values = group.markers.compactMap { m -> LabDexaRegionContext.Value? in
+                guard let v = m.value else { return nil }
+                return .init(label: labels[m.canonicalName] ?? m.name, value: v, unit: m.unit)
+            }
+            guard !values.isEmpty else { return nil }
+            return LabDexaRegionContext(region: group.region.replacingOccurrences(of: "_", with: " "), values: values)
+        }
+    }
+
+    /// Recent medical documents, skipping ones the parser found no medical content in.
+    static func medicalDocuments(_ reports: [LabReportWithMarkers]) -> [LabMedicalDocumentContext] {
+        reports.lazy
+            .map(\.asMedicalRecord)
+            .filter { $0.summary != MedicalRecordData.noMedicalContentNote }
+            .map { r in
+                LabMedicalDocumentContext(
+                    title: r.title, date: r.reportDate, documentType: r.documentType, summary: r.summary,
+                    findings: r.keyFindings ?? [], diagnoses: r.diagnoses ?? [], medications: r.medications ?? []
+                )
+            }
+            .filter { $0.summary != nil || !$0.findings.isEmpty || !$0.diagnoses.isEmpty || !$0.medications.isEmpty }
+            .prefix(maxMedicalDocuments)
+            .map { $0 }
     }
 
     // MARK: - Private Fetch Helpers
-
-    private func fetchBloodwork(item: StorjListItem?, key: WalletEncryptionKey) async -> LabBloodworkContext? {
-        guard let item else { return nil }
-        do {
-            if item.dataType == "bloodwork-report-fhir" {
-                // Use report/retrieve — the backend normalizes the stored FHIR
-                // blob into the RemoteBloodworkReport shape. storage/retrieve
-                // returns the raw blob whose keys don't match our struct.
-                let report = try await api.retrieveBloodworkReport(
-                    storjUri: item.uri,
-                    walletAddress: key.walletAddress,
-                    encryptionKey: key
-                )
-                let ctx = convertBloodworkReport(report)
-                #if DEBUG
-                print("🧪 LabContextService: FHIR bloodwork → \(ctx?.metrics.count ?? 0) metrics")
-                #endif
-                return ctx
-            } else {
-                let record = try await api.retrieveStoredData(
-                    storjUri: item.uri,
-                    walletAddress: key.walletAddress,
-                    encryptionKey: key,
-                    as: LabRecord.self
-                )
-                let ctx = convertLegacyBloodwork(record)
-                #if DEBUG
-                print("🧪 LabContextService: legacy bloodwork → \(ctx?.metrics.count ?? 0) metrics")
-                #endif
-                return ctx
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 LabContextService: bloodwork fetch/decode failed — \(error)")
-            #endif
-            return nil
-        }
-    }
-
-    private func fetchDexa(item: StorjListItem?, key: WalletEncryptionKey) async -> LabDexaContext? {
-        guard let item else { return nil }
-        do {
-            if item.dataType == "dexa-report-fhir" {
-                // Use report/retrieve — the backend normalizes the stored FHIR
-                // blob into the RemoteDexaReport shape. storage/retrieve
-                // returns the raw blob whose keys don't match our struct.
-                let report = try await api.retrieveDexaReport(
-                    storjUri: item.uri,
-                    walletAddress: key.walletAddress,
-                    encryptionKey: key
-                )
-                #if DEBUG
-                print("🧪 LabContextService: FHIR dexa report retrieved")
-                #endif
-                return convertDexaReport(report)
-            } else {
-                let record = try await api.retrieveStoredData(
-                    storjUri: item.uri,
-                    walletAddress: key.walletAddress,
-                    encryptionKey: key,
-                    as: LabRecord.self
-                )
-                #if DEBUG
-                print("🧪 LabContextService: legacy dexa → \(record.values.count) values")
-                #endif
-                return convertLegacyDexa(record)
-            }
-        } catch {
-            #if DEBUG
-            print("🧪 LabContextService: dexa fetch/decode failed — \(error)")
-            #endif
-            return nil
-        }
-    }
-
-    // MARK: - Sorting
-
-    /// Returns the most recently uploaded item matching `preferredType`, or
-    /// falls back to `fallbackType` if no preferred items exist.
-    private func mostRecent(
-        from items: [StorjListItem],
-        preferredType: String,
-        fallbackType: String
-    ) -> StorjListItem? {
-        let preferred = items
-            .filter { $0.dataType == preferredType }
-            .sorted { $0.uploadedAt > $1.uploadedAt }
-
-        if let first = preferred.first { return first }
-
-        return items
-            .filter { $0.dataType == fallbackType }
-            .sorted { $0.uploadedAt > $1.uploadedAt }
-            .first
-    }
 
     // MARK: - Conversion: FHIR → Luma context
 

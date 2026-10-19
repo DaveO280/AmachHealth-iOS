@@ -86,6 +86,16 @@ struct MedicalRecordData: Codable, Equatable {
     let confidence: Double         // 0.0 – 1.0
 }
 
+extension MedicalRecordData {
+    /// Summary set by the regex parser when a document is stored as a generic
+    /// medical record but none of its text looks medical. Carried in `summary`
+    /// so it survives the vault (summary marker) and FHIR round-trips.
+    static let noMedicalContentNote = "This document doesn't appear to contain medical information."
+
+    /// True when the parser stored this document without finding medical content.
+    var appearsNonMedical: Bool { summary == Self.noMedicalContentNote }
+}
+
 // MARK: - Union
 
 enum ParsedHealthReport {

@@ -205,10 +205,13 @@ enum TrendPeriod: String, CaseIterable {
 
 // MARK: - Workout summary (last 7 days for Luma context)
 
-struct WorkoutSummaryItem {
+struct WorkoutSummaryItem: Equatable {
     let date: Date
     let activityType: String
     let durationMinutes: Double
+    var endDate: Date? = nil
+    /// App or device that recorded it (e.g. "Dave's Apple Watch", "Strava").
+    var sourceName: String? = nil
 }
 
 // MARK: - Dashboard Service
@@ -544,62 +547,22 @@ final class DashboardService: ObservableObject {
         }
     }
 
+    /// Last night: sleep sessions ending today, one source per night
+    /// (SleepSessionBuilder), the same rule the vault uses.
     private func fetchLastNightSleep() async -> (hours: Double, efficiency: Double?, stages: SleepStageBreakdown) {
-        guard let sleepType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
+        let now = Date()
+        let startOfToday = Calendar.current.startOfDay(for: now)
+        let samples = await HealthKitIngestionService.sleepSamples(store: store, range: startOfToday..<now)
+        guard let row = HealthKitIngestionService.sleepRows(samples).first(where: { $0.day == now.vaultDay }) else {
             return (0, nil, SleepStageBreakdown())
         }
-        let now = Date()
-        let cal = Calendar.current
-        let yesterday = cal.date(byAdding: .day, value: -1, to: now)!
-        let windowStart = cal.date(bySettingHour: 18, minute: 0, second: 0, of: yesterday) ?? yesterday
-        let windowEnd = cal.date(bySettingHour: 14, minute: 0, second: 0, of: now) ?? now
-        let predicate = HKQuery.predicateForSamples(withStart: windowStart, end: windowEnd, options: .strictStartDate)
-
-        return await withCheckedContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: sleepType,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: nil
-            ) { _, samples, _ in
-                guard let samples = samples as? [HKCategorySample] else {
-                    continuation.resume(returning: (0, nil, SleepStageBreakdown()))
-                    return
-                }
-                var totalSleep: Double = 0
-                var totalInBed: Double = 0
-                var stages = SleepStageBreakdown()
-
-                for sample in samples {
-                    let hours = sample.endDate.timeIntervalSince(sample.startDate) / 3600
-                    let mins = Int(hours * 60)
-                    switch sample.value {
-                    case 0:  // inBed
-                        totalInBed += hours
-                    case 1:  // asleepUnspecified → count as core
-                        totalSleep += hours
-                        stages.coreMinutes += mins
-                    case 2:  // awake during sleep window
-                        stages.awakeMinutes += mins
-                    case 3:  // asleepCore
-                        totalSleep += hours
-                        stages.coreMinutes += mins
-                    case 4:  // asleepDeep
-                        totalSleep += hours
-                        stages.deepMinutes += mins
-                    case 5:  // asleepREM
-                        totalSleep += hours
-                        stages.remMinutes += mins
-                    default:
-                        break
-                    }
-                }
-                let efficiency = totalInBed > 0 ? totalSleep / totalInBed : nil
-                stages.efficiency = efficiency
-                continuation.resume(returning: (totalSleep, efficiency, stages))
-            }
-            store.execute(query)
-        }
+        var stages = SleepStageBreakdown()
+        stages.coreMinutes = Int(row.sleepCoreMin ?? 0)
+        stages.deepMinutes = Int(row.sleepDeepMin ?? 0)
+        stages.remMinutes = Int(row.sleepRemMin ?? 0)
+        stages.awakeMinutes = Int(row.sleepAwakeMin ?? 0)
+        stages.efficiency = row.sleepEfficiency
+        return ((row.total ?? 0) / 60, row.sleepEfficiency, stages)
     }
 
     private func fetchSleepStagesAllPeriods() async -> [TrendPeriod: [SleepStageTrendPoint]] {
@@ -675,7 +638,7 @@ final class DashboardService: ObservableObject {
 
     // MARK: - Recent workouts (for Luma context block)
 
-    private func fetchRecentWorkoutSummaries(days: Int) async -> [WorkoutSummaryItem] {
+    func fetchRecentWorkoutSummaries(days: Int) async -> [WorkoutSummaryItem] {
         let workoutType = HKObjectType.workoutType()
         let now = Date()
         let start = Calendar.current.date(byAdding: .day, value: -days, to: now)!
@@ -700,7 +663,9 @@ final class DashboardService: ObservableObject {
                     return WorkoutSummaryItem(
                         date: w.startDate,
                         activityType: name,
-                        durationMinutes: duration
+                        durationMinutes: duration,
+                        endDate: w.endDate,
+                        sourceName: w.sourceRevision.source.name
                     )
                 }
                 continuation.resume(returning: Array(items))
