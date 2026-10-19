@@ -392,7 +392,7 @@ struct HealthContextBuilder {
         var blocks: [ContextBlock] = []
 
         // 1. data_note — partial-day instruction (always first)
-        blocks.append(ContextBlock(type: "data_note", content: dataNote))
+        blocks.append(ContextBlock(type: "data_note", content: clockLine() + " " + dataNote))
 
         // 2. metrics — formatted health metrics text
         blocks.append(ContextBlock(type: "metrics", content: formatMetrics(metrics, dateRange: dateRange)))
@@ -550,14 +550,50 @@ struct HealthContextBuilder {
     }
 
     private static func buildWorkoutsBlock() -> ContextBlock? {
-        let items = DashboardService.shared.recentWorkoutSummaries
-        guard !items.isEmpty else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let lines = ["Recent workouts (last 7 days):"] + items.prefix(14).map { w in
-            "  \(formatter.string(from: w.date)): \(w.activityType) \(Int(w.durationMinutes)) min"
+        formatWorkouts(DashboardService.shared.recentWorkoutSummaries).map {
+            ContextBlock(type: "workouts", content: $0)
         }
-        return ContextBlock(type: "workouts", content: lines.joined(separator: "\n"))
+    }
+
+    /// One line per workout with local start/end times, how long ago, and
+    /// the recording source, so Luma never has to guess when it happened.
+    static func formatWorkouts(_ items: [WorkoutSummaryItem], now: Date = Date(), calendar: Calendar = .current) -> String? {
+        guard !items.isEmpty else { return nil }
+        let day = DateFormatter()
+        day.calendar = calendar
+        day.timeZone = calendar.timeZone
+        day.locale = Locale(identifier: "en_US_POSIX")
+        day.dateFormat = "EEE d MMM"
+        let time = DateFormatter()
+        time.calendar = calendar
+        time.timeZone = calendar.timeZone
+        time.locale = Locale(identifier: "en_US_POSIX")
+        time.dateFormat = "HH:mm"
+        let lines = ["Recent workouts, last 7 days (local times; only these workouts exist, do not infer others):"]
+            + items.prefix(14).map { w in
+                var relative = ""
+                if calendar.isDate(w.date, inSameDayAs: now) { relative = "today" }
+                else if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(w.date, inSameDayAs: y) { relative = "yesterday" }
+                else { relative = "\(max(1, calendar.dateComponents([.day], from: calendar.startOfDay(for: w.date), to: calendar.startOfDay(for: now)).day ?? 0)) days ago" }
+                var span = time.string(from: w.date)
+                if let end = w.endDate { span += "–" + time.string(from: end) }
+                var line = "  \(day.string(from: w.date)) (\(relative)) \(span): \(w.activityType), \(Int(w.durationMinutes.rounded())) min"
+                if let source = w.sourceName, !source.isEmpty { line += " [\(source)]" }
+                return line
+            }
+        return lines.joined(separator: "\n")
+    }
+
+    /// The user's local clock, so Luma knows the actual time of day.
+    static func clockLine(now: Date = Date(), timeZone: TimeZone = .current) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = timeZone
+        f.dateFormat = "EEEE d MMMM yyyy, HH:mm"
+        let seconds = timeZone.secondsFromGMT(for: now)
+        let sign = seconds < 0 ? "-" : "+"
+        let offset = String(format: "UTC%@%02d:%02d", sign, abs(seconds) / 3600, (abs(seconds) % 3600) / 60)
+        return "User's local time now: \(f.string(from: now)) (\(timeZone.identifier), \(offset))."
     }
 
     private static func buildAnomaliesBlock() -> ContextBlock? {
@@ -669,14 +705,10 @@ struct HealthContextBuilder {
     /// Today's running totals for cumulative metrics — matches what the dashboard shows.
     /// Only includes metrics with a non-zero value to keep the block concise.
     private static func formatTodayPartial(_ today: DashboardTodayData) -> String {
-        let now = Date()
-        let cal = Calendar.current
-        let startOfDay = cal.startOfDay(for: now)
-        let secondsElapsed = now.timeIntervalSince(startOfDay)
-        let hoursElapsed = secondsElapsed / 3600
-        let timeLabel = String(format: "%.1f hrs into the day", hoursElapsed)
-
-        var lines: [String] = ["Today's running totals (\(timeLabel)):"]
+        let time = DateFormatter()
+        time.locale = Locale(identifier: "en_US_POSIX")
+        time.dateFormat = "HH:mm"
+        var lines: [String] = ["Today's running totals since midnight (as of \(time.string(from: Date())) local time):"]
         if today.steps > 0 {
             lines.append(String(format: "  - Steps: %.0f (so far today)", today.steps))
         }

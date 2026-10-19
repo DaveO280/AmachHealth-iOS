@@ -146,6 +146,7 @@ final class ChatService: ObservableObject {
         // gets labs_bloodwork / labs_dexa in `contextBlocks` for this turn.
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
+        LumaContextInspector.shared.record(finalContext, intent: intent, mode: chatMode)
 
         let userMsg = ChatMessage(role: .user, content: trimmed)
         currentSession.messages.append(userMsg)
@@ -239,6 +240,7 @@ final class ChatService: ObservableObject {
 
         let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
+        LumaContextInspector.shared.record(finalContext, intent: intent, mode: chatMode)
 
         let dynamicLimit = historyLimit(for: finalContext, hasLabData: labDataToUse != nil)
         let historyMessages = currentSession.messages

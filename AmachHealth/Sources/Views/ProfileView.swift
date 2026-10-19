@@ -534,6 +534,25 @@ struct ProfileView: View {
                 .listRowBackground(Color.amachSurface)
             }
 
+            NavigationLink {
+                LumaInspectorView()
+            } label: {
+                HStack(spacing: AmachSpacing.md) {
+                    Image(systemName: "eye")
+                        .foregroundStyle(Color.amachAI)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("What Luma sees")
+                            .font(AmachType.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.amachTextPrimary)
+                        Text("Luma's numbers next to Apple Health, and the last context sent")
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                }
+            }
+            .listRowBackground(Color.amachSurface)
         } header: {
             sectionHeader("Luma Intelligence")
         } footer: {
