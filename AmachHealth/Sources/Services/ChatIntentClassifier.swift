@@ -118,7 +118,7 @@ enum ChatIntentClassifier {
         "lab", "labs", "blood", "bloodwork", "cholesterol", "glucose",
         "a1c", "hba1c", "lipid", "triglyceride", "hdl", "ldl",
         "tsh", "thyroid", "vitamin d", "ferritin", "draw", "results",
-        "test results", "panel"
+        "test results", "panel", "gut", "microbiome", "microbes", "bacteria", "probiotic"
     ]
 
     private static let medicationsKeywords = [

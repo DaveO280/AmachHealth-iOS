@@ -205,6 +205,7 @@ struct LabRecordDetailView: View {
     @State private var bloodworkReport: RemoteBloodworkReport?
     @State private var dexaReport: RemoteDexaReport?
     @State private var medicalRecord: RemoteMedicalRecord?
+    @State private var gutMarkers: [LabMarkerRow]?
     @State private var isLoading = true
     @State private var error: String?
 
@@ -374,6 +375,35 @@ struct LabRecordDetailView: View {
                         }
                         .padding(AmachSpacing.md)
                     }
+                } else if let gutMarkers {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: AmachSpacing.lg) {
+                            reportHeaderCard(
+                                title: vaultItem.report.title ?? "Gut Health",
+                                dateText: vaultItem.report.reportDate,
+                                txHash: txHash
+                            )
+
+                            VStack(alignment: .leading, spacing: AmachSpacing.md) {
+                                Text("Values")
+                                    .font(AmachType.h3)
+                                    .foregroundStyle(Color.amachTextPrimary)
+                                if gutMarkers.isEmpty {
+                                    Text("No values were stored for this report.")
+                                        .font(AmachType.caption)
+                                        .foregroundStyle(Color.amachTextSecondary)
+                                }
+                                GutHealthMarkerList(markers: gutMarkers)
+                            }
+                            .padding(AmachSpacing.lg)
+                            .amachCard()
+
+                            if let notes = vaultItem.report.notes, !notes.isEmpty {
+                                notesCard(notes)
+                            }
+                        }
+                        .padding(AmachSpacing.md)
+                    }
                 } else if let medicalRecord {
                     ScrollView {
                         VStack(alignment: .leading, spacing: AmachSpacing.lg) {
@@ -513,7 +543,11 @@ struct LabRecordDetailView: View {
         switch vaultItem.report.kindValue {
         case .bloodwork: bloodworkReport = vaultItem.asBloodwork
         case .dexa: dexaReport = vaultItem.asDexa
-        case .medical: medicalRecord = vaultItem.asMedicalRecord
+        case .medical:
+            // Gut-health reports are stored as medical rows, but their values
+            // are numeric markers, not findings.
+            if vaultItem.report.subtype == "gut-health" { gutMarkers = vaultItem.markers }
+            else { medicalRecord = vaultItem.asMedicalRecord }
         }
         error = nil
     }

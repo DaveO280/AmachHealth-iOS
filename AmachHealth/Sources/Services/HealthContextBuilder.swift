@@ -405,7 +405,7 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "today_partial", content: todayPartialContent))
         }
 
-        // 3. labs_bloodwork, labs_trends, labs_dexa, labs_medical — separate blocks for targeted queries
+        // 3. labs_bloodwork, labs_trends, labs_dexa, labs_medical, labs_gut — separate blocks for targeted queries
         blocks += labBlocks()
 
         // 4. goals — conversation-extracted active goals (separate from memory for clarity)
@@ -477,7 +477,7 @@ struct HealthContextBuilder {
         // In quick mode, prune blocks not relevant to the intent
         if mode == .quick {
             if !intent.includesLabData {
-                blocks.removeAll { $0.type == "labs_bloodwork" || $0.type == "labs_dexa" }
+                blocks.removeAll { $0.type == "labs_bloodwork" || $0.type == "labs_dexa" || $0.type == "labs_gut" }
             }
             // Bloodwork history is for lab questions; body-comp questions only need the DEXA.
             if !intent.includesLabData || intent == .bodyComp {
@@ -691,7 +691,57 @@ struct HealthContextBuilder {
         if let medical = formatMedicalDocuments(labs.medicalDocuments) {
             blocks.append(ContextBlock(type: "labs_medical", content: medical))
         }
+        if let gut = labs.gutHealth, let content = formatGutHealth(gut) {
+            blocks.append(ContextBlock(type: "labs_gut", content: content))
+        }
         return blocks
+    }
+
+    /// Gut reports carry hundreds of values: summary and flagged values come
+    /// first, then each section, then the most abundant species, capped.
+    static let maxGutChars = 6_000
+    static let gutTopSpecies = 25
+
+    static func formatGutHealth(_ gut: LabGutHealthContext) -> String? {
+        guard !gut.values.isEmpty || !gut.species.isEmpty else { return nil }
+        func entry(_ v: LabGutHealthContext.Value) -> String {
+            var out = v.name.replacingOccurrences(of: "_", with: " ")
+            if let n = v.value {
+                out += " " + String(format: "%g", n)  // full precision: abundances like 0.005
+                if let u = v.unit, !u.isEmpty { out += u == "%" ? "%" : " \(u)" }
+            }
+            else if let t = v.text { out += ": \(t)" }
+            if let s = v.status, !s.isEmpty { out += " (\(s.replacingOccurrences(of: "_", with: " ")))" }
+            return out
+        }
+        let flaggedStatuses: Set<String> = ["needs_support", "needs_improving", "improving"]
+        var lines: [String] = []
+        let summary = gut.values.filter { $0.section == "summary" }
+        if !summary.isEmpty { lines.append("  Summary: " + summary.map(entry).joined(separator: "; ")) }
+        let flagged = gut.values.filter { $0.section != "summary" && flaggedStatuses.contains($0.status ?? "") }
+        if !flagged.isEmpty { lines.append("  Needs attention: " + flagged.map(entry).joined(separator: "; ")) }
+        var order: [String] = []
+        var bySection: [String: [LabGutHealthContext.Value]] = [:]
+        for v in gut.values where v.section != "summary" {
+            if bySection[v.section] == nil { order.append(v.section) }
+            bySection[v.section, default: []].append(v)
+        }
+        if !gut.species.isEmpty {
+            var counts: [String: Int] = [:]
+            for s in gut.species { counts[s.status ?? "unknown", default: 0] += 1 }
+            let breakdown = counts.keys.sorted().map { "\(counts[$0]!) \($0)" }.joined(separator: ", ")
+            lines.append("  Species: \(gut.species.count) detected (\(breakdown)). Most abundant: "
+                         + gut.species.prefix(gutTopSpecies).map(entry).joined(separator: "; "))
+        }
+        for section in order {
+            let title = section.replacingOccurrences(of: "_", with: " ")
+            lines.append("  \(title.prefix(1).uppercased() + title.dropFirst()): "
+                         + (bySection[section] ?? []).map(entry).joined(separator: "; "))
+        }
+        var header = "Gut microbiome report"
+        if let date = gut.date { header += " (\(date))" }
+        if let source = gut.source { header += " — \(source)" }
+        return capped(header: header + ":", lines, limit: maxGutChars)
     }
 
     /// Appends lines up to `limit` characters, then notes how many were left out.
