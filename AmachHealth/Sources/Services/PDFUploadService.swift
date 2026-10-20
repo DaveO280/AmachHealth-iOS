@@ -170,6 +170,9 @@ final class PDFUploadService: ObservableObject {
         if case APIError.enclaveBusy = error {
             return "The private AI is busy right now. Nothing was saved. Try again in a minute."
         }
+        if case APIError.aiCreditExhausted(let resetsAt) = error {
+            return APIError.creditExhaustedMessage(resetsAt: resetsAt) + " Nothing was saved."
+        }
         if case APIError.httpError(let code) = error, code == 504 || code == 502 {
             return "The private AI took too long to read this report. Nothing was saved."
         }

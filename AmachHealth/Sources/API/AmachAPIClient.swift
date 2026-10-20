@@ -419,6 +419,11 @@ final class AmachAPIClient {
                 if errorResponse.code == APIError.enclaveBusyCode {
                     throw APIError.enclaveBusy
                 }
+                if errorResponse.code == APIError.aiCreditExhaustedCode {
+                    throw APIError.aiCreditExhausted(
+                        resetsAt: errorResponse.resetsAt.flatMap { ISO8601DateFormatter.withFractionalSeconds.date(from: $0) }
+                    )
+                }
                 throw APIError.requestFailed(errorResponse.error)
             }
             throw APIError.httpError(statusCode: httpResponse.statusCode)
@@ -781,6 +786,17 @@ struct ErrorResponse: Decodable {
     let error: String
     /// Machine-readable error code, e.g. "enclave_busy".
     let code: String?
+    /// For "ai_credit_exhausted": when the daily AI credit refreshes (ISO 8601).
+    var resetsAt: String? = nil
+}
+
+extension ISO8601DateFormatter {
+    /// Parses "2026-10-21T00:00:00.000Z".
+    static let withFractionalSeconds: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 }
 
 // MARK: - ZK Coverage Types
@@ -1055,11 +1071,29 @@ enum APIError: LocalizedError {
     /// Every private (enclave) AI model was at capacity (HTTP 503
     /// `enclave_busy`). The server never falls back to a non-private model.
     case enclaveBusy
+    /// The AI account's daily credit is used up (HTTP 503
+    /// `ai_credit_exhausted`); it refreshes at `resetsAt` (midnight UTC).
+    case aiCreditExhausted(resetsAt: Date?)
     /// A request body contained the wallet key or derivation signature and
     /// was not sent (OutboundSecretGuard).
     case secretInRequest
 
     static let enclaveBusyCode = "enclave_busy"
+    static let aiCreditExhaustedCode = "ai_credit_exhausted"
+
+    /// "…It refreshes daily, next at 8:00 PM." in the phone's time zone.
+    static func creditExhaustedMessage(resetsAt: Date?) -> String {
+        let when: String
+        if let resetsAt {
+            let f = DateFormatter()
+            f.timeStyle = .short
+            f.dateStyle = Calendar.current.isDate(resetsAt, inSameDayAs: Date()) ? .none : .medium
+            when = "next at \(f.string(from: resetsAt))"
+        } else {
+            when = "at midnight UTC"
+        }
+        return "Amach's private AI has used today's credit. It refreshes daily, \(when)."
+    }
 
     var errorDescription: String? {
         switch self {
@@ -1075,6 +1109,8 @@ enum APIError: LocalizedError {
             return "Failed to decode response"
         case .enclaveBusy:
             return "The private AI enclave is busy. Please try again in a moment."
+        case .aiCreditExhausted(let resetsAt):
+            return Self.creditExhaustedMessage(resetsAt: resetsAt)
         case .secretInRequest:
             return "Blocked a request that contained your encryption key"
         }

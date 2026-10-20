@@ -90,9 +90,9 @@ final class ChatService: ObservableObject {
     /// isn't duplicated, then calls startStreaming as normal.
     func retryLastMessage() {
         guard let text = lastFailedMessage else { return }
-        // Drop Luma's "enclave busy" note so the retry replaces it
+        // Drop Luma's "enclave busy" / "out of credit" note so the retry replaces it
         if let last = currentSession.messages.last, last.role == .assistant,
-           last.content == Self.enclaveBusyReply {
+           Self.isPauseReply(last.content) {
             currentSession.messages.removeLast()
         }
         // Remove the dangling user message left by the failed attempt
@@ -121,9 +121,28 @@ final class ChatService: ObservableObject {
         "and it's full for the moment. Give it a minute and tap Try Again. " +
         "Your question is saved."
 
-    private static func isEnclaveBusy(_ error: Error) -> Bool {
-        if case .enclaveBusy = error as? APIError { return true }
-        return false
+    private static let creditReplyPrefix = "My private AI has used up today's credit"
+
+    /// Luma's reply when the AI account's daily credit is spent.
+    static func creditExhaustedReply(resetsAt: Date?) -> String {
+        let refresh = APIError.creditExhaustedMessage(resetsAt: resetsAt)
+            .components(separatedBy: "It refreshes").last.map { "It refreshes" + $0 } ?? ""
+        return "\(creditReplyPrefix), so I can't think this through right now. \(refresh) " +
+            "Your question is saved: tap Try Again then."
+    }
+
+    /// Luma's reply for a pause that isn't a failure (enclave full, daily
+    /// credit spent), or nil for a real error.
+    static func pauseReply(for error: Error) -> String? {
+        switch error as? APIError {
+        case .enclaveBusy: return enclaveBusyReply
+        case .aiCreditExhausted(let resetsAt): return creditExhaustedReply(resetsAt: resetsAt)
+        default: return nil
+        }
+    }
+
+    static func isPauseReply(_ content: String) -> Bool {
+        content == enclaveBusyReply || content.hasPrefix(creditReplyPrefix)
     }
 
     // MARK: - Send Message
@@ -171,8 +190,8 @@ final class ChatService: ObservableObject {
             saveToDisk()
 
             updateRollingSummaryIfNeeded()
-        } catch where Self.isEnclaveBusy(error) {
-            currentSession.messages.append(ChatMessage(role: .assistant, content: Self.enclaveBusyReply))
+        } catch where Self.pauseReply(for: error) != nil {
+            currentSession.messages.append(ChatMessage(role: .assistant, content: Self.pauseReply(for: error)!))
             currentSession.updatedAt = .now
             saveToDisk()
             self.error = nil
@@ -353,12 +372,12 @@ final class ChatService: ObservableObject {
                 }
                 lastFailedMessage = nil
                 saveToDisk()
-            } else if Self.isEnclaveBusy(error) {
+            } else if let reply = Self.pauseReply(for: error) {
                 if currentSession.messages.indices.contains(assistantIdx),
                    currentSession.messages[assistantIdx].role == .assistant {
-                    currentSession.messages[assistantIdx].content = Self.enclaveBusyReply
+                    currentSession.messages[assistantIdx].content = reply
                 } else {
-                    currentSession.messages.append(ChatMessage(role: .assistant, content: Self.enclaveBusyReply))
+                    currentSession.messages.append(ChatMessage(role: .assistant, content: reply))
                 }
                 saveToDisk()
                 self.error = nil
@@ -464,8 +483,8 @@ final class ChatService: ObservableObject {
             AmachHaptics.lumaResponse()
             // Link this session back to the HealthEvent for future memory queries
             service.linkSession(currentSession.id, to: event.id)
-        } catch where Self.isEnclaveBusy(error) {
-            currentSession.messages[idx].content = Self.enclaveBusyReply
+        } catch where Self.pauseReply(for: error) != nil {
+            currentSession.messages[idx].content = Self.pauseReply(for: error)!
             saveToDisk()
             self.error = nil
         } catch {
