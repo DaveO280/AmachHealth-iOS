@@ -44,6 +44,7 @@ final class LivePDFImportTests: XCTestCase {
             case .bloodwork(let bw): count = bw.metrics.count
             case .dexa(let dx): count = dx.regions.count
             case .medicalRecord(let mr): count = mr.keyFindings?.count ?? 0
+            case .gutHealth(let gut): count = LabVaultMapping.gutHealthMarkers(gut.json, reportId: "live").count
             }
             print("LIVE_PDF_IMPORT reader=\(result.reader) type=\(result.report.reportType) values=\(count) seconds=\(Int(seconds))")
             XCTAssertTrue(result.reader.isAI, "expected the private AI to read it, got \(result.reader)")

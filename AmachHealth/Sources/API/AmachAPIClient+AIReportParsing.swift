@@ -70,6 +70,10 @@ extension AmachAPIClient {
             func decode<T: Decodable>(as: T.Type) throws -> T {
                 try JSONDecoder().decode(T.self, from: _data)
             }
+
+            var jsonObject: [String: Any]? {
+                try? JSONSerialization.jsonObject(with: _data) as? [String: Any]
+            }
         }
     }
 
@@ -158,6 +162,8 @@ extension AmachAPIClient {
             report = .bloodwork(try first.report.decode(as: BloodworkReportData.self))
         case "medical-record":
             report = .medicalRecord(try first.report.decode(as: MedicalRecordData.self))
+        case "gut-health":
+            report = first.report.jsonObject.flatMap(GutHealthReport.init(json:)).map { .gutHealth($0) }
         default:
             report = nil
         }

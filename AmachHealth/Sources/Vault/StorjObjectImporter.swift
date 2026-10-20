@@ -447,25 +447,7 @@ struct StorjObjectImporter {
             throw ImportError.shape("not an object")
         }
         let id = Self.reportId(for: object.key)
-        var markers: [LabMarkerRow] = []
-        func walk(_ value: Any, path: [String]) {
-            guard let dict = value as? [String: Any] else { return }
-            if let v = Self.number(dict["value"]) {
-                let name = path.last ?? "value"
-                let low = Self.number(dict["ref_low"]), high = Self.number(dict["ref_high"])
-                let range = (low != nil || high != nil)
-                    ? "\(low.map(LabReportWithMarkers.format) ?? "")–\(high.map(LabReportWithMarkers.format) ?? "")" : nil
-                markers.append(LabMarkerRow(
-                    id: nil, reportId: id, position: markers.count, name: name,
-                    canonicalName: LabMarkerRow.canonicalize(name), value: v, valueText: nil,
-                    unit: dict["unit"] as? String, referenceRange: range, flag: dict["status"] as? String,
-                    panel: path.dropLast().last
-                ))
-                return
-            }
-            for key in dict.keys.sorted() { walk(dict[key]!, path: path + [key]) }
-        }
-        walk(root, path: [])
+        let markers = LabVaultMapping.gutHealthMarkers(root, reportId: id)
         var report = LabVaultMapping.row(
             id: id, kind: .medical, reportDate: root["collection_date"] as? String,
             subtype: "gut-health", title: "Gut Health", source: root["provider"] as? String,

@@ -93,6 +93,8 @@ struct PDFReportReviewCard: View {
             else if (mr.keyFindings ?? []).isEmpty && (mr.summary ?? "").isEmpty {
                 out.append("Saved as a general document: no findings were extracted.")
             }
+        case .gutHealth(let gut):
+            if gutValues(gut).isEmpty { out.append("No gut-health values were found.") }
         }
         return out
     }
@@ -113,6 +115,7 @@ struct PDFReportReviewCard: View {
         case .bloodwork(let bw): return "Bloodwork · \(bw.metrics.count) values"
         case .dexa: return "DEXA scan"
         case .medicalRecord(let mr): return mr.title ?? "Medical document"
+        case .gutHealth(let gut): return "Gut health · \(gutValues(gut).count) values"
         }
     }
 
@@ -121,6 +124,7 @@ struct PDFReportReviewCard: View {
         case .bloodwork(let bw): return [bw.laboratory, bw.reportDate].compactMap { $0 }.joined(separator: " · ")
         case .dexa(let dx): return [dx.source, dx.scanDate].compactMap { $0 }.joined(separator: " · ")
         case .medicalRecord(let mr): return [mr.documentType, mr.reportDate].compactMap { $0 }.joined(separator: " · ")
+        case .gutHealth(let gut): return [gut.provider, gut.collectionDate].compactMap { $0 }.joined(separator: " · ")
         }
     }
 
@@ -160,7 +164,34 @@ struct PDFReportReviewCard: View {
                     Text("• \(f)").font(AmachType.tiny).foregroundStyle(Color.amachTextSecondary)
                 }
             }
+        case .gutHealth(let gut):
+            VStack(alignment: .leading, spacing: 6) {
+                row("Microbiome score", gut.microbiomeScore.map { String(format: "%g", $0) })
+                row("Gut type", gut.gutType)
+                row("Species identified", gut.species.isEmpty ? nil : "\(gut.species.count)")
+                ForEach(Array(gutValues(gut).filter { $0.panel != "summary" && $0.panel != "species" }
+                    .prefix(200).enumerated()), id: \.offset) { _, m in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(m.name.replacingOccurrences(of: "_", with: " "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextPrimary)
+                            .lineLimit(2)
+                        Spacer()
+                        Text([m.value.map { String(format: "%g", $0) }, m.unit].compactMap { $0 }.joined(separator: " "))
+                            .font(AmachType.dataMono)
+                            .foregroundStyle(Color.amachTextPrimary)
+                        if let flag = m.flag {
+                            Text(flag).font(AmachType.tiny).foregroundStyle(Color.amachTextSecondary)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// The values the vault will store for a gut-health report.
+    private func gutValues(_ gut: GutHealthReport) -> [LabMarkerRow] {
+        LabVaultMapping.gutHealthMarkers(gut.json, reportId: "review")
     }
 
     @ViewBuilder
