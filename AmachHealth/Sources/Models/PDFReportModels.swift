@@ -96,18 +96,44 @@ extension MedicalRecordData {
     var appearsNonMedical: Bool { summary == Self.noMedicalContentNote }
 }
 
+// MARK: - Gut health (Tiny Health and similar)
+
+/// A gut-microbiome report as the website returns it (GutHealthReportData in
+/// Amach-Website/src/types/reportData.ts). Kept as the original JSON: the
+/// shape is deep and provider-specific, and the vault mapping walks it.
+struct GutHealthReport {
+    let json: [String: Any]
+    let rawJSON: Data
+
+    init?(json: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]) else { return nil }
+        self.json = json
+        self.rawJSON = data
+    }
+
+    var provider: String? { json["provider"] as? String }
+    var collectionDate: String? { (json["collection_date"] ?? json["report_date"]) as? String }
+    private var summary: [String: Any] { json["summary"] as? [String: Any] ?? [:] }
+    var microbiomeScore: Double? { (summary["microbiome_score"] as? NSNumber)?.doubleValue }
+    var gutType: String? { summary["gut_type"] as? String }
+    var species: [[String: Any]] { json["species"] as? [[String: Any]] ?? [] }
+    var recommendations: [String] { json["recommendations"] as? [String] ?? [] }
+}
+
 // MARK: - Union
 
 enum ParsedHealthReport {
     case bloodwork(BloodworkReportData)
     case dexa(DexaReportData)
     case medicalRecord(MedicalRecordData)
+    case gutHealth(GutHealthReport)
 
     var reportType: String {
         switch self {
         case .bloodwork: return "bloodwork"
         case .dexa: return "dexa"
         case .medicalRecord: return "medical-record"
+        case .gutHealth: return "gut-health"
         }
     }
 }

@@ -87,6 +87,9 @@ struct UploadPDFReportSheet: View {
                 Label("DEXA body composition scans", systemImage: "figure.stand")
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextSecondary)
+                Label("Gut health (Tiny Health)", systemImage: "leaf")
+                    .font(AmachType.caption)
+                    .foregroundStyle(Color.amachTextSecondary)
                 Label("Medical records & other documents", systemImage: "doc.text")
                     .font(AmachType.caption)
                     .foregroundStyle(Color.amachTextSecondary)
@@ -321,6 +324,7 @@ struct UploadPDFReportSheet: View {
         case .bloodwork: return "Bloodwork"
         case .dexa: return "DEXA Scan"
         case .medicalRecord: return "Medical Record"
+        case .gutHealth: return "Gut Health"
         }
     }
 

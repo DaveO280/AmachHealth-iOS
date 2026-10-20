@@ -198,6 +198,8 @@ final class PDFUploadService: ObservableObject {
             return LabVaultMapping.dexa(dexa, id: id, origin: "device", pdfSHA256: pdfSHA256)
         case .medicalRecord(let mr):
             return LabVaultMapping.medical(mr, id: id, origin: "device", pdfSHA256: pdfSHA256)
+        case .gutHealth(let gut):
+            return LabVaultMapping.gutHealth(gut, id: id, origin: "device", pdfSHA256: pdfSHA256)
         }
     }
 
@@ -208,6 +210,7 @@ final class PDFUploadService: ObservableObject {
         case .bloodwork(let bw): return "bloodwork-\(bw.reportDate ?? timestampString())-\(shortRandom())"
         case .dexa(let dexa): return "dexa-\(dexa.scanDate ?? timestampString())-\(shortRandom())"
         case .medicalRecord(let mr): return "medical-record-\(mr.reportDate ?? timestampString())-\(shortRandom())"
+        case .gutHealth(let gut): return "gut-health-\(gut.collectionDate ?? timestampString())-\(shortRandom())"
         }
     }
 

@@ -636,6 +636,8 @@ final class UploadMetadataTests: XCTestCase {
             let fingerprint = FhirConverter.fingerprintMedicalRecord(mr)
             let reportId = "medical-record-test"
             return (fhir, "medical-record-fhir", fingerprint, reportId)
+        case .gutHealth:
+            preconditionFailure("gut-health reports have no FHIR mapping")
         }
     }
 }

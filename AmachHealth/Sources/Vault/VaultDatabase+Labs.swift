@@ -242,6 +242,67 @@ enum LabVaultMapping {
         )
     }
 
+    /// Gut health: every {value, unit, status, ref_*} leaf becomes a marker
+    /// (panel = the section it sits in), plus the summary numbers, gut type
+    /// and species abundances. Shared by PDF import and the Storj import.
+    static func gutHealthMarkers(_ root: [String: Any], reportId: String) -> [LabMarkerRow] {
+        var markers: [LabMarkerRow] = []
+        func add(_ name: String, value: Double?, text: String? = nil, unit: String? = nil,
+                 range: String? = nil, flag: String? = nil, panel: String?) {
+            markers.append(LabMarkerRow(
+                id: nil, reportId: reportId, position: markers.count, name: name,
+                canonicalName: LabMarkerRow.canonicalize(name), value: value, valueText: text,
+                unit: unit, referenceRange: range, flag: flag, panel: panel
+            ))
+        }
+        func number(_ any: Any?) -> Double? {
+            if let n = any as? NSNumber { return n.doubleValue }
+            if let s = any as? String { return Double(s) }
+            return nil
+        }
+        func walk(_ value: Any, path: [String]) {
+            guard let dict = value as? [String: Any] else { return }
+            if let v = number(dict["value"]) {
+                let low = number(dict["ref_low"]), high = number(dict["ref_high"])
+                let range = (low != nil || high != nil)
+                    ? "\(low.map(LabReportWithMarkers.format) ?? "")–\(high.map(LabReportWithMarkers.format) ?? "")" : nil
+                add(path.last ?? "value", value: v, unit: dict["unit"] as? String, range: range,
+                    flag: dict["status"] as? String, panel: path.dropLast().last)
+                return
+            }
+            for key in dict.keys.sorted() where key != "summary" && key != "species" {
+                walk(dict[key]!, path: path + [key])
+            }
+        }
+        if let summary = root["summary"] as? [String: Any] {
+            for key in summary.keys.sorted() {
+                if let v = number(summary[key]) { add(key, value: v, panel: "summary") }
+                else if let t = summary[key] as? String, !t.isEmpty { add(key, value: nil, text: t, panel: "summary") }
+            }
+        }
+        walk(root, path: [])
+        for entry in root["species"] as? [[String: Any]] ?? [] {
+            guard let name = entry["name"] as? String else { continue }
+            add(name, value: number(entry["abundance_pct"]), unit: "%",
+                flag: entry["classification"] as? String, panel: "species")
+        }
+        return markers
+    }
+
+    static func gutHealth(
+        _ report: GutHealthReport, id: String, origin: String, pdfSHA256: String? = nil,
+        storjKey: String? = nil, createdAt: Date = Date()
+    ) -> LabReportWithMarkers {
+        var row = row(
+            id: id, kind: .medical, reportDate: report.collectionDate, pdfSHA256: pdfSHA256,
+            subtype: "gut-health", title: "Gut Health", source: report.provider,
+            notes: report.recommendations.isEmpty ? nil : report.recommendations,
+            fingerprint: sha256Hex(report.rawJSON), origin: origin, storjKey: storjKey, createdAt: createdAt
+        )
+        row.laboratory = report.provider
+        return LabReportWithMarkers(report: row, markers: gutHealthMarkers(report.json, reportId: id))
+    }
+
     /// Legacy manual-entry LabRecord (dataType "bloodwork" / "dexa").
     static func legacy(_ record: LabRecord, origin: String, storjKey: String? = nil) -> LabReportWithMarkers {
         let kind: LabReportRow.Kind = record.type.contains("dexa") ? .dexa : (record.type.contains("bloodwork") ? .bloodwork : .medical)
