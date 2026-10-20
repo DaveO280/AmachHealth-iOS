@@ -115,7 +115,10 @@ struct PDFReportReviewCard: View {
         case .bloodwork(let bw): return "Bloodwork · \(bw.metrics.count) values"
         case .dexa: return "DEXA scan"
         case .medicalRecord(let mr): return mr.title ?? "Medical document"
-        case .gutHealth(let gut): return "Gut health · \(gutValues(gut).count) values"
+        case .gutHealth(let gut):
+            let values = gutValues(gut)
+            let species = values.filter { $0.panel == "species" }.count
+            return "Gut health · \(values.count - species) values · \(species) species"
         }
     }
 
@@ -165,27 +168,7 @@ struct PDFReportReviewCard: View {
                 }
             }
         case .gutHealth(let gut):
-            VStack(alignment: .leading, spacing: 6) {
-                row("Microbiome score", gut.microbiomeScore.map { String(format: "%g", $0) })
-                row("Gut type", gut.gutType)
-                row("Species identified", gut.species.isEmpty ? nil : "\(gut.species.count)")
-                ForEach(Array(gutValues(gut).filter { $0.panel != "summary" && $0.panel != "species" }
-                    .prefix(200).enumerated()), id: \.offset) { _, m in
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(m.name.replacingOccurrences(of: "_", with: " "))
-                            .font(AmachType.tiny)
-                            .foregroundStyle(Color.amachTextPrimary)
-                            .lineLimit(2)
-                        Spacer()
-                        Text([m.value.map { String(format: "%g", $0) }, m.unit].compactMap { $0 }.joined(separator: " "))
-                            .font(AmachType.dataMono)
-                            .foregroundStyle(Color.amachTextPrimary)
-                        if let flag = m.flag {
-                            Text(flag).font(AmachType.tiny).foregroundStyle(Color.amachTextSecondary)
-                        }
-                    }
-                }
-            }
+            GutHealthMarkerList(markers: gutValues(gut))
         }
     }
 
@@ -231,4 +214,139 @@ struct PDFReportReviewCard: View {
 
 extension PDFReadResult.Reader {
     var isAI: Bool { if case .privateAI = self { return true } else { return false } }
+}
+
+// MARK: - Gut health values
+
+/// Every value of a gut-health report, grouped by section: summary first,
+/// then each measured section, then every species (name, abundance,
+/// classification). Sections collapse; headers show how many values each holds.
+/// Used by the import review card and the saved report.
+struct GutHealthMarkerList: View {
+    let markers: [LabMarkerRow]
+    @State private var expanded: Set<String> = ["summary"]
+
+    struct Section: Identifiable, Equatable {
+        let panel: String
+        let rows: [LabMarkerRow]
+        var id: String { panel }
+    }
+
+    /// Summary, then sections in report order, then "other", then species.
+    static func sections(_ markers: [LabMarkerRow]) -> [Section] {
+        var order: [String] = []
+        var rows: [String: [LabMarkerRow]] = [:]
+        for m in markers {
+            let panel = m.panel ?? "other"
+            if rows[panel] == nil { order.append(panel) }
+            rows[panel, default: []].append(m)
+        }
+        func rank(_ panel: String) -> Int {
+            switch panel {
+            case "summary": return 0
+            case "other": return 2
+            case "species": return 3
+            default: return 1
+            }
+        }
+        return order.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map { Section(panel: $0.element, rows: rows[$0.element] ?? []) }
+    }
+
+    /// "gut_barrier_inflammation" → "Gut barrier inflammation".
+    static func title(_ key: String) -> String {
+        switch key {
+        case "species": return "Species"
+        case "other": return "Other values"
+        default:
+            let words = key.replacingOccurrences(of: "_", with: " ")
+            return words.prefix(1).uppercased() + words.dropFirst()
+        }
+    }
+
+    /// "20 beneficial · 8 unfriendly · 6 variable · 322 unknown".
+    static func classificationCounts(_ species: [LabMarkerRow]) -> String {
+        let order = ["beneficial", "unfriendly", "variable", "unknown"]
+        var counts: [String: Int] = [:]
+        for s in species { counts[s.flag ?? "unknown", default: 0] += 1 }
+        let known = order.compactMap { k in counts[k].map { "\($0) \(k)" } }
+        let rest = counts.keys.filter { !order.contains($0) }.sorted().map { "\(counts[$0]!) \($0)" }
+        return (known + rest).joined(separator: " · ")
+    }
+
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: AmachSpacing.sm) {
+            ForEach(Self.sections(markers)) { section in
+                header(section)
+                if expanded.contains(section.panel) {
+                    if section.panel == "species" {
+                        Text(Self.classificationCounts(section.rows))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    ForEach(Array(section.rows.enumerated()), id: \.offset) { _, m in
+                        row(m, species: section.panel == "species")
+                    }
+                }
+            }
+        }
+    }
+
+    private func header(_ section: Section) -> some View {
+        Button {
+            if expanded.contains(section.panel) { expanded.remove(section.panel) }
+            else { expanded.insert(section.panel) }
+        } label: {
+            HStack {
+                Text(Self.title(section.panel))
+                    .font(AmachType.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.amachTextPrimary)
+                Text("\(section.rows.count)")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+                Spacer()
+                Image(systemName: expanded.contains(section.panel) ? "chevron.up" : "chevron.down")
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Color.amachTextSecondary)
+            }
+            .padding(.top, AmachSpacing.xs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(Self.title(section.panel)), \(section.rows.count) values")
+    }
+
+    private func row(_ m: LabMarkerRow, species: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: AmachSpacing.sm) {
+            Text(species ? m.name : Self.title(m.name))
+                .font(AmachType.tiny)
+                .italic(species)
+                .foregroundStyle(Color.amachTextPrimary)
+                .lineLimit(2)
+            Spacer()
+            Text(Self.value(m))
+                .font(AmachType.dataMono)
+                .foregroundStyle(Color.amachTextPrimary)
+            if let flag = m.flag, !flag.isEmpty {
+                Text(flag.replacingOccurrences(of: "_", with: " "))
+                    .font(AmachType.tiny)
+                    .foregroundStyle(Self.flagColor(flag))
+            }
+        }
+    }
+
+    static func value(_ m: LabMarkerRow) -> String {
+        let number = m.value.map { String(format: "%g", $0) } ?? m.valueText ?? "—"
+        return [number, m.unit].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
+    static func flagColor(_ flag: String) -> Color {
+        switch flag {
+        case "great", "beneficial": return Color.amachSuccess
+        case "needs_support", "needs_improving", "improving", "unfriendly": return Color.amachWarning
+        default: return Color.amachTextSecondary
+        }
+    }
 }

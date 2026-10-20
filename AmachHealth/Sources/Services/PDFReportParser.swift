@@ -18,6 +18,8 @@ enum PDFReportParser {
 
     /// Extract text from a PDF data blob using PDFKit.
     /// Returns the full concatenated text from all pages.
+    /// Gut-microbiome reports also get a key of the coloured classification
+    /// dots beside species names (see SpeciesDots), which text can't carry.
     static func extractText(from pdfData: Data) -> String {
         guard let document = PDFDocument(data: pdfData) else { return "" }
         var pages: [String] = []
@@ -25,7 +27,9 @@ enum PDFReportParser {
             guard let page = document.page(at: i) else { continue }
             pages.append(page.string ?? "")
         }
-        return pages.joined(separator: "\n")
+        let text = pages.joined(separator: "\n")
+        guard SpeciesDots.isMicrobiomeReport(text) else { return text }
+        return text + SpeciesDots.key(document)
     }
 
     /// Parse PDF data into a structured health report.
@@ -1020,4 +1024,151 @@ enum PDFReportParser {
 
 private extension String {
     var padded: String { count == 1 ? "0\(self)" : self }
+}
+
+// MARK: - Species classification dots
+
+/// Tiny Health marks each species' classification with a coloured dot before
+/// its name (green beneficial, orange variable, red unfriendly, grey unknown).
+/// The dots are graphics, so page text loses them. This renders each species
+/// page, finds the dots, and lists the row each one labels:
+///
+///     SPECIES CLASSIFICATION DOTS
+///     B|Faecalibacterium prausnitzii_G 1.125%
+///
+/// The website matches these rows to species by abundance and name.
+enum SpeciesDots {
+    static let heading = "SPECIES CLASSIFICATION DOTS"
+
+    /// PDFKit splits words across lines ("Tiny Healt\nh"), so compare without whitespace.
+    static func isMicrobiomeReport(_ text: String) -> Bool {
+        let squashed = text.lowercased().replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+        return squashed.contains("tinyhealth") && squashed.contains("species")
+    }
+
+    /// The key for the species pages: from the "Top 20 species" or "All
+    /// species" table up to the references (earlier pages use coloured
+    /// markers for gauges, not species). "" when no dots are found.
+    static func key(_ document: PDFDocument) -> String {
+        var lines: [String] = []
+        var inSpecies = false
+        for i in 0 ..< document.pageCount {
+            guard let page = document.page(at: i) else { continue }
+            let squashed = (page.string ?? "").lowercased()
+                .replacingOccurrences(of: "\\s+", with: "", options: .regularExpression)
+            if squashed.contains("top20species") || squashed.contains("allspecies") { inSpecies = true }
+            if inSpecies, (page.string ?? "").range(of: #"(?m)^\s*References\s*$"#, options: .regularExpression) != nil { break }
+            if inSpecies { lines += rows(on: page) }
+        }
+        return lines.isEmpty ? "" : "\n\n\(heading)\n" + lines.joined(separator: "\n")
+    }
+
+    /// "B|<row text>" for each dot on the page that labels a species row.
+    static func rows(on page: PDFPage) -> [String] {
+        let box = page.bounds(for: .mediaBox)
+        guard let bitmap = Bitmap(page: page, box: box) else { return [] }
+        return bitmap.dots().compactMap { dot in
+            // Name and abundance columns (descriptions start ~270 pt right; a
+            // few of their letters may come along, which the website ignores).
+            let rowRect = CGRect(x: dot.center.x + 3, y: dot.center.y - 9, width: 272, height: 18)
+            let text = (page.selection(for: rowRect)?.string ?? "")
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces)
+            // A species row ends in its abundance ("0.926%"; the % can be clipped).
+            guard text.range(of: #"\d\.\s?\d"#, options: .regularExpression) != nil,
+                  // and a name ("UB A1417 sp003531055" has no longer letter run).
+                  text.range(of: #"[A-Za-z]{2}"#, options: .regularExpression) != nil else { return nil }
+            return "\(dot.code)|\(text)"
+        }
+    }
+
+    /// A page rendered to RGBA, sampled in page coordinates.
+    struct Bitmap {
+        static let scale: CGFloat = 2
+        let width: Int, height: Int
+        let pixels: [UInt8]
+        let origin: CGPoint
+
+        init?(page: PDFPage, box: CGRect) {
+            width = Int(box.width * Self.scale)
+            height = Int(box.height * Self.scale)
+            origin = box.origin
+            guard width > 0, height > 0,
+                  let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                      bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            ctx.scaleBy(x: Self.scale, y: Self.scale)
+            page.draw(with: .mediaBox, to: ctx)
+            guard let data = ctx.data else { return nil }
+            pixels = Array(UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self),
+                                               count: width * height * 4))
+        }
+
+        /// RGB at a point in page space (origin bottom-left, like PDFKit bounds).
+        func rgb(_ x: CGFloat, _ y: CGFloat) -> (Int, Int, Int)? {
+            let ix = Int((x - origin.x) * Self.scale)
+            let iy = height - 1 - Int((y - origin.y) * Self.scale)
+            guard ix >= 0, ix < width, iy >= 0, iy < height else { return nil }
+            let o = (iy * width + ix) * 4
+            return (Int(pixels[o]), Int(pixels[o + 1]), Int(pixels[o + 2]))
+        }
+
+        /// Solid round dots (3.5-9 pt across), top to bottom, left to right.
+        func dots() -> [(center: CGPoint, code: String)] {
+            var found: [(center: CGPoint, code: String)] = []
+            let minX = origin.x, minY = origin.y
+            let maxX = origin.x + CGFloat(width) / Self.scale, maxY = origin.y + CGFloat(height) / Self.scale
+            for y in stride(from: maxY - 1, through: minY + 1, by: -1.0) {
+                for x in stride(from: minX + 1, through: maxX - 1, by: 1.0) {
+                    guard let c = rgb(x, y), let code = Self.code(c),
+                          !found.contains(where: { abs($0.center.x - x) < 9 && abs($0.center.y - y) < 9 }),
+                          let center = disk(x, y, c) else { continue }
+                    found.append((center, code))
+                }
+            }
+            return found
+        }
+
+        private func same(_ a: (Int, Int, Int), _ b: (Int, Int, Int)) -> Bool {
+            abs(a.0 - b.0) < 16 && abs(a.1 - b.1) < 16 && abs(a.2 - b.2) < 16
+        }
+
+        /// The centre of a filled disk of colour `c` through (x, y), if the run
+        /// of that colour is dot-sized both ways (not text, not a bar).
+        private func disk(_ x: CGFloat, _ y: CGFloat, _ c: (Int, Int, Int)) -> CGPoint? {
+            let step: CGFloat = 0.5
+            func extent(_ dx: CGFloat, _ dy: CGFloat, from p: CGPoint) -> CGFloat {
+                var d: CGFloat = 0
+                while d < 12, let n = rgb(p.x + dx * (d + step), p.y + dy * (d + step)), same(n, c) { d += step }
+                return d
+            }
+            let start = CGPoint(x: x, y: y)
+            let cx = x + (extent(1, 0, from: start) - extent(-1, 0, from: start)) / 2
+            let column = CGPoint(x: cx, y: y)
+            let cy = y + (extent(0, 1, from: column) - extent(0, -1, from: column)) / 2
+            let center = CGPoint(x: cx, y: cy)
+            let w = extent(-1, 0, from: center) + extent(1, 0, from: center)
+            let h = extent(0, -1, from: center) + extent(0, 1, from: center)
+            guard w >= 3.5, w <= 9, h >= 3.5, h <= 9, abs(w - h) < 1.5 else { return nil }
+            // Round, not square: the corners of the bounding box are background.
+            let r = w / 2 * 0.85
+            for (ox, oy) in [(r, r), (-r, r), (r, -r), (-r, -r)] {
+                if let n = rgb(cx + ox, cy + oy), same(n, c) { return nil }
+            }
+            return center
+        }
+
+        /// B (green), V (orange), U (red), X (light grey); nil for anything else.
+        static func code(_ c: (Int, Int, Int)) -> String? {
+            let (r, g, b) = c
+            let hi = max(r, g, b), lo = min(r, g, b)
+            if g > r + 60 && b > r + 40 { return "B" }
+            if r > 200 && g > 120 && g < 215 && b < 150 && r - b > 80 { return "V" }
+            if r > 180 && g < 150 && b < 150 && r - g > 60 { return "U" }
+            if hi - lo < 16 && hi >= 190 && hi <= 238 { return "X" }
+            return nil
+        }
+    }
 }

@@ -87,7 +87,7 @@ struct ChatSession: Identifiable, Codable {
 // Adding a new data source (Whoop, CGM, Oura, Android) = new block on iOS,
 // zero backend changes required.
 //
-// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_trends" | "labs_dexa" | "labs_medical"
+// type examples: "data_note" | "metrics" | "labs_bloodwork" | "labs_trends" | "labs_dexa" | "labs_medical" | "labs_gut"
 //               | "goals" | "memory" | "timeline" | "cgm" | "whoop"
 
 struct ContextBlock: Encodable {
@@ -183,6 +183,25 @@ struct LabResultsContext: Encodable {
     var bloodworkTrends: [LabMarkerTrend] = []
     /// Recent medical documents (imaging, discharge summaries, prescriptions…), newest first.
     var medicalDocuments: [LabMedicalDocumentContext] = []
+    /// The latest gut-microbiome report.
+    var gutHealth: LabGutHealthContext? = nil
+}
+
+/// A gut-microbiome report's values: summary and measurements by section,
+/// and species by abundance (highest first).
+struct LabGutHealthContext: Encodable {
+    struct Value: Encodable, Equatable {
+        let section: String
+        let name: String
+        let value: Double?
+        let text: String?
+        let unit: String?
+        let status: String?
+    }
+    let date: String?
+    let source: String?
+    let values: [Value]
+    let species: [Value]
 }
 
 /// One marker's last few values across bloodwork reports, newest first.

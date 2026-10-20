@@ -196,6 +196,22 @@ final class LumaLabAccessTests: XCTestCase {
         XCTAssertLessThanOrEqual(content.count, HealthContextBuilder.maxMedicalChars + 40)
     }
 
+    func test_gut_report_reaches_luma_as_its_own_block() throws {
+        let gut = try XCTUnwrap(GutHealthReport(json: [
+            "provider": "Tiny Health", "collection_date": "2026-09-01",
+            "summary": ["microbiome_score": 61],
+            "other_metrics": [["name": "Cellulose", "value": 42, "unit": "rpkm", "section": "Digestive capacity"]],
+            "species": [["name": "Phocaeicola dorei", "abundance_pct": 9.771, "classification": "variable"]],
+        ]))
+        save(.gutHealth(gut), name: "gut.pdf")
+        let content = try XCTUnwrap(block("labs_gut"), "Luma got no gut block")
+        XCTAssertTrue(content.contains("microbiome score 61"), content)
+        XCTAssertTrue(content.contains("Cellulose 42 rpkm"), content)
+        XCTAssertTrue(content.contains("Phocaeicola dorei 9.771% (variable)"), content)
+        XCTAssertNil(block("labs_medical"), "a gut report is not listed as a medical document")
+        XCTAssertNil(block("labs_gut", intent: .sleep), "quick mode drops it for unrelated questions")
+    }
+
     func test_quick_mode_prunes_lab_history_by_intent_and_deep_mode_keeps_it() throws {
         save(.bloodwork(bloodwork(date: "2025-06-01", ldl: 131)), name: "a.pdf")
         save(.bloodwork(bloodwork(date: "2026-05-21", ldl: 98)), name: "b.pdf")

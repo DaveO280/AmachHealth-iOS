@@ -8,6 +8,7 @@
 //   - PDF generation: PDFKit produces parseable output
 
 import XCTest
+import UIKit
 @testable import AmachHealth
 
 // MARK: - Report type detection
@@ -496,5 +497,162 @@ final class FhirJsonSerializationTests: XCTestCase {
         XCTAssertNotNil(json["contained"],   "contained array required by website decoder")
         XCTAssertNotNil(json["result"],      "result references required by website decoder")
         XCTAssertNotNil(json["effectiveDateTime"] as? String, "effectiveDateTime required")
+    }
+}
+
+// MARK: - Gut health (Tiny Health)
+
+@MainActor
+final class GutHealthReportTests: XCTestCase {
+
+    private func report() -> GutHealthReport {
+        GutHealthReport(json: [
+            "provider": "Tiny Health",
+            "collection_date": "2026-09-01",
+            "summary": ["microbiome_score": 61, "gut_type": "Bacteroides"],
+            "metrics": [
+                "beneficial_microbes": ["bifidobacterium": ["value": 7.3, "unit": "%", "status": "great"]],
+                "gut_barrier_inflammation": ["hexa_lps_index": ["value": 97, "unit": "", "status": "needs_support"]],
+            ],
+            "other_metrics": [
+                ["name": "Cellulose", "value": 42, "unit": "rpkm", "status": "okay",
+                 "section": "Digestive capacity - Fiber Digestion Capacity"],
+                ["name": "Beneficial microbes: great", "value": 2, "section": "Beneficial microbes"],
+                ["name": "No section", "value": 1],
+                ["name": "No value", "value": NSNull()],
+            ],
+            "species": [
+                ["name": "Phocaeicola dorei", "abundance_pct": 9.771, "classification": "variable"],
+                ["name": "Escherichia flexneri", "abundance_pct": 7.092, "classification": "unfriendly"],
+                ["name": "Holdemanella sp002299315", "abundance_pct": 4.11, "classification": "unknown"],
+            ],
+            "recommendations": ["Eat more fiber"],
+        ])!
+    }
+
+    func test_every_value_becomes_a_marker_including_other_metrics() {
+        let markers = LabVaultMapping.gutHealthMarkers(report().json, reportId: "r")
+        XCTAssertEqual(markers.count, 2 + 2 + 3 + 3)
+        let cellulose = markers.first { $0.name == "Cellulose" }
+        XCTAssertEqual(cellulose?.panel, "digestive_capacity_fiber_digestion_capacity")
+        XCTAssertEqual(cellulose?.value, 42)
+        XCTAssertEqual(cellulose?.unit, "rpkm")
+        XCTAssertEqual(cellulose?.flag, "okay")
+        // Same snake_case form as the named section, so they group together.
+        XCTAssertEqual(markers.first { $0.name.hasPrefix("Beneficial microbes:") }?.panel, "beneficial_microbes")
+        XCTAssertEqual(markers.first { $0.name == "No section" }?.panel, "other")
+        XCTAssertNil(markers.first { $0.name == "No value" })
+        XCTAssertEqual(markers.filter { $0.panel == "species" }.map(\.flag), ["variable", "unfriendly", "unknown"])
+    }
+
+    func test_display_groups_summary_first_and_species_last() {
+        let markers = LabVaultMapping.gutHealthMarkers(report().json, reportId: "r")
+        let sections = GutHealthMarkerList.sections(markers)
+        XCTAssertEqual(sections.first?.panel, "summary")
+        XCTAssertEqual(sections.last?.panel, "species")
+        XCTAssertEqual(sections.dropLast().last?.panel, "other")
+        XCTAssertEqual(sections.reduce(0) { $0 + $1.rows.count }, markers.count, "every value is shown")
+        XCTAssertEqual(sections.first { $0.panel == "beneficial_microbes" }?.rows.count, 2)
+        XCTAssertEqual(GutHealthMarkerList.title("gut_barrier_inflammation"), "Gut barrier inflammation")
+        XCTAssertEqual(GutHealthMarkerList.classificationCounts(sections.last!.rows),
+                       "1 unfriendly · 1 variable · 1 unknown")
+    }
+
+    func test_saved_report_shows_markers_and_reaches_luma_as_gut_block() {
+        let saved = LabVaultMapping.gutHealth(report(), id: "g1", origin: "device")
+        XCTAssertEqual(saved.report.subtype, "gut-health")
+        let context = LabContextService.gutHealth(saved)
+        XCTAssertEqual(context.species.map(\.name).first, "Phocaeicola dorei")
+        XCTAssertEqual(context.values.count + context.species.count, saved.markers.count)
+        let block = HealthContextBuilder.formatGutHealth(context) ?? ""
+        XCTAssertTrue(block.hasPrefix("Gut microbiome report (2026-09-01) — Tiny Health:"), block)
+        XCTAssertTrue(block.contains("Needs attention: hexa lps index 97 (needs support)"), block)
+        XCTAssertTrue(block.contains("Species: 3 detected"), block)
+        XCTAssertTrue(block.contains("Phocaeicola dorei 9.771% (variable)"), block)
+        XCTAssertTrue(block.contains("Cellulose 42 rpkm (okay)"), block)
+    }
+
+    func test_luma_gut_block_is_capped() {
+        let many = (0..<600).map { i in
+            LabGutHealthContext.Value(section: "section_\(i % 12)", name: "Measured value number \(i)",
+                                      value: Double(i), text: nil, unit: "rpkm", status: "okay")
+        }
+        let species = (0..<400).map { i in
+            LabGutHealthContext.Value(section: "species", name: "Genus species\(i)", value: 1 / Double(i + 1),
+                                      text: nil, unit: "%", status: "unknown")
+        }
+        let block = HealthContextBuilder.formatGutHealth(
+            LabGutHealthContext(date: nil, source: nil, values: many, species: species)) ?? ""
+        XCTAssertLessThanOrEqual(block.count, HealthContextBuilder.maxGutChars + 40)
+        XCTAssertTrue(block.contains("Species: 400 detected"), "species summary comes before the sections")
+        XCTAssertTrue(block.contains("more not shown"))
+    }
+
+    // MARK: Classification dots
+
+    func test_dot_colours_map_to_classifications() {
+        XCTAssertEqual(SpeciesDots.Bitmap.code((0, 153, 133)), "B")
+        XCTAssertEqual(SpeciesDots.Bitmap.code((240, 160, 60)), "V")
+        XCTAssertEqual(SpeciesDots.Bitmap.code((220, 85, 85)), "U")
+        XCTAssertEqual(SpeciesDots.Bitmap.code((214, 216, 207)), "X")
+        XCTAssertNil(SpeciesDots.Bitmap.code((255, 255, 255)))
+        XCTAssertNil(SpeciesDots.Bitmap.code((60, 60, 60)), "text is not a dot")
+    }
+
+    /// A species page drawn like Tiny Health's: a coloured dot, the name,
+    /// the abundance. The key lists each row with its dot.
+    func test_extracted_text_carries_a_key_of_the_species_dots() throws {
+        let rows: [(UIColor, String, String)] = [
+            (UIColor(red: 0, green: 0.6, blue: 0.52, alpha: 1), "Faecalibacterium prausnitzii_G", "1.125%"),
+            (UIColor(red: 0.94, green: 0.63, blue: 0.24, alpha: 1), "Alistipes putredinis", "1.107%"),
+            (UIColor(red: 0.86, green: 0.33, blue: 0.33, alpha: 1), "Escherichia coli_D", "0.627%"),
+            (UIColor(red: 0.84, green: 0.85, blue: 0.81, alpha: 1), "KLE1615 sp900066985", "1.006%"),
+        ]
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792))
+        let pdf = renderer.pdfData { ctx in
+            ctx.beginPage()
+            let font: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 11)]
+            "Tiny Health gut report".draw(at: CGPoint(x: 30, y: 30), withAttributes: font)
+            "All species".draw(at: CGPoint(x: 30, y: 60), withAttributes: font)
+            for (i, row) in rows.enumerated() {
+                let y = 100 + CGFloat(i) * 22
+                row.0.setFill()
+                UIBezierPath(ovalIn: CGRect(x: 30, y: y + 3, width: 6, height: 6)).fill()
+                row.1.draw(at: CGPoint(x: 42, y: y), withAttributes: font)
+                row.2.draw(at: CGPoint(x: 250, y: y), withAttributes: font)
+            }
+        }
+        let text = PDFReportParser.extractText(from: pdf)
+        let key = try XCTUnwrap(text.components(separatedBy: "\n\(SpeciesDots.heading)\n").last)
+        let lines = key.split(separator: "\n").map(String.init)
+        XCTAssertEqual(lines.map { String($0.prefix(1)) }, ["B", "V", "U", "X"], key)
+        XCTAssertTrue(lines[0].replacingOccurrences(of: " ", with: "").contains("Faecalibacteriumprausnitzii_G"), key)
+        XCTAssertTrue(lines[0].contains("1.125"), key)
+    }
+
+    /// Opt-in: TEST_RUNNER_AMACH_DOTS_PDF=<report.pdf> and
+    /// TEST_RUNNER_AMACH_DOTS_OUT=<file> write the phone's extracted text
+    /// (with the dot key) for a real report. Prints only counts.
+    func test_real_report_dot_key() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let path = env["AMACH_DOTS_PDF"], let out = env["AMACH_DOTS_OUT"] else {
+            throw XCTSkip("Set AMACH_DOTS_PDF and AMACH_DOTS_OUT")
+        }
+        let text = PDFReportParser.extractText(from: try Data(contentsOf: URL(fileURLWithPath: path)))
+        try text.write(toFile: out, atomically: true, encoding: .utf8)
+        let key = text.components(separatedBy: "\n\(SpeciesDots.heading)\n").dropFirst().first ?? ""
+        let codes = Dictionary(grouping: key.split(separator: "\n"), by: { $0.prefix(1) }).mapValues(\.count)
+        print("DOTS_KEY rows=\(key.split(separator: "\n").count) codes=\(codes.sorted { $0.key < $1.key })")
+        XCTAssertFalse(key.isEmpty)
+    }
+
+    func test_microbiome_detection_survives_split_words() {
+        XCTAssertTrue(SpeciesDots.isMicrobiomeReport("Tiny Healt\nh Lab Director\nTop 2\n0 species"))
+        XCTAssertFalse(SpeciesDots.isMicrobiomeReport("Quest Diagnostics\nLipid panel"))
+    }
+
+    func test_other_reports_get_no_dot_key() {
+        let text = PDFReportParser.extractText(from: MockPDFReports.mockBloodworkPDF())
+        XCTAssertFalse(text.contains(SpeciesDots.heading))
     }
 }

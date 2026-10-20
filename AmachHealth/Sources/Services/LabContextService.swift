@@ -66,9 +66,26 @@ final class LabContextService: ObservableObject {
         var dx = dexa.flatMap { shared.convertDexaReport($0.asDexa) }
         if let dexa { dx?.regions = dexaRegions(dexa) }
         let trends = bloodworkTrends(bloodworkReports)
-        let medical = medicalDocuments((try? vault.labReports(kind: .medical)) ?? [])
-        guard bw != nil || dx != nil || !trends.isEmpty || !medical.isEmpty else { return nil }
-        return LabResultsContext(bloodwork: bw, dexa: dx, bloodworkTrends: trends, medicalDocuments: medical)
+        let medicalReports = (try? vault.labReports(kind: .medical)) ?? []
+        let isGut = { (r: LabReportWithMarkers) in r.report.subtype == "gut-health" }
+        let medical = medicalDocuments(medicalReports.filter { !isGut($0) })
+        let gut = medicalReports.first(where: isGut).map(gutHealth)
+        guard bw != nil || dx != nil || !trends.isEmpty || !medical.isEmpty || gut != nil else { return nil }
+        return LabResultsContext(bloodwork: bw, dexa: dx, bloodworkTrends: trends,
+                                 medicalDocuments: medical, gutHealth: gut)
+    }
+
+    /// A gut-health report's markers, split into values and species.
+    static func gutHealth(_ report: LabReportWithMarkers) -> LabGutHealthContext {
+        let all = report.markers.map { m in
+            LabGutHealthContext.Value(section: m.panel ?? "other", name: m.name, value: m.value,
+                                      text: m.valueText, unit: m.unit, status: m.flag)
+        }
+        return LabGutHealthContext(
+            date: report.report.reportDate, source: report.report.source ?? report.report.laboratory,
+            values: all.filter { $0.section != "species" },
+            species: all.filter { $0.section == "species" }.sorted { ($0.value ?? 0) > ($1.value ?? 0) }
+        )
     }
 
     /// Markers with numeric values in two or more reports (matched by

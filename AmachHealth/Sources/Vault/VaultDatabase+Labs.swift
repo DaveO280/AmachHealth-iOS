@@ -281,12 +281,27 @@ enum LabVaultMapping {
             }
         }
         walk(root, path: [])
+        // Values with no named field; the section they appear under is the
+        // panel, in the same snake_case form as the named sections.
+        for entry in root["other_metrics"] as? [[String: Any]] ?? [] {
+            guard let name = entry["name"] as? String, let v = number(entry["value"]) else { continue }
+            let section = (entry["section"] as? String).map(gutPanelKey) ?? ""
+            add(name, value: v, unit: entry["unit"] as? String, flag: entry["status"] as? String,
+                panel: section.isEmpty ? "other" : section)
+        }
         for entry in root["species"] as? [[String: Any]] ?? [] {
             guard let name = entry["name"] as? String else { continue }
             add(name, value: number(entry["abundance_pct"]), unit: "%",
                 flag: entry["classification"] as? String, panel: "species")
         }
         return markers
+    }
+
+    /// "Gut barrier & inflammation" → "gut_barrier_inflammation".
+    static func gutPanelKey(_ section: String) -> String {
+        section.lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
     }
 
     static func gutHealth(
