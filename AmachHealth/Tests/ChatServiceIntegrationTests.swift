@@ -100,6 +100,34 @@ final class ChatServiceSendTests: XCTestCase {
         XCTAssertFalse(sut.currentSession.messages.contains { $0.content == ChatService.enclaveBusyReply })
     }
 
+    func test_out_of_credit_replies_with_refresh_time_and_retry_replaces_it() async throws {
+        let reset = ISO8601DateFormatter.withFractionalSeconds.date(from: "2026-10-21T00:00:00.000Z")
+        mockAPI.config.chatError = APIError.aiCreditExhausted(resetsAt: reset)
+        await sut.sendStreaming("What does my gut test say?")
+
+        XCTAssertNil(sut.error)
+        XCTAssertEqual(sut.lastFailedMessage, "What does my gut test say?")
+        let reply = try XCTUnwrap(sut.currentSession.messages.last?.content)
+        XCTAssertTrue(reply.hasPrefix("My private AI has used up today's credit"), reply)
+        XCTAssertTrue(reply.contains("It refreshes daily, next at"), reply)
+        XCTAssertTrue(ChatService.isPauseReply(reply))
+
+        mockAPI.config.chatError = nil
+        sut.retryLastMessage()
+        XCTAssertFalse(sut.currentSession.messages.contains { ChatService.isPauseReply($0.content) })
+    }
+
+    func test_credit_error_decodes_from_the_server_body() throws {
+        let json = #"{"error":"x","code":"ai_credit_exhausted","resetsAt":"2026-10-21T00:00:00.000Z"}"#
+        let body = try JSONDecoder().decode(ErrorResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(body.code, APIError.aiCreditExhaustedCode)
+        let reset = try XCTUnwrap(body.resetsAt.flatMap { ISO8601DateFormatter.withFractionalSeconds.date(from: $0) })
+        XCTAssertEqual(reset.timeIntervalSince1970, 1_792_540_800)
+        XCTAssertEqual(APIError.creditExhaustedMessage(resetsAt: nil),
+                       "Amach's private AI has used today's credit. It refreshes daily, at midnight UTC.")
+        XCTAssertTrue(PDFUploadService.describe(APIError.aiCreditExhausted(resetsAt: nil)).hasSuffix("Nothing was saved."))
+    }
+
     func test_feedback_is_disabled_and_never_calls_api() async throws {
         mockAPI.config.chatResponse = .fixture(content: "Here you go")
         await sut.send("Hi")
