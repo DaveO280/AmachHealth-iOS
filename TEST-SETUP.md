@@ -50,6 +50,28 @@ Tests: `/api/profile/read`, `/api/storj` (list), `/api/health/summary`, `/api/ai
 
 Runs `xcodebuild`, executes the full XCTest suite on a simulator, boots the simulator, installs + launches the app, captures screenshots. Confirms zero build errors and zero test failures.
 
+### Optional — Luma Answer Evaluation (~3-10 min, costs Venice credit)
+**Scripts:** `Tests/Scripts/luma-eval.sh` → `luma-eval.py`, checks in `luma-eval-checks.json`
+
+Not part of the pre-session check. Run it when the prompt, the context builders (`HealthContextBuilder`, `LabContextService`, `LumaTemporalContext`) or the models change, or now and then to see how Luma is doing.
+
+```bash
+./Tests/Scripts/luma-eval.sh --target preview               # Vercel preview of Amach-Website's checked-out branch
+./Tests/Scripts/luma-eval.sh --target prod --repeat 3        # answers vary, so repeat
+./Tests/Scripts/luma-eval.sh --target preview --branch my-branch --only vitd_2024,gut_age
+./Tests/Scripts/luma-eval.sh --skip-build --requests Tests/Logs/luma-eval/<stamp>/requests   # reuse requests
+```
+
+1. Runs `LumaTemporalContextTests/test_write_luma_eval_requests` on a simulator (boots one if none is). It fills a vault with a **synthetic** profile (two years of metrics, 2024/2025 bloodwork and DEXA, a May gut test, a recent HRV/sleep dip, earlier-conversation memory) and writes the exact `/api/ai/chat` request the app would send for 10 questions.
+2. Sends them 4 at a time and records time, status, `x-amach-model`, usage and answer.
+3. Scores each answer with regexes (`must_contain` / `must_not_contain`), flags answers over 60 s and fallbacks to `e2ee-kimi-k2-6`.
+
+Output in `Tests/Logs/luma-eval/<stamp>/` (gitignored): `report.md` (summary table, failures, every answer with a manual-review line) and `results.json`. Exit code 1 if any answer fails a check.
+
+Regex checks are a first pass: they catch known slips (wrong units, wrong dates, wrong causality) but not every wrong answer, so read the answers in the manual-review section. When you find a new slip, add a check for it. Dates in checks can use `{months_since:YYYY-MM-DD}` and `{month_ago:N}` because the fixture is built relative to today.
+
+Previews need the Vercel protection bypass: `AMACH_VERCEL_BYPASS` from the environment or `Amach-Website/.env.local`. It is only sent as a header — never printed or written to the output.
+
 ---
 
 ## Test Account
