@@ -132,26 +132,35 @@ enum ChatIntentClassifier {
         "visceral", "android", "gynoid", "scan", "inbody"
     ]
 
-    /// Classify user message into a single intent. &lt;1ms, no API call.
-    static func classify(_ message: String) -> ChatIntent {
-        let lower = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !lower.isEmpty else { return .general }
+    /// Intents in priority order, used to break ties.
+    private static let ordered: [(ChatIntent, [String])] = [
+        (.sleep, sleepKeywords), (.labs, labsKeywords), (.medications, medicationsKeywords),
+        (.bodyComp, bodyCompKeywords), (.activity, activityKeywords), (.recovery, recoveryKeywords),
+        (.vitals, vitalsKeywords)
+    ]
 
-        let words = Set(lower.split(separator: " ").map(String.init))
-        func hasAny(_ keywords: [String]) -> Bool {
-            keywords.contains { kw in
-                lower.contains(kw) || words.contains(kw)
-            }
+    /// Whole-word matches, allowing plurals and -ed/-ing ("workouts", "slept"
+    /// is its own keyword), so "rest" doesn't match "interest" or "rem" "remember".
+    private static func hits(_ keywords: [String], in text: String) -> Int {
+        keywords.reduce(0) { count, kw in
+            let pattern = "\\b" + NSRegularExpression.escapedPattern(for: kw) + "(?:s|es|ed|ing)?\\b"
+            return count + (text.range(of: pattern, options: .regularExpression) != nil ? 1 : 0)
         }
+    }
 
-        if hasAny(sleepKeywords) { return .sleep }
-        if hasAny(labsKeywords) { return .labs }
-        if hasAny(medicationsKeywords) { return .medications }
-        if hasAny(bodyCompKeywords) { return .bodyComp }
-        if hasAny(activityKeywords) { return .activity }
-        if hasAny(recoveryKeywords) { return .recovery }
-        if hasAny(vitalsKeywords) { return .vitals }
+    /// Every intent the message touches, strongest first. `.general` when none.
+    static func classifyAll(_ message: String) -> [ChatIntent] {
+        let lower = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !lower.isEmpty else { return [.general] }
+        let scored = ordered.enumerated()
+            .map { (index: $0.offset, intent: $0.element.0, hits: hits($0.element.1, in: lower)) }
+            .filter { $0.hits > 0 }
+            .sorted { $0.hits != $1.hits ? $0.hits > $1.hits : $0.index < $1.index }
+        return scored.isEmpty ? [.general] : scored.map(\.intent)
+    }
 
-        return .general
+    /// The strongest intent in the message. &lt;1ms, no API call.
+    static func classify(_ message: String) -> ChatIntent {
+        classifyAll(message)[0]
     }
 }

@@ -565,7 +565,8 @@ final class GutHealthReportTests: XCTestCase {
         XCTAssertEqual(context.species.map(\.name).first, "Phocaeicola dorei")
         XCTAssertEqual(context.values.count + context.species.count, saved.markers.count)
         let block = HealthContextBuilder.formatGutHealth(context) ?? ""
-        XCTAssertTrue(block.hasPrefix("Gut microbiome report (2026-09-01) — Tiny Health:"), block)
+        XCTAssertTrue(block.hasPrefix("Gut microbiome report (collected 2026-09-01, "), block)
+        XCTAssertTrue(block.contains(" ago) — Tiny Health:"), block)
         XCTAssertTrue(block.contains("Needs attention: hexa lps index 97 (needs support)"), block)
         XCTAssertTrue(block.contains("Species: 3 detected"), block)
         XCTAssertTrue(block.contains("Phocaeicola dorei 9.771% (variable)"), block)

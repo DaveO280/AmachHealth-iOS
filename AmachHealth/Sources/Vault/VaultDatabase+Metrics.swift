@@ -58,6 +58,42 @@ extension VaultDatabase {
         }
     }
 
+    struct PeriodAverage: Equatable {
+        /// `YYYY-MM` for months, `YYYY` for years.
+        let period: String
+        let value: Double
+        /// Days with a value in the period.
+        let days: Int
+    }
+
+    enum AverageGrouping {
+        case month, year
+        var prefixLength: Int { self == .month ? 7 : 4 }
+    }
+
+    /// Average of a daily value per month or year, over days where it's positive.
+    /// `column` is the SQL value expression; nil uses the metric's primary value
+    /// (the daily total for sum metrics and sleep, the mean otherwise).
+    func periodAverages(
+        metric: String, column: String? = nil, grouping: AverageGrouping,
+        from startDay: String, through endDay: String
+    ) throws -> [PeriodAverage] {
+        let expr = column ?? (metric == AmachMetric.sleepId || AmachMetric.byId[metric]?.aggregation == .sum
+                              ? "total" : "COALESCE(avg, total)")
+        let sql = """
+            SELECT substr(day, 1, \(grouping.prefixLength)) AS p, AVG(\(expr)) AS v, COUNT(*) AS n
+            FROM daily_metrics
+            WHERE metric = ? AND day >= ? AND day <= ? AND \(expr) > 0
+            GROUP BY p ORDER BY p
+            """
+        return try dbQueue.read { db in
+            try Row.fetchAll(db, sql: sql, arguments: [metric, startDay, endDay]).compactMap { row in
+                guard let p: String = row["p"], let v: Double = row["v"] else { return nil }
+                return PeriodAverage(period: p, value: v, days: row["n"] ?? 0)
+            }
+        }
+    }
+
     func dailyMetricCount() throws -> Int {
         try dbQueue.read { db in try DailyMetricRow.fetchCount(db) }
     }

@@ -164,7 +164,9 @@ struct MetricContext: Encodable {
     let max: Double?            // 30-day maximum
     let latest: Double?         // previous complete day's value (never today's partial)
     let sevenDayAvg: Double?    // 7-day rolling average (completed days only)
-    let trend: String?          // "improving" | "stable" | "declining"
+    let trend: String?          // "rising" | "stable" | "falling", with the % change
+    /// The day `latest` is from; not always yesterday (watch not worn, no sync).
+    var latestDate: Date? = nil
 }
 
 struct AIChatDateRange: Encodable {
@@ -185,6 +187,25 @@ struct LabResultsContext: Encodable {
     var medicalDocuments: [LabMedicalDocumentContext] = []
     /// The latest gut-microbiome report.
     var gutHealth: LabGutHealthContext? = nil
+    /// Every report in the vault, newest first, so Luma knows what exists and when.
+    var index: [LabIndexEntry] = []
+    /// Bloodwork reports before the latest, newest first.
+    var olderBloodwork: [LabBloodworkContext] = []
+    /// DEXA scans before the latest, newest first.
+    var olderDexa: [LabDexaContext] = []
+    /// Gut reports before the latest, newest first.
+    var olderGutHealth: [LabGutHealthContext] = []
+}
+
+/// One report in the vault: what it is and when it's from.
+struct LabIndexEntry: Encodable, Equatable {
+    /// "Bloodwork", "DEXA scan", "Gut microbiome", or the medical document's title.
+    let kind: String
+    let date: String?
+    /// When it was added to the app; used when the report carries no date.
+    let uploadedAt: Date?
+    let source: String?
+    let valueCount: Int
 }
 
 /// A gut-microbiome report's values: summary and measurements by section,
@@ -202,6 +223,7 @@ struct LabGutHealthContext: Encodable {
     let source: String?
     let values: [Value]
     let species: [Value]
+    var uploadedAt: Date? = nil
 }
 
 /// One marker's last few values across bloodwork reports, newest first.
@@ -223,6 +245,7 @@ struct LabMedicalDocumentContext: Encodable {
     let findings: [String]
     let diagnoses: [String]
     let medications: [String]
+    var uploadedAt: Date? = nil
 }
 
 /// A DEXA body region's values (e.g. left arm, trunk).
@@ -242,6 +265,7 @@ struct LabBloodworkContext: Encodable {
     /// Individual biomarkers — name, value, unit, reference range, flag (H/L/etc.)
     let metrics: [LabMetricEntry]
     let notes: [String]?
+    var uploadedAt: Date? = nil
 }
 
 struct LabMetricEntry: Encodable {
@@ -264,6 +288,7 @@ struct LabDexaContext: Encodable {
     let boneDensityZScore: Double?
     let notes: [String]?
     var regions: [LabDexaRegionContext] = []
+    var uploadedAt: Date? = nil
 }
 
 struct AIChatMemoryCapsule: Encodable {
@@ -427,7 +452,8 @@ final class ConversationMemoryStore: ObservableObject {
             let sorted = filteredFacts.filter { $0.category == category }
                 .sorted { effectiveDate($0) < effectiveDate($1) }
             let sliced = limit != nil ? Array(sorted.suffix(limit!)) : sorted
-            return sliced.map { truncated($0.value, maxLen: 120) }
+            // Month noted, so Luma can tell a fact from last week from one a year old.
+            return sliced.map { "\(truncated($0.value, maxLen: 120)) (noted \(Self.monthYear(effectiveDate($0))))" }
         }
 
         let activeGoals = latestValues(for: .goal, limit: 6)
@@ -438,7 +464,7 @@ final class ConversationMemoryStore: ObservableObject {
         let recentSummaries = summaries
             .sorted { $0.date < $1.date }
             .suffix(3)
-            .map { truncated($0.summary, maxLen: 150) }
+            .map { "\(LumaDate.day($0.date)) (\(LumaDate.age(of: $0.date))): \(truncated($0.summary, maxLen: 150))" }
 
         if activeGoals.isEmpty,
            activeConcerns.isEmpty,
@@ -455,6 +481,13 @@ final class ConversationMemoryStore: ObservableObject {
             conditions: conditions,
             recentSessionNotes: recentSummaries
         )
+    }
+
+    private static func monthYear(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "MMM yyyy"
+        return f.string(from: date)
     }
 
     // MARK: - Dedup Helpers
