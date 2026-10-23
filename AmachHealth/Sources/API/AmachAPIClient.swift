@@ -12,6 +12,9 @@ final class AmachAPIClient {
     static let shared = AmachAPIClient()
 
     private let baseURL: URL
+    /// The backend's base URL (for routes called outside this client, such
+    /// as the E2EE relay).
+    var apiBaseURL: URL { baseURL }
     private let session: URLSession
     /// Report parsing runs on private enclave models and a long lab report
     /// takes about three minutes with no bytes sent until it's done, so it

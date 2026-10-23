@@ -9,6 +9,11 @@
 //      the same gateway share a key) and sends all attempts in one request,
 //      so the relay can fall back without ever holding plaintext,
 //   4. decrypts the reply stream with a fresh per-request client key.
+//
+// The relay needs a wallet session (`authorizer`, Bearer token). A 401 gets
+// one fresh token and one retry. When an enclave says it couldn't decrypt
+// (its gateway key rotated), the relay names those models; the client drops
+// their cached keys, attests again and retries once.
 
 import Foundation
 
@@ -33,16 +38,33 @@ public enum VeniceE2EEEvent: Sendable, Equatable {
 
 public enum VeniceE2EEError: Error, Equatable {
     case noAttestableModel([String])
-    case relay(status: Int, code: String?)
+    /// The relay refused or failed the request. `resetsAt` (ISO 8601) comes
+    /// with `ai_credit_exhausted`.
+    case relay(status: Int, code: String?, resetsAt: String? = nil)
     case decryption
     /// A reply chunk arrived unencrypted; the request wasn't served by E2EE.
     case plaintextReply
     case malformedResponse
 }
 
+/// Attests one model's enclave key (VeniceAttestationVerifier in the app).
+public protocol VeniceModelAttesting: Sendable {
+    func attest(model: String, session: URLSession) async throws -> AttestedModelKey
+}
+
+extension VeniceAttestationVerifier: VeniceModelAttesting {}
+
+/// Supplies the relay's bearer token (the wallet's backup session token).
+public protocol VeniceRelayAuthorizing: Sendable {
+    /// A token for the relay. `refresh` is true after the relay answered 401,
+    /// so a cached token must not be reused.
+    func relayToken(refresh: Bool) async throws -> String
+}
+
 public actor VeniceE2EEClient {
     public let relayURL: URL
-    private let verifier: VeniceAttestationVerifier
+    private let verifier: any VeniceModelAttesting
+    private let authorizer: (any VeniceRelayAuthorizing)?
     private let session: URLSession
     private let attestationTTL: TimeInterval
     private var cache: [String: AttestedModelKey] = [:]
@@ -55,14 +77,19 @@ public actor VeniceE2EEClient {
         public var skipped: [String: String] = [:]
         public var encryptedChunks = 0
         public var plaintextChunks = 0
+        /// Models re-attested because their enclave couldn't decrypt.
+        public var reattested: [String] = []
+        public var authRefreshed = false
     }
 
     public init(relayURL: URL,
-                verifier: VeniceAttestationVerifier = VeniceAttestationVerifier(),
+                verifier: any VeniceModelAttesting = VeniceAttestationVerifier(),
+                authorizer: (any VeniceRelayAuthorizing)? = nil,
                 session: URLSession = .shared,
                 attestationTTL: TimeInterval = 600) {
         self.relayURL = relayURL
         self.verifier = verifier
+        self.authorizer = authorizer
         self.session = session
         self.attestationTTL = attestationTTL
     }
@@ -100,6 +127,47 @@ public actor VeniceE2EEClient {
                      temperature: Double? = nil) async throws -> AsyncThrowingStream<VeniceE2EEEvent, Error> {
         lastStats = Stats()
         let chain = try await modelChain(tier: tier)
+        var refreshAuth = false
+        var reattested = false
+        while true {
+            do {
+                return try await sendOnce(tier: tier, chain: chain, messages: messages, stream: stream,
+                                          maxTokens: maxTokens, temperature: temperature, refreshAuth: refreshAuth)
+            } catch let failure as RelayFailure {
+                if failure.status == 401, authorizer != nil, !refreshAuth {
+                    refreshAuth = true
+                    lastStats.authRefreshed = true
+                    continue
+                }
+                if !failure.staleKeyModels.isEmpty, !reattested {
+                    // The gateway rotated its key: attest again, retry once.
+                    reattested = true
+                    failure.staleKeyModels.forEach { cache[$0] = nil }
+                    lastStats.reattested = failure.staleKeyModels
+                    continue
+                }
+                throw VeniceE2EEError.relay(status: failure.status, code: failure.code, resetsAt: failure.resetsAt)
+            }
+        }
+    }
+
+    /// A non-200 relay answer, before it becomes a public VeniceE2EEError.
+    private struct RelayFailure: Error {
+        let status: Int
+        let code: String?
+        let resetsAt: String?
+        let staleKeyModels: [String]
+    }
+
+    private func sendOnce(tier: String,
+                          chain: [String],
+                          messages: [VeniceE2EEMessage],
+                          stream: Bool,
+                          maxTokens: Int?,
+                          temperature: Double?,
+                          refreshAuth: Bool) async throws -> AsyncThrowingStream<VeniceE2EEEvent, Error> {
+        lastStats.attempts = []
+        lastStats.skipped = [:]
 
         var attempts: [[String: Any]] = []
         var encryptedByKey: [Data: [[String: String]]] = [:]
@@ -133,6 +201,10 @@ public actor VeniceE2EEClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(stream ? "text/event-stream" : "application/json", forHTTPHeaderField: "Accept")
+        if let authorizer {
+            let token = try await authorizer.relayToken(refresh: refreshAuth)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.timeoutInterval = 300
 
@@ -141,8 +213,16 @@ public actor VeniceE2EEClient {
         guard http.statusCode == 200 else {
             var raw = Data()
             for try await byte in bytes { raw.append(byte); if raw.count > 4096 { break } }
-            let code = (try? JSONSerialization.jsonObject(with: raw) as? [String: Any])?["code"] as? String
-            throw VeniceE2EEError.relay(status: http.statusCode, code: code)
+            let json = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any]
+            throw RelayFailure(status: http.statusCode,
+                               code: json?["code"] as? String,
+                               resetsAt: json?["resetsAt"] as? String,
+                               staleKeyModels: (json?["staleKeyModels"] as? [String]) ?? [])
+        }
+        // Served by a fallback after an enclave couldn't decrypt: attest that
+        // model again next time.
+        if let stale = http.value(forHTTPHeaderField: "x-amach-e2ee-stale-key") {
+            for model in stale.split(separator: ",") { cache[model.trimmingCharacters(in: .whitespaces)] = nil }
         }
         let served = VeniceE2EEEvent.served(model: http.value(forHTTPHeaderField: "x-amach-model") ?? "?",
                                             teeProvider: http.value(forHTTPHeaderField: "x-amach-tee-provider"))
