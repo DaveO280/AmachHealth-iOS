@@ -317,8 +317,14 @@ POST /api/ai/e2ee?tier=chat
 
 It refuses any message that isn't ≥186 hex chars, for every role. A client
 bug therefore fails closed instead of leaking plaintext to the server.
-Before shipping it needs the same auth / rate limiting the other AI routes
-get (currently none on `/api/ai/chat` either).
+The route is **off (404) unless `AMACH_E2EE_RELAY_ENABLED=true`**. Because
+the relay can't see content, an open one would let anyone run arbitrary
+prompts on Amach's Venice key without a trace. POST is limited to 30
+requests per minute per client IP. The limit lives in memory, so it's per
+Vercel instance: a brake on one client, not a global quota. Bodies are
+capped at 2 MB (413). Before enabling it in production, it needs
+auth-bound limits, for example the backup signed-challenge session.
+`/api/ai/chat` has no auth today either.
 
 ## The spike
 
@@ -341,7 +347,7 @@ Run it:
 
 ```bash
 # website worktree, with VENICE_API_KEY in the environment
-npx next dev -p 3123
+AMACH_E2EE_RELAY_ENABLED=true npx next dev -p 3123
 # iOS worktree
 cd Packages/VeniceE2EE && swift test && swift run venice-e2ee-spike http://127.0.0.1:3123/api/ai/e2ee
 ```
