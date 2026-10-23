@@ -1,0 +1,102 @@
+{
+  "_about": "Regex checks for luma-eval.py. Each key is a question id from test_write_luma_eval_requests. Patterns are Python regexes, matched case-insensitively against Luma's answer. 'must_contain': every pattern must match. 'must_not_contain': no pattern may match. 'note' says what a failure means. These are a first pass; read the answers too. Placeholders, filled from today's date when the runner starts (the fixture is built relative to today): {months_since:YYYY-MM-DD} = whole months since that date; {month_ago:N} = the month name N months back (the earlier-conversation memory is dated 2 months back).",
+  "_global": {
+    "max_seconds": 60,
+    "expected_model": "e2ee-glm-5-3-p",
+    "fallback_models": [
+      "e2ee-kimi-k2-6"
+    ]
+  },
+  "gut_age": {
+    "note": "Gut test was collected 2026-05-14; Luma must give its age in months and the date, not weeks.",
+    "must_contain": [
+      "\\b{months_since:2026-05-14}\\s*months?\\b",
+      "May\\s+14|14\\s+May|2026-05-14"
+    ],
+    "must_not_contain": [
+      "\\b\\d+\\s*weeks?\\s+(old|ago)\\b"
+    ]
+  },
+  "vitd_2024": {
+    "note": "2024 vitamin D was 26 ng/mL; Nov 2025 was 34 ng/mL. A supplement conversation from {month_ago:2} (after the Nov 2025 test) must not be credited for that result.",
+    "must_contain": [
+      "\\b26\\s*ng/mL",
+      "\\b34\\s*ng/mL"
+    ],
+    "must_not_contain": [
+      "ng/dL",
+      "(since|after|following)\\s+(our|your|the|that)?\\s*({month_ago:2})\\b[^.]{0,120}\\b(rose|risen|increased|improved|up|climbed|34)",
+      "(supplement\\w*|conversation|discuss\\w*)[^.]{0,80}\\b(in|since|from)\\s+{month_ago:2}\\b[^.]{0,80}\\b(rose|raised|increased|improved|brought|got)\\b",
+      "{month_ago:2}[^.]{0,80}\\b(is|was|has been|are)\\s+(working|paying off|helping)|(working|paid off|paying off|helped|did the trick)[^.]{0,80}\\b{month_ago:2}\\b"
+    ]
+  },
+  "no_data": {
+    "note": "Data starts September 2024; Luma must say there is no March 2023 data rather than invent it.",
+    "must_contain": [
+      "(no|don'?t have|do not have|doesn'?t (include|go back)|isn'?t|not available|before)[^.]{0,120}(March\\s+2023|2023|that (period|time)|that far)|(start|begin)s?[^.]{0,40}(September|Sept?)\\s+2024"
+    ],
+    "must_not_contain": []
+  },
+  "gut_sleep": {
+    "note": "The gut test is from May; sleep dropped in the last two weeks. Luma must not say the May gut result causes the recent sleep drop.",
+    "must_contain": [],
+    "must_not_contain": [
+      "(gut|microbiome|butyrate|akkermansia)[^.]{0,80}\\b(is|are)\\s+(causing|driving|behind|responsible for)\\b[^.]{0,60}sleep",
+      "(gut|microbiome)[^.]{0,40}\\b(explains?|caused?)\\b[^.]{0,60}(recent|lately|last (two|couple|few)|poor|worse)[^.]{0,20}sleep"
+    ]
+  },
+  "sleep_march": {
+    "note": "Sleep was strong in March 2026 and dropped only in the last ~14 days (October). Luma must not place the change in April.",
+    "must_contain": [
+      "March"
+    ],
+    "must_not_contain": [
+      "since\\s+April",
+      "(in|from|starting|after)\\s+April\\b[^.]{0,80}(drop|declin|fell|decreas|worse)",
+      "(drop|declin|fell|decreas|worse)\\w*[^.]{0,60}\\b(in|since|from)\\s+April\\b"
+    ]
+  },
+  "hrv_drop": {
+    "note": "HRV ~55 baseline dipping to ~42 over the last 14 days.",
+    "must_contain": [
+      "\\b4[0-4]\\b",
+      "\\b5[3-7]\\b|baseline"
+    ],
+    "must_not_contain": []
+  },
+  "body_now": {
+    "note": "Latest DEXA is Nov 2025 (18.2% fat); Luma should name its date or age.",
+    "must_contain": [
+      "18\\.2",
+      "November\\s+2025|Nov\\s+2025|2025-11|{months_since:2025-11-10}\\s+months|\\bmonths?\\s+(old|ago)"
+    ],
+    "must_not_contain": [
+      "\\b21\\.5\\s*%[^.]{0,40}(now|current|currently|right now)"
+    ]
+  },
+  "ldl_trend": {
+    "note": "LDL 135 (Jun 2024) -> 118 (Nov 2025).",
+    "must_contain": [
+      "\\b135\\b",
+      "\\b118\\b"
+    ],
+    "must_not_contain": []
+  },
+  "hrv_years": {
+    "note": "Compares this year to last year; just check it gives numbers.",
+    "must_contain": [
+      "\\b\\d{2}\\s*ms\\b|\\bms\\b"
+    ],
+    "must_not_contain": []
+  },
+  "summary_deep": {
+    "note": "Deep summary; should mention the recent HRV dip and the labs' age.",
+    "must_contain": [
+      "HRV",
+      "(2025|months? (old|ago))"
+    ],
+    "must_not_contain": [
+      "ng/dL[^.]{0,20}vitamin|vitamin D[^.]{0,30}ng/dL"
+    ]
+  }
+}
