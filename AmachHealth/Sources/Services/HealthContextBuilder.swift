@@ -960,6 +960,7 @@ struct HealthContextBuilder {
         if !mem.activeConcerns.isEmpty  { parts.append("Concerns: " + mem.activeConcerns.joined(separator: "; ")) }
         if !mem.medications.isEmpty     { parts.append("Medications/supplements: " + mem.medications.joined(separator: "; ")) }
         if !mem.conditions.isEmpty      { parts.append("Conditions: " + mem.conditions.joined(separator: "; ")) }
+        if !mem.preferences.isEmpty     { parts.append("Preferences: " + mem.preferences.joined(separator: "; ")) }
         if !mem.recentSessionNotes.isEmpty {
             parts.append("Recent conversation notes: " + mem.recentSessionNotes.joined(separator: " | "))
         }

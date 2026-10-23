@@ -66,6 +66,7 @@ struct AmachHealthApp: App {
                     // background scheduler.
                     if newPhase == .background {
                         BackupService.shared.scheduleBackgroundCatchUp()
+                        rememberCurrentChat()
                     }
                 }
                 // Keep AppState in sync with service state changes mid-session.
@@ -77,6 +78,20 @@ struct AmachHealthApp: App {
                 .onChange(of: healthKit.isAuthorized) { _, authorized in
                     appState.setHealthKit(authorized: authorized)
                 }
+        }
+    }
+
+    /// Read the open Luma chat for memory before the app is suspended. The
+    /// call goes through the same private /api/ai/chat route as chat.
+    private func rememberCurrentChat() {
+        var taskId = UIBackgroundTaskIdentifier.invalid
+        taskId = UIApplication.shared.beginBackgroundTask(withName: "luma-memory") {
+            UIApplication.shared.endBackgroundTask(taskId)
+            taskId = .invalid
+        }
+        Task {
+            await ChatService.shared.extractCurrentSessionMemory()
+            if taskId != .invalid { UIApplication.shared.endBackgroundTask(taskId) }
         }
     }
 }

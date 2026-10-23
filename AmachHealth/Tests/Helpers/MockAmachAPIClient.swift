@@ -15,6 +15,8 @@ struct MockAPIConfig {
     // Chat
     var chatResponse: AIChatResponse = .fixture(content: "Mock Luma response to your query.")
     var chatError: Error? = nil
+    /// Answers sendChatMessage by prompt (e.g. memory extraction); nil falls back to chatResponse.
+    var chatResponder: ((String) -> String?)? = nil
 
     // Storj
     var storeChatSessionResult: String = "storj://mock-bucket/chat-session-1.enc"
@@ -55,6 +57,7 @@ final class MockAmachAPIClient: AmachAPIClientProtocol {
 
     // Captured arguments for inspection
     var lastChatMessage: String?
+    var sentChatMessages: [String] = []
     var lastChatHistory: [AIChatHistoryMessage]?
     var lastChatContext: AIChatContext?
     var lastStoredSession: ChatSession?
@@ -72,7 +75,9 @@ final class MockAmachAPIClient: AmachAPIClientProtocol {
         lastChatMessage = message
         lastChatHistory = history
         lastChatContext = context
+        sentChatMessages.append(message)
         if let error = config.chatError { throw error }
+        if let content = config.chatResponder?(message) { return .fixture(content: content) }
         return config.chatResponse
     }
 

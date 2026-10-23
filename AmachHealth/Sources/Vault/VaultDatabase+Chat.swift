@@ -156,12 +156,19 @@ extension VaultDatabase {
 
             let summaryIds = summaries.map(\.id.uuidString)
             try MemorySummaryRow.filter(!summaryIds.contains(Column("id"))).deleteAll(db)
-            for summary in summaries where try !MemorySummaryRow.exists(db, key: summary.id.uuidString) {
-                try MemorySummaryRow(
+            for summary in summaries {
+                let row = MemorySummaryRow(
                     id: summary.id.uuidString, date: summary.date.unixMillis, summary: summary.summary,
                     topicsJson: (try? String(decoding: JSONEncoder().encode(summary.topics), as: UTF8.self)) ?? "[]",
                     importance: summary.importance.rawValue, messageCount: summary.messageCount
-                ).insert(db)
+                )
+                // A session's summary is rewritten as the session grows.
+                if let existing = try MemorySummaryRow.fetchOne(db, key: row.id),
+                   existing.date == row.date, existing.summary == row.summary,
+                   existing.messageCount == row.messageCount {
+                    continue
+                }
+                try row.save(db)
             }
         }
     }

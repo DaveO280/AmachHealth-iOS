@@ -194,6 +194,8 @@ struct LumaSheetView: View {
         .presentationBackground(Color.amachBg)
         .presentationCornerRadius(AmachRadius.xl)
         .onAppear { lumaContext.markRead() }
+        // Closing Luma: remember what was said, without waiting for New Chat.
+        .onDisappear { Task { await chatService.extractCurrentSessionMemory() } }
     }
 
     // MARK: Context Bar
