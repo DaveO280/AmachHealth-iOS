@@ -35,6 +35,8 @@ public enum VeniceE2EEError: Error, Equatable {
     case noAttestableModel([String])
     case relay(status: Int, code: String?)
     case decryption
+    /// A reply chunk arrived unencrypted; the request wasn't served by E2EE.
+    case plaintextReply
     case malformedResponse
 }
 
@@ -187,15 +189,19 @@ public actor VeniceE2EEClient {
         }
     }
 
-    /// Decrypts one chunk. Venice's docs allow plaintext chunks (none were seen
-    /// in testing); they're passed through and counted.
+    /// Decrypts one chunk. Fails closed on plaintext: Venice's docs allow it,
+    /// but no encrypted request ever produced it, and a plaintext reply means
+    /// E2EE wasn't applied (headers dropped, `enable_e2ee` off) or the reply
+    /// didn't come from the enclave. Seen 2026-10-23 when Venice ignored
+    /// E2EE v2 headers: the model got the ciphertext as text and answered in
+    /// the clear.
     private func open(_ text: String, with key: VeniceClientKey) throws -> String {
-        if VeniceE2EECrypto.looksEncrypted(text) {
-            lastStats.encryptedChunks += 1
-            do { return try key.decrypt(text) } catch { throw VeniceE2EEError.decryption }
+        guard VeniceE2EECrypto.looksEncrypted(text) else {
+            lastStats.plaintextChunks += 1
+            throw VeniceE2EEError.plaintextReply
         }
-        lastStats.plaintextChunks += 1
-        return text
+        lastStats.encryptedChunks += 1
+        do { return try key.decrypt(text) } catch { throw VeniceE2EEError.decryption }
     }
 
     private func url(tier: String) -> URL {

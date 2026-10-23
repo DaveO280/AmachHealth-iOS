@@ -174,21 +174,90 @@ Venice rewrites the body, and Venice's own text says to "treat request/response 
 provider-reported values". So a phone can't use signatures to detect a
 swapped `X-Venice-TEE-Client-Pub-Key`.
 
+### The unauthenticated client key, in detail
+
+Request fields are bound: each carries its own ephemeral key, sealed to the
+attested enclave key. Replies are encrypted to whatever key arrives in
+`X-Venice-TEE-Client-Pub-Key`, and nothing ties that header to the phone.
+Any party that can rewrite requests between the phone and the enclave can
+do the following. That means a compromised or modified relay deployment, or
+Venice's API layer; passive log readers can't.
+
+1. Swap the header for a key of its own.
+2. Decrypt every reply chunk.
+3. Re-encrypt each chunk to the phone's real key, which it has from the
+   request.
+
+The phone sees valid AES-GCM chunks and can't tell, because GCM proves only
+the symmetric key, not who sealed it. The same weakness lets such a party
+forge whole replies (integrity). Reasoning chunks go to the same key and
+restate the prompt at length, so in practice they leak much of the prompt as
+well. Stripping or minimising reasoning reduces that exposure.
+
+### What the gateway's "E2EE v2" does (checked 2026-10-23)
+
+Both phala attestations advertise `supported_e2ee_versions: ["2"]`. The
+gateway's spec (`Dstack-TEE/private-ai-gateway` at the attested commit
+`22d08e2`, `spec/e2ee-v2.md` + `spec/aci.md`) defines:
+
+- headers `X-E2EE-Version: 2`, `X-Client-Pub-Key`, `X-Model-Pub-Key`,
+  `X-E2EE-Nonce`, `X-E2EE-Timestamp`;
+- HKDF info `aci.e2ee.v2.secp256k1` / `aci.e2ee.v2.x25519`;
+- AES-GCM AAD = JCS `{purpose, algo, model, field, nonce, ts}` (plus the
+  response `id`), which binds each ciphertext to its field and request, and
+  replay protection;
+- a signed ACI receipt whose `response.returned` hashes **the exact bytes
+  the gateway emitted**, and whose `request.received` hashes the restored
+  request.
+
+v2 does **not** put the client key in the AAD, so the header swap above still
+works against v2 itself. Its defence is detection after the fact. The client
+compares SHA-256 of the bytes it received with the receipt's signed
+`response.returned`, and a re-encrypted reply doesn't match. That still
+doesn't stop the attacker from reading the reply first. Holding the reply
+until the receipt verifies would also give integrity: forged replies would
+be rejected before display.
+
+**It doesn't work through Venice today.** A live v2 request through
+`api.venice.ai` returned 200 with a **plaintext** reply. The gateway got the
+ciphertext as ordinary text (the model's reasoning began "Just a hash —"),
+so Venice doesn't forward the v2 headers. Nothing leaked, because only
+ciphertext was sent. Venice also rewrites response chunks (`id: req_…`,
+`model: e2ee-glm-5-3-p`). So the bytes the phone receives never hash to the
+gateway's `response.returned`, in either the documented ECDSA flow or v2.
+Receipt-based detection is impossible through Venice as it stands.
+
+Hardening taken from this: `VeniceE2EEClient` now **fails closed on any
+plaintext reply chunk** (`VeniceE2EEError.plaintextReply`). The relay
+controls `venice_parameters`, including Venice's documented `enable_e2ee`
+switch, and a dropped header or a disabled E2EE mode both show up as
+plaintext replies.
+
 ### Residual risk and options (choose before GA)
 
 1. **Accept it for v1**, and say "Amach's servers relay only encrypted data"
    rather than "Amach can never read replies". The relay is about 200 lines
    and doesn't log headers or bodies.
-2. **Ask Venice** to bind the client key into the request. For example,
-   require the client key as AES-GCM AAD on each message, or require the
-   message ephemeral key to equal the client key, so a swapped header fails
-   decryption inside the TEE. A small protocol change on their side fixes it
-   completely.
+2. **Ask Venice for two things**:
+   - Pass E2EE v2 headers through, and pass the gateway's response bytes
+     through unmodified (or return them alongside the rewritten ones), so
+     clients can verify receipts. That gives detection and integrity using
+     a spec that already exists.
+   - Ask Venice and dstack to bind the client key in E2EE v3. Putting
+     `client_pub_key` in the request AAD makes a swapped header fail
+     decryption inside the TEE, which is actual prevention. v2 is frozen
+     and v3 is "to be specified", so this is the right time to ask.
 3. **Direct-to-Venice with server-minted scoped keys.** The server mints
    short-lived, credit-capped Venice inference keys per device. The phone
    calls Venice directly, so Amach leaves the data path entirely. The costs:
    Venice sees user IPs, key-abuse controls are needed, and Venice's
-   key-management API limits need checking.
+   key-management API limits need checking. Venice's API layer could still
+   swap the header, so this narrows trust to Venice; it doesn't remove it.
+4. **Go to the gateway operator directly.** The attested keyset pins TLS
+   for `api.redpill.ai`, `inference.phala.com` and `tee.redpill.ai`. A
+   client talking to that gateway directly gets v2 plus verifiable
+   receipts. That's a provider change outside Venice (new account, pricing,
+   model list), so it's for consideration only.
 
 ## Q3: fallback across the model chain
 
