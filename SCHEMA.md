@@ -32,7 +32,7 @@ The on-device vault is the start of the protocol's data format. Names are Amach'
 
 | Column | Meaning |
 |---|---|
-| key, value | Key/value text. Keys in use:<br>• `key_check`, `wallet_address`<br>• `hk_backfill_from` (oldest day backfilled from HealthKit)<br>• `hk_backfill_complete`<br>• `storj_import_completed` (ISO time)<br>• `storj_import_report` (JSON)<br>• `backup_enabled` ("1" when encrypted backup is on)<br>• `backup_generation`, `backup_last_success` (ms), `backup_index_body` (JSON part list)<br>• `backup_restore_checked` (ms; the new-phone restore check ran)<br>• `legacy_storj_cleanup` (JSON summary once old Storj objects were deleted) |
+| key, value | Key/value text. Keys in use:<br>• `key_check`, `wallet_address`<br>• `hk_backfill_from` (oldest day backfilled from HealthKit)<br>• `hk_backfill_complete`<br>• `storj_import_completed` (ISO time)<br>• `storj_import_report` (JSON)<br>• `backup_enabled` ("1" when encrypted backup is on)<br>• `backup_generation`, `backup_last_success` (ms), `backup_index_body` (JSON part list)<br>• `backup_restore_checked` (ms; the new-phone restore check ran)<br>• `legacy_storj_cleanup` (JSON summary once old Storj objects were deleted)<br>• `memory_extracted` (JSON `[{session, messages}]`: how many messages of each recent chat session have been read for memory; last 60 sessions) |
 
 ## daily_metrics
 
@@ -184,6 +184,9 @@ The vault keeps every session; the chat list shows the 30 most recent. Website s
 | memory_summaries | id, date, summary, topics_json, importance (`critical`, `high`, `medium`, `low`), message_count |
 
 Retention is the same as before: 200 facts and 40 summaries.
+
+- A fact the user says no longer holds (stopped a medication, goal reached, concern resolved) is retired: `is_active` = 0 and `last_confirmed_at` = when it was retired. Retired facts are not sent to Luma.
+- A summary written since memory is read mid-session has the chat session's id and is rewritten as the session grows; older summaries have their own ids.
 
 ## merkle_leaves / merkle_roots
 

@@ -8,6 +8,8 @@
 //     reach the context
 //   • the classifier routes mixed questions to every topic they touch
 //   • memory reaches the backend as a block, with dates
+//   • memory builds without New Chat, retires facts that no longer hold,
+//     keeps one summary per session and carries preferences
 
 import XCTest
 import GRDB
@@ -477,5 +479,158 @@ final class LumaTemporalContextTests: XCTestCase {
                                       conditions: [], recentSessionNotes: [])
         let text = HealthContextBuilder.formatMemory(mem, latestBloodwork: "11/03/2025")
         XCTAssertTrue(text.contains("Latest bloodwork was drawn 2025-11-03. Anything noted after that date"), text)
+    }
+
+    // MARK: - Memory across chats
+
+    private static let factsJSON = #"{"facts":[{"category":"medication","value":"Takes creatine 5 g daily","context":"chat"}]}"#
+
+    /// Answers the two extraction prompts; anything else gets a plain reply.
+    private func memoryAPI(facts: String = factsJSON, summary: String = "Talked about creatine.") -> MockAmachAPIClient {
+        let api = MockAmachAPIClient()
+        api.config.chatResponder = { prompt in
+            if prompt.contains("Analyze the conversation and extract") { return facts }
+            if prompt.contains("Create a brief summary") {
+                return #"{"summary":"\#(summary)","topics":["supplements"],"importance":"medium"}"#
+            }
+            return nil
+        }
+        return api
+    }
+
+    private func extractionPrompts(_ api: MockAmachAPIClient) -> [String] {
+        api.sentChatMessages.filter { $0.contains("Analyze the conversation and extract") }
+    }
+
+    func test_memory_builds_without_new_chat() async throws {
+        let api = memoryAPI()
+        let sut = ChatService(injectedAPI: api, injectedWallet: MockWalletService(), injectedVault: LocalVault.shared.database)
+        let memory = ConversationMemoryStore.shared
+
+        for i in 1..<ChatService.memoryExtractionInterval {
+            await sut.send("Question \(i) about my creatine and training")
+        }
+        XCTAssertNil(sut.memoryExtractionTask, "nothing read before the interval")
+        XCTAssertTrue(extractionPrompts(api).isEmpty)
+
+        await sut.send("I take 5 g of creatine every morning")
+        await sut.memoryExtractionTask?.value
+
+        let session = sut.currentSession
+        XCTAssertEqual(session.messages.count, 20, "still the same session: no New Chat")
+        XCTAssertTrue(memory.facts.contains { $0.value == "Takes creatine 5 g daily" && $0.isActive })
+        XCTAssertEqual(memory.summaries.map(\.id), [session.id], "the summary belongs to this session")
+        XCTAssertEqual(memory.extractedMessageCount(sessionId: session.id), 20)
+
+        // Progress is kept in the vault.
+        memory.vaultDidChange()
+        XCTAssertEqual(memory.extractedMessageCount(sessionId: session.id), 20)
+        XCTAssertEqual(memory.summaries.count, 1)
+    }
+
+    func test_later_extractions_read_only_new_messages_and_update_the_summary() async throws {
+        let api = memoryAPI(summary: "First part: creatine.")
+        let sut = ChatService(injectedAPI: api, injectedWallet: MockWalletService(), injectedVault: LocalVault.shared.database)
+        let memory = ConversationMemoryStore.shared
+
+        await sut.send("I started creatine 5 g a day for training")
+        await sut.extractCurrentSessionMemory()
+        XCTAssertEqual(memory.summaries.first?.summary, "First part: creatine.")
+
+        // Nothing new: no second extraction.
+        await sut.extractCurrentSessionMemory()
+        XCTAssertEqual(extractionPrompts(api).count, 1)
+
+        api.config.chatResponder = memoryAPI(facts: #"{"facts":[]}"#, summary: "Creatine, then sleep.").config.chatResponder
+        await sut.send("Also my sleep has been poor this week, around five hours")
+        await sut.extractCurrentSessionMemory()
+
+        let prompts = extractionPrompts(api)
+        XCTAssertEqual(prompts.count, 2)
+        XCTAssertFalse(prompts[1].contains("I started creatine"), "already read")
+        XCTAssertTrue(prompts[1].contains("sleep has been poor"))
+        let summaryPrompt = try XCTUnwrap(api.sentChatMessages.last { $0.contains("Create a brief summary") })
+        XCTAssertTrue(summaryPrompt.contains("Summary of this conversation so far:\nFirst part: creatine."), summaryPrompt)
+
+        XCTAssertEqual(memory.summaries.count, 1, "updated, not appended")
+        XCTAssertEqual(memory.summaries.first?.summary, "Creatine, then sleep.")
+        XCTAssertEqual(memory.summaries.first?.messageCount, 4)
+
+        // Archiving the session afterwards adds no second summary.
+        let session = sut.currentSession
+        await sut.summarizeAndArchive(session)
+        XCTAssertEqual(extractionPrompts(api).count, 2)
+        memory.vaultDidChange()
+        XCTAssertEqual(memory.summaries.map(\.id), [session.id])
+    }
+
+    func test_extraction_retires_facts_that_no_longer_hold() async throws {
+        let memory = ConversationMemoryStore.shared
+        memory.upsert(
+            facts: [CriticalFact(id: UUID(), category: .medication, value: "Takes magnesium glycinate 400 mg at night",
+                                 context: nil, dateIdentified: Date(), isActive: true, lastConfirmed: nil),
+                    CriticalFact(id: UUID(), category: .goal, value: "Sleep 8 hours a night",
+                                 context: nil, dateIdentified: Date(), isActive: true, lastConfirmed: nil)],
+            summary: nil)
+        let api = memoryAPI(facts: #"{"facts":[{"category":"medication","value":"Takes zinc 15 mg"}],"retire":["F1"]}"#)
+        let sut = ChatService(injectedAPI: api, injectedWallet: MockWalletService(), injectedVault: LocalVault.shared.database)
+
+        var session = ChatSession()
+        session.messages = [ChatMessage(role: .user, content: "I stopped the magnesium last week, it upset my stomach. Trying zinc."),
+                            ChatMessage(role: .assistant, content: "Noted.")]
+        await sut.extractSessionMemory(from: session)
+
+        let prompt = try XCTUnwrap(extractionPrompts(api).first)
+        XCTAssertTrue(prompt.contains("F1 [medication] Takes magnesium glycinate 400 mg at night"), prompt)
+        XCTAssertTrue(prompt.contains(#""retire""#))
+
+        let magnesium = try XCTUnwrap(memory.facts.first { $0.value.contains("magnesium") })
+        XCTAssertFalse(magnesium.isActive)
+        XCTAssertNotNil(magnesium.retiredAt)
+        XCTAssertTrue(memory.facts.contains { $0.value == "Sleep 8 hours a night" && $0.isActive })
+
+        let capsule = try XCTUnwrap(memory.buildMemoryCapsule(mode: .deep))
+        let block = HealthContextBuilder.formatMemory(capsule)
+        XCTAssertFalse(block.contains("magnesium"), block)
+        XCTAssertTrue(block.contains("Takes zinc 15 mg"), block)
+
+        // Retirement survives a reload from the vault.
+        memory.vaultDidChange()
+        XCTAssertEqual(memory.facts.first { $0.value.contains("magnesium") }?.isActive, false)
+    }
+
+    func test_preferences_reach_the_memory_block() async throws {
+        ConversationMemoryStore.shared.upsert(
+            facts: [CriticalFact(id: UUID(), category: .preference, value: "Prefers food-first advice over supplements",
+                                 context: nil, dateIdentified: Date(), isActive: true, lastConfirmed: nil)],
+            summary: nil)
+        let api = MockAmachAPIClient()
+        let sut = ChatService(injectedAPI: api, injectedWallet: MockWalletService())
+        // A sleep question: preferences come along whatever the topic.
+        await sut.send("how did I sleep last night?")
+        let memory = try XCTUnwrap(api.lastChatContext?.contextBlocks?.first { $0.type == "memory" }?.content)
+        XCTAssertTrue(memory.contains("Preferences: Prefers food-first advice over supplements (noted "), memory)
+    }
+
+    func test_memory_carries_older_notes_on_the_question_topic() {
+        func summary(_ text: String, topics: [String], daysAgo: Int) -> SessionSummary {
+            SessionSummary(id: UUID(), date: calendar.date(byAdding: .day, value: -daysAgo, to: now)!, summary: text,
+                           topics: topics, importance: .medium, messageCount: 4)
+        }
+        let all = [
+            summary("Worked out why deep sleep drops after late dinners.", topics: ["sleep"], daysAgo: 150),
+            summary("Discussed LDL and the cholesterol panel.", topics: ["labs"], daysAgo: 120),
+            summary("Set a step target for walking.", topics: ["activity"], daysAgo: 30),
+            summary("Reviewed vitamin D dosing.", topics: ["supplements"], daysAgo: 20),
+            summary("Planned a zone 2 cardio block.", topics: ["training"], daysAgo: 10),
+        ]
+        let sleep = ConversationMemoryStore.pickSummaries(all, intent: .sleep, mode: .quick).map(\.summary)
+        XCTAssertEqual(sleep.first, "Worked out why deep sleep drops after late dinners.")
+        XCTAssertEqual(sleep.count, 4, "3 most recent + the older one on sleep")
+        XCTAssertFalse(sleep.contains("Discussed LDL and the cholesterol panel."))
+
+        let general = ConversationMemoryStore.pickSummaries(all, intent: .general, mode: .quick)
+        XCTAssertEqual(general.count, 3)
+        XCTAssertEqual(ConversationMemoryStore.pickSummaries(all, intent: nil, mode: .deep).count, 5)
     }
 }

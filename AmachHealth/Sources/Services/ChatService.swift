@@ -194,6 +194,7 @@ final class ChatService: ObservableObject {
             saveToDisk()
 
             updateRollingSummaryIfNeeded()
+            extractMemoryIfDue()
         } catch where Self.pauseReply(for: error) != nil {
             currentSession.messages.append(ChatMessage(role: .assistant, content: Self.pauseReply(for: error)!))
             currentSession.updatedAt = .now
@@ -317,6 +318,7 @@ final class ChatService: ObservableObject {
             AmachHaptics.lumaResponse()
 
             updateRollingSummaryIfNeeded()
+            extractMemoryIfDue()
         } catch {
             let isEmptyResponse = (error.localizedDescription + " " + String(describing: error))
                 .contains("Luma returned an empty response")
@@ -364,6 +366,7 @@ final class ChatService: ObservableObject {
                     lastFailedMessage = nil
                     saveToDisk()
                     updateRollingSummaryIfNeeded()
+                    extractMemoryIfDue()
                     isSending = false
                     sendingTask = nil
                     return
@@ -549,8 +552,12 @@ final class ChatService: ObservableObject {
     /// Called when archiving a session — the summary feeds future proactive contexts.
     func summarizeAndArchive(_ session: ChatSession) async {
         guard session.messages.count >= 2 else { return }  // need at least one exchange
-        guard session.healthSummary == nil else { return }  // already summarized
+        if session.healthSummary == nil { await summarizeHealth(session) }
+        // A reopened session may have new messages even if already summarized.
+        await extractSessionMemory(from: session)
+    }
 
+    private func summarizeHealth(_ session: ChatSession) async {
         let summaryPrompt =
             "In 1-2 sentences, summarize ONLY the health events, anomalies, or symptoms " +
             "discussed in this conversation, and any outcomes mentioned. " +
@@ -573,8 +580,6 @@ final class ChatService: ObservableObject {
         } catch {
             // Non-critical — memory works without summaries, just less rich
         }
-
-        await extractAndStoreConversationMemory(from: session)
     }
 
     // Maps HealthKit metric type identifiers to natural language search terms
@@ -594,11 +599,40 @@ final class ChatService: ObservableObject {
 
     // MARK: - Conversation Memory Extraction
 
-    private func extractAndStoreConversationMemory(from session: ChatSession) async {
-        guard shouldExtractMemory(from: session) else { return }
+    /// Read the open session for memory once it has this many user messages
+    /// not yet read, so memory builds without the user tapping New Chat.
+    static let memoryExtractionInterval = 10
 
-        let messages = session.messages
-        var conversationText = messages.map { message -> String in
+    /// The latest background extraction, so tests can wait for it.
+    private(set) var memoryExtractionTask: Task<Void, Never>?
+    private var sessionsBeingExtracted: Set<UUID> = []
+
+    private func extractMemoryIfDue() {
+        let session = currentSession
+        let read = ConversationMemoryStore.shared.extractedMessageCount(sessionId: session.id)
+        let unread = session.messages.dropFirst(read).filter { $0.role == .user }.count
+        guard unread >= Self.memoryExtractionInterval else { return }
+        memoryExtractionTask = Task { await extractSessionMemory(from: session) }
+    }
+
+    /// Read the open session for memory now (app going to the background,
+    /// chat closed). Does nothing if nothing substantial is new.
+    func extractCurrentSessionMemory() async {
+        await extractSessionMemory(from: currentSession)
+    }
+
+    /// Extract facts from the messages not yet read, retire facts they say no
+    /// longer hold, and update this session's one summary.
+    func extractSessionMemory(from session: ChatSession) async {
+        let memory = ConversationMemoryStore.shared
+        let read = min(memory.extractedMessageCount(sessionId: session.id), session.messages.count)
+        let newMessages = Array(session.messages.dropFirst(read))
+        guard shouldExtractMemory(from: newMessages),
+              !sessionsBeingExtracted.contains(session.id) else { return }
+        sessionsBeingExtracted.insert(session.id)
+        defer { sessionsBeingExtracted.remove(session.id) }
+
+        var conversationText = newMessages.map { message -> String in
             let roleLabel = message.role == .user ? "User" : "Assistant"
             return "\(roleLabel): \(message.content)"
         }.joined(separator: "\n\n")
@@ -608,6 +642,13 @@ final class ChatService: ObservableObject {
         if conversationText.count > maxChars {
             conversationText = String(conversationText.suffix(maxChars))
         }
+
+        // Facts already remembered, by reference, so the extractor can retire them.
+        let known = memory.activeFactsForReview()
+        let knownRefs = Dictionary(uniqueKeysWithValues: known.enumerated().map { ("F\($0.offset + 1)", $0.element) })
+        let knownList = known.isEmpty ? "(none)" : known.enumerated()
+            .map { "F\($0.offset + 1) [\($0.element.category.rawValue)] \($0.element.value)" }
+            .joined(separator: "\n")
 
         let factPrompt = """
         You are a health assistant memory system. Analyze the conversation and extract important facts about the user that should be remembered for future conversations.
@@ -625,6 +666,12 @@ final class ChatService: ObservableObject {
         - Focus on health-relevant information
         - Skip generic greetings or small talk
         - Each fact should be self-contained and understandable without the conversation
+        - Do not repeat a fact already remembered (listed below) unless it changed
+
+        Facts already remembered:
+        \(knownList)
+
+        Retire a remembered fact only if the user says it no longer holds: they stopped a medication or supplement, reached or dropped a goal, a concern resolved, a preference changed. A changed dose retires the old fact and adds the new one. List retired facts by their reference (e.g. "F2").
 
         Return a JSON object with this structure:
         {
@@ -634,12 +681,24 @@ final class ChatService: ObservableObject {
               "value": "the fact statement",
               "context": "brief context about when/why this was mentioned"
             }
-          ]
+          ],
+          "retire": ["F2"]
         }
 
         Conversation:
         \(conversationText)
         """
+
+        let previousSummary = memory.summary(forSession: session.id)
+        let summarySoFar = previousSummary.map {
+            """
+
+            Summary of this conversation so far:
+            \($0.summary)
+
+            Write one summary covering both that and the new messages below.
+            """
+        } ?? ""
 
         let summaryPrompt = """
         You are a health assistant memory system. Create a brief summary of this conversation for future reference.
@@ -650,7 +709,7 @@ final class ChatService: ObservableObject {
         - Highlight key health insights shared
         - Be concise (1–3 sentences)
         - Focus on what would be useful context for future conversations
-
+        \(summarySoFar)
         Return JSON with this structure:
         {
           "summary": "Brief summary of the conversation",
@@ -668,22 +727,29 @@ final class ChatService: ObservableObject {
 
             let (factsResult, summaryResult) = try await (factsResponse, summaryResponse)
 
-            let facts = parseFacts(from: factsResult.content)
-            let summary = parseSessionSummary(
-                from: summaryResult.content,
-                messageCount: session.messages.count
-            )
+            let (facts, retire) = parseFacts(from: factsResult.content)
+            let retiredIds = Set(retire.compactMap { ref -> UUID? in
+                if let fact = knownRefs[ref.trimmingCharacters(in: .whitespaces).uppercased()] { return fact.id }
+                // Some replies name the fact instead of its reference.
+                let norm = ConversationMemoryStore.normalizeFactValue(ref)
+                return known.first { ConversationMemoryStore.normalizeFactValue($0.value) == norm }?.id
+            })
+            var summary = parseSessionSummary(from: summaryResult.content, messageCount: session.messages.count)
+            if let parsed = summary {
+                summary = SessionSummary(id: session.id, date: Date(), summary: parsed.summary, topics: parsed.topics,
+                                         importance: parsed.importance, messageCount: parsed.messageCount)
+            }
 
-            guard let sessionSummary = summary else { return }
-
-            ConversationMemoryStore.shared.upsert(facts: facts, summary: sessionSummary)
+            memory.upsert(facts: facts, summary: summary, retiring: retiredIds)
+            memory.markExtracted(sessionId: session.id, messageCount: session.messages.count)
         } catch {
-            // Non-critical — chat still works without long-term memory
+            // Non-critical — chat still works without long-term memory. The
+            // messages stay unread and are tried again next time.
         }
     }
 
-    private func shouldExtractMemory(from session: ChatSession) -> Bool {
-        let userMessages = session.messages.filter { $0.role == .user }
+    private func shouldExtractMemory(from messages: [ChatMessage]) -> Bool {
+        let userMessages = messages.filter { $0.role == .user }
         guard !userMessages.isEmpty else { return false }
 
         // Any substantive user input is worth extracting — the LLM decides
@@ -693,22 +759,36 @@ final class ChatService: ObservableObject {
         return totalLength >= 20
     }
 
-    private func parseFacts(from response: String) -> [CriticalFact] {
-        guard let jsonData = extractFirstJSONObject(from: response) else { return [] }
+    private func parseFacts(from response: String) -> (facts: [CriticalFact], retire: [String]) {
+        guard let jsonData = extractFirstJSONObject(from: response) else { return ([], []) }
         struct RawFact: Decodable {
             let category: String
             let value: String
             let context: String?
         }
+        /// "F2", or an object naming it.
+        struct RetireRef: Decodable {
+            let ref: String?
+            init(from decoder: Decoder) throws {
+                if let text = try? decoder.singleValueContainer().decode(String.self) {
+                    ref = text
+                    return
+                }
+                struct Keyed: Decodable { let id: String?; let ref: String?; let value: String? }
+                let keyed = try Keyed(from: decoder)
+                ref = keyed.id ?? keyed.ref ?? keyed.value
+            }
+        }
         struct Payload: Decodable {
             let facts: [RawFact]?
+            let retire: [RetireRef]?
         }
 
         do {
             let payload = try JSONDecoder().decode(Payload.self, from: jsonData)
             let rawFacts = payload.facts ?? []
             let now = Date()
-            return rawFacts.compactMap { raw in
+            let facts = rawFacts.compactMap { raw -> CriticalFact? in
                 guard let category = FactCategory(rawValue: raw.category) else { return nil }
                 return CriticalFact(
                     id: UUID(),
@@ -719,8 +799,9 @@ final class ChatService: ObservableObject {
                     isActive: true
                 )
             }
+            return (facts, (payload.retire ?? []).compactMap(\.ref))
         } catch {
-            return []
+            return ([], [])
         }
     }
 
@@ -831,7 +912,7 @@ final class ChatService: ObservableObject {
         }
         if let mem = ctx.memory {
             let memText = (mem.activeGoals + mem.activeConcerns + mem.medications
-                           + mem.conditions + mem.recentSessionNotes).joined(separator: " ")
+                           + mem.conditions + mem.preferences + mem.recentSessionNotes).joined(separator: " ")
             tokens += (memText.count + 3) / 4
         }
         return tokens

@@ -55,6 +55,8 @@ struct ChatView: View {
             }
             .navigationBarHidden(true)
             .onAppear { lumaContext.update(screen: "Chat") }
+            // Leaving the chat: remember what was said, without waiting for New Chat.
+            .onDisappear { Task { await chatService.extractCurrentSessionMemory() } }
             .task {
                 // Load lab results so Luma can answer questions about bloodwork,
                 // DEXA, lipids, etc. Safe to call repeatedly — loads once per session.
@@ -654,6 +656,11 @@ struct LumaMemoryDebugOverlay: View {
                     }
                     if !capsule.conditions.isEmpty {
                         Text("Conditions: " + capsule.conditions.joined(separator: "; "))
+                            .font(AmachType.tiny)
+                            .foregroundStyle(Color.amachTextSecondary)
+                    }
+                    if !capsule.preferences.isEmpty {
+                        Text("Preferences: " + capsule.preferences.joined(separator: "; "))
                             .font(AmachType.tiny)
                             .foregroundStyle(Color.amachTextSecondary)
                     }

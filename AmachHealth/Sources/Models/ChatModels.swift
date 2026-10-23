@@ -296,6 +296,7 @@ struct AIChatMemoryCapsule: Encodable {
     let activeConcerns: [String]
     let medications: [String]
     let conditions: [String]
+    var preferences: [String] = []
     let recentSessionNotes: [String]
 }
 
@@ -326,9 +327,14 @@ struct CriticalFact: Codable, Identifiable {
     var context: String?
     let dateIdentified: Date
     var isActive: Bool
+    /// When last confirmed. For a retired fact (isActive false), when it was retired.
     var lastConfirmed: Date?
+
+    var retiredAt: Date? { isActive ? nil : lastConfirmed }
 }
 
+/// One per chat session: its id is the session's id, and later extractions
+/// from the same session replace it. Summaries from before that have their own ids.
 struct SessionSummary: Codable, Identifiable {
     let id: UUID
     let date: Date
@@ -361,6 +367,7 @@ final class ConversationMemoryStore: ObservableObject {
 
     /// Reload from the vault after it opens or closes.
     func vaultDidChange() {
+        extracted = []
         guard let vault else {
             facts = []
             summaries = []
@@ -370,11 +377,59 @@ final class ConversationMemoryStore: ObservableObject {
             facts = payload.facts
             summaries = payload.summaries
         }
+        if let json = try? vault.meta(Self.extractedMetaKey),
+           let stored = try? JSONDecoder().decode([ExtractionMark].self, from: Data(json.utf8)) {
+            extracted = stored
+        }
+    }
+
+    // MARK: - Extraction progress
+
+    private static let extractedMetaKey = "memory_extracted"
+    /// Sessions whose progress is kept; older entries are dropped.
+    private static let extractedSessionsKept = 60
+
+    private struct ExtractionMark: Codable {
+        let session: UUID
+        let messages: Int
+    }
+
+    /// How many messages of each session have been read for memory, most
+    /// recently read last (vault_meta `memory_extracted`).
+    private var extracted: [ExtractionMark] = []
+
+    func extractedMessageCount(sessionId: UUID) -> Int {
+        extracted.last { $0.session == sessionId }?.messages ?? 0
+    }
+
+    func markExtracted(sessionId: UUID, messageCount: Int) {
+        extracted.removeAll { $0.session == sessionId }
+        extracted.append(ExtractionMark(session: sessionId, messages: messageCount))
+        extracted = Array(extracted.suffix(Self.extractedSessionsKept))
+        guard let vault, let data = try? JSONEncoder().encode(extracted) else { return }
+        try? vault.setMeta(Self.extractedMetaKey, String(decoding: data, as: UTF8.self))
+    }
+
+    func summary(forSession id: UUID) -> SessionSummary? {
+        summaries.first { $0.id == id }
+    }
+
+    /// Active facts, oldest first, for the extractor to check against.
+    func activeFactsForReview(limit: Int = 60) -> [CriticalFact] {
+        Array(facts.filter(\.isActive).sorted { effectiveDate($0) < effectiveDate($1) }.suffix(limit))
     }
 
     // MARK: - Upsert with Value-Based Deduplication
 
-    func upsert(facts newFacts: [CriticalFact], summary: SessionSummary) {
+    /// Retire facts the user said no longer hold, add or confirm new ones, and
+    /// add or replace the summary (same id replaces).
+    func upsert(facts newFacts: [CriticalFact], summary: SessionSummary?,
+                retiring retiredIds: Set<UUID> = [], at date: Date = Date()) {
+        for idx in facts.indices where facts[idx].isActive && retiredIds.contains(facts[idx].id) {
+            facts[idx].isActive = false
+            facts[idx].lastConfirmed = date
+        }
+
         for newFact in newFacts {
             let newNorm = Self.normalizeFactValue(newFact.value)
 
@@ -396,10 +451,12 @@ final class ConversationMemoryStore: ObservableObject {
             }
         }
 
-        if let idx = summaries.firstIndex(where: { $0.id == summary.id }) {
-            summaries[idx] = summary
-        } else {
-            summaries.append(summary)
+        if let summary {
+            if let idx = summaries.firstIndex(where: { $0.id == summary.id }) {
+                summaries[idx] = summary
+            } else {
+                summaries.append(summary)
+            }
         }
 
         applyRetentionCaps()
@@ -432,7 +489,10 @@ final class ConversationMemoryStore: ObservableObject {
             filteredFacts = activeFacts
         } else {
             let relevanceCategories = Self.intentRelevantCategories(intent!)
-            var list = activeFacts.filter { relevanceCategories.isEmpty || relevanceCategories.contains($0.category) }
+            // Preferences shape every answer, whatever the topic.
+            var list = activeFacts.filter {
+                relevanceCategories.isEmpty || relevanceCategories.contains($0.category) || $0.category == .preference
+            }
             if list.count > 15 { list = Array(list.suffix(15)) }
             filteredFacts = list
         }
@@ -460,16 +520,16 @@ final class ConversationMemoryStore: ObservableObject {
         let activeConcerns = latestValues(for: .concern, limit: 6)
         let medications = latestValues(for: .medication, limit: 20)
         let conditions = latestValues(for: .condition, limit: 20)
+        let preferences = latestValues(for: .preference, limit: 8)
 
-        let recentSummaries = summaries
-            .sorted { $0.date < $1.date }
-            .suffix(3)
+        let recentSummaries = Self.pickSummaries(summaries, intent: intent, mode: mode)
             .map { "\(LumaDate.day($0.date)) (\(LumaDate.age(of: $0.date))): \(truncated($0.summary, maxLen: 150))" }
 
         if activeGoals.isEmpty,
            activeConcerns.isEmpty,
            medications.isEmpty,
            conditions.isEmpty,
+           preferences.isEmpty,
            recentSummaries.isEmpty {
             return nil
         }
@@ -479,8 +539,30 @@ final class ConversationMemoryStore: ObservableObject {
             activeConcerns: activeConcerns,
             medications: medications,
             conditions: conditions,
+            preferences: preferences,
             recentSessionNotes: recentSummaries
         )
+    }
+
+    /// Most recent session summaries, plus older ones on the question's topic,
+    /// oldest first and within `summaryCharBudget`.
+    static let summaryCharBudget = 1_000
+
+    nonisolated static func pickSummaries(_ all: [SessionSummary], intent: ChatIntent?, mode: ChatMode) -> [SessionSummary] {
+        let sorted = all.sorted { $0.date < $1.date }
+        let recentCount = mode == .deep ? 6 : 3
+        var picked = Array(sorted.suffix(recentCount))
+        if let intent, intent != .general {
+            let onTopic = sorted.dropLast(recentCount).filter {
+                ChatIntentClassifier.classifyAll(($0.topics + [$0.summary]).joined(separator: ". ")).contains(intent)
+            }
+            picked = Array(onTopic.suffix(2)) + picked
+        }
+        // Drop from the oldest until the notes fit (each is shown at up to ~150 characters plus a date).
+        while picked.count > 1, picked.reduce(0, { $0 + min($1.summary.count, 150) + 30 }) > summaryCharBudget {
+            picked.removeFirst()
+        }
+        return picked
     }
 
     private static func monthYear(_ date: Date) -> String {
@@ -544,7 +626,9 @@ final class ConversationMemoryStore: ObservableObject {
 
         var summariesById: [UUID: SessionSummary] = [:]
         for summary in local.summaries { summariesById[summary.id] = summary }
-        for remoteSummary in remote.summaries where summariesById[remoteSummary.id] == nil {
+        // A session's summary is updated as it grows: keep the newer.
+        for remoteSummary in remote.summaries
+        where summariesById[remoteSummary.id].map({ remoteSummary.date > $0.date }) ?? true {
             summariesById[remoteSummary.id] = remoteSummary
         }
 
