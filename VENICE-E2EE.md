@@ -192,7 +192,8 @@ The phone sees valid AES-GCM chunks and can't tell, because GCM proves only
 the symmetric key, not who sealed it. The same weakness lets such a party
 forge whole replies (integrity). Reasoning chunks go to the same key and
 restate the prompt at length, so in practice they leak much of the prompt as
-well. Stripping or minimising reasoning reduces that exposure.
+well. The relay now strips reasoning (`strip_thinking_response`, verified
+under E2EE), so only the answer itself is exposed.
 
 ### What the gateway's "E2EE v2" does (checked 2026-10-23)
 
@@ -292,10 +293,13 @@ plaintext replies.
   server's concurrency of about 2–3, since enclaves 429 easily).
 - Streaming also keeps bytes flowing for the phone's `URLSession` idle
   timer, which today needs a special 330 s `parseSession`.
-- Bandwidth: reasoning is streamed encrypted too. That was 650 of 736
-  chunks in the spike. Test `strip_thinking_response` under E2EE, or lower
-  `reasoning_effort`. Not yet checked whether Venice honours it with E2EE
-  headers.
+- Reasoning: without stripping it's streamed (encrypted) too, which was
+  650 of 736 chunks in the first spike run. `strip_thinking_response: true`
+  **works under E2EE**: GLM 5.3 went from 131 to 8 chunks and GLM 5.3 Flash
+  from 15 to 3, with replies intact. It must be applied inside the enclave
+  gateway, since Venice only sees ciphertext. It removes reasoning from the
+  reply only; the model still reasons, so quality and token cost are
+  unchanged. The relay now always sends it.
 
 ## Relay API (website `src/app/api/ai/e2ee/route.ts`)
 
