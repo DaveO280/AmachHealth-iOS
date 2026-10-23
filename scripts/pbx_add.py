@@ -8,6 +8,7 @@ are already referenced are skipped.
   python3 scripts/pbx_add.py app AmachHealth/Sources/Vault/Foo.swift ...
   python3 scripts/pbx_add.py test AmachHealth/Tests/FooTests.swift ...
   python3 scripts/pbx_add.py grdb
+  python3 scripts/pbx_add.py venice-e2ee   (local package Packages/VeniceE2EE)
 """
 import hashlib
 import os
@@ -28,6 +29,10 @@ PROJECT = "AA0000000000000000000700"
 GRDB_PKG = "5BABE2000000000000000A01"
 GRDB_PRODUCT = "5BABE2000000000000000A02"
 GRDB_BUILD = "5BABE2000000000000000A03"
+
+VENICE_PKG = "5BABE2000000000000000B01"
+VENICE_PRODUCT = "5BABE2000000000000000B02"
+VENICE_BUILD = "5BABE2000000000000000B03"
 
 
 def oid(seed: str) -> str:
@@ -125,12 +130,49 @@ def add_grdb(s: str) -> str:
     return s
 
 
+def add_venice_e2ee(s: str) -> str:
+    if VENICE_PKG in s:
+        print("skip VeniceE2EE")
+        return s
+    s = insert_after(
+        s, "/* Begin PBXBuildFile section */\n",
+        f"\t\t{VENICE_BUILD} /* VeniceE2EE in Frameworks */ = {{isa = PBXBuildFile; productRef = {VENICE_PRODUCT} /* VeniceE2EE */; }};\n",
+    )
+    s = add_to_list(s, APP_FRAMEWORKS_PHASE, "files", f"{VENICE_BUILD} /* VeniceE2EE in Frameworks */")
+    s = add_to_list(s, APP_TARGET, "packageProductDependencies", f"{VENICE_PRODUCT} /* VeniceE2EE */")
+    s = add_to_list(s, PROJECT, "packageReferences", f'{VENICE_PKG} /* XCLocalSwiftPackageReference "Packages/VeniceE2EE" */')
+    if "/* Begin XCLocalSwiftPackageReference section */" not in s:
+        s = s.replace(
+            "/* Begin XCRemoteSwiftPackageReference section */",
+            "/* Begin XCLocalSwiftPackageReference section */\n/* End XCLocalSwiftPackageReference section */\n\n"
+            "/* Begin XCRemoteSwiftPackageReference section */",
+        )
+    s = insert_after(
+        s, "/* Begin XCLocalSwiftPackageReference section */\n",
+        f'\t\t{VENICE_PKG} /* XCLocalSwiftPackageReference "Packages/VeniceE2EE" */ = {{\n'
+        f"\t\t\tisa = XCLocalSwiftPackageReference;\n"
+        f"\t\t\trelativePath = Packages/VeniceE2EE;\n"
+        f"\t\t}};\n",
+    )
+    s = insert_after(
+        s, "/* Begin XCSwiftPackageProductDependency section */\n",
+        f"\t\t{VENICE_PRODUCT} /* VeniceE2EE */ = {{\n"
+        f"\t\t\tisa = XCSwiftPackageProductDependency;\n"
+        f"\t\t\tproductName = VeniceE2EE;\n"
+        f"\t\t}};\n",
+    )
+    print("added VeniceE2EE")
+    return s
+
+
 def main() -> None:
     mode, paths = sys.argv[1], sys.argv[2:]
     with open(PBX) as f:
         s = f.read()
     if mode == "grdb":
         s = add_grdb(s)
+    elif mode == "venice-e2ee":
+        s = add_venice_e2ee(s)
     else:
         if mode == "app":
             s = ensure_vault_group(s)
