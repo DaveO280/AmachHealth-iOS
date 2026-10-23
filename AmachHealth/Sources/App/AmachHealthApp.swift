@@ -36,6 +36,9 @@ struct AmachHealthApp: App {
                 .environmentObject(proofService)
                 .preferredColorScheme(.dark)
                 .task {
+                    #if DEBUG
+                    if VeniceE2EESpike.isRequested { await VeniceE2EESpike.run() }
+                    #endif
                     // Initialize Privy SDK (restores session if user was previously authenticated).
                     // In dev-mock mode (Privy SDK not installed), this sets up the dev wallet.
                     wallet.initializePrivy()

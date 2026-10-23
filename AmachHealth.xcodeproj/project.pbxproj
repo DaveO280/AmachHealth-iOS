@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BABE236A6172C0AA0C52B2C /* VeniceE2EESpike.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE29608B3C073E89DCD41 /* VeniceE2EESpike.swift */; };
+		5BABE2000000000000000B03 /* VeniceE2EE in Frameworks */ = {isa = PBXBuildFile; productRef = 5BABE2000000000000000B02 /* VeniceE2EE */; };
 		5BABE24F1950E7C99A494DF5 /* VaultReportDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE216BFD6B4D804B7FE29 /* VaultReportDeletionTests.swift */; };
 		5BABE2650DCB68092767C92C /* VaultReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE262E1BAF8EB856FE2E6 /* VaultReportsView.swift */; };
 		5BABE2C25BA8B51307B6444E /* LumaLabAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */; };
@@ -148,6 +150,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5BABE29608B3C073E89DCD41 /* VeniceE2EESpike.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VeniceE2EESpike.swift; path = AmachHealth/Sources/API/VeniceE2EESpike.swift; sourceTree = SOURCE_ROOT; };
 		5BABE216BFD6B4D804B7FE29 /* VaultReportDeletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultReportDeletionTests.swift; path = AmachHealth/Tests/VaultReportDeletionTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE262E1BAF8EB856FE2E6 /* VaultReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultReportsView.swift; path = AmachHealth/Sources/Vault/VaultReportsView.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2C3E9E0449CA97FA399 /* LumaLabAccessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaLabAccessTests.swift; path = AmachHealth/Tests/LumaLabAccessTests.swift; sourceTree = SOURCE_ROOT; };
@@ -297,6 +300,7 @@
 			files = (
 				BB0000000000000000000003 /* PrivySDK in Frameworks */,
 				5BABE2000000000000000A03 /* GRDB in Frameworks */,
+				5BABE2000000000000000B03 /* VeniceE2EE in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -443,6 +447,7 @@
 				5BABE2EC0D436DDA6A68EEF9 /* LumaContextInspector.swift */,
 				5BABE215D6DAA0507C78D142 /* LumaInspectorView.swift */,
 				5BABE2186558D21FD7A4DC98 /* PDFReportReviewCard.swift */,
+				5BABE29608B3C073E89DCD41 /* VeniceE2EESpike.swift */,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -608,6 +613,7 @@
 			packageProductDependencies = (
 				BB0000000000000000000002 /* Privy */,
 				5BABE2000000000000000A02 /* GRDB */,
+				5BABE2000000000000000B02 /* VeniceE2EE */,
 			);
 			productName = "Amach Health";
 			productReference = AA0000000000000000000001 /* Amach Health.app */;
@@ -656,6 +662,7 @@
 			packageReferences = (
 				BB0000000000000000000001 /* XCRemoteSwiftPackageReference "privy-ios" */,
 				5BABE2000000000000000A01 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				5BABE2000000000000000B01 /* XCLocalSwiftPackageReference "Packages/VeniceE2EE" */,
 			);
 			productRefGroup = AA0000000000000000000402 /* Products */;
 			projectDirPath = "";
@@ -785,6 +792,7 @@
 				5BABE2F84D2A7E33DC533978 /* LumaInspectorView.swift in Sources */,
 				5BABE271CAAFADB579CCFAFC /* PDFReportReviewCard.swift in Sources */,
 				5BABE2650DCB68092767C92C /* VaultReportsView.swift in Sources */,
+				5BABE236A6172C0AA0C52B2C /* VeniceE2EESpike.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1072,6 +1080,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		5BABE2000000000000000B01 /* XCLocalSwiftPackageReference "Packages/VeniceE2EE" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/VeniceE2EE;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		5BABE2000000000000000A01 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1092,6 +1107,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5BABE2000000000000000B02 /* VeniceE2EE */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = VeniceE2EE;
+		};
 		5BABE2000000000000000A02 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5BABE2000000000000000A01 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
