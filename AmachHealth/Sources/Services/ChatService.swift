@@ -156,14 +156,18 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let intent = ChatIntentClassifier.classify(trimmed)
+        let intents = ChatIntentClassifier.classifyAll(trimmed)
+        let intent = intents[0]
         // Labs are expensive even with caching. Only include lab data for
         // explicit lab/body-composition intents, or when in deep mode.
-        let needsLabs = chatMode == .deep || intent == .labs || intent == .bodyComp
+        let needsLabs = chatMode == .deep || intents.contains(.labs) || intents.contains(.bodyComp)
         let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
+        // Metrics as of now, not whenever the dashboard last loaded (5-minute cache).
+        if context == nil { await DashboardService.shared.load() }
         // Build context blocks after lab context is warmed so Luma always
         // gets labs_bloodwork / labs_dexa in `contextBlocks` for this turn.
-        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
+        let baseContext = context ?? HealthContextBuilder.buildContext(
+            for: intent, mode: chatMode, message: trimmed, intents: Set(intents))
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
         LumaContextInspector.shared.record(finalContext, intent: intent, mode: chatMode)
 
@@ -227,10 +231,11 @@ final class ChatService: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let intent = ChatIntentClassifier.classify(trimmed)
+        let intents = ChatIntentClassifier.classifyAll(trimmed)
+        let intent = intents[0]
         // Labs are expensive even with caching. Only include lab data for
         // explicit lab/body-composition intents, or when in deep mode.
-        let needsLabs = chatMode == .deep || intent == .labs || intent == .bodyComp
+        let needsLabs = chatMode == .deep || intents.contains(.labs) || intents.contains(.bodyComp)
         
         // 1. Append user message + assistant placeholder immediately so the UI
         // renders without waiting on any network/decryption work.
@@ -246,6 +251,8 @@ final class ChatService: ObservableObject {
 
         // Warm lab context (if needed) before building context blocks.
         let labDataToUse: LabDataContext? = needsLabs ? await HealthContextBuilder.buildLabContext() : nil
+        // Metrics as of now, not whenever the dashboard last loaded (5-minute cache).
+        if context == nil { await DashboardService.shared.load() }
         // If user cancelled while we were loading lab context, bail out cleanly.
         guard !Task.isCancelled else {
             if currentSession.messages.indices.contains(assistantIdx),
@@ -257,7 +264,8 @@ final class ChatService: ObservableObject {
             return
         }
 
-        let baseContext = context ?? HealthContextBuilder.buildContext(for: intent, mode: chatMode)
+        let baseContext = context ?? HealthContextBuilder.buildContext(
+            for: intent, mode: chatMode, message: trimmed, intents: Set(intents))
         let finalContext = enrichContext(baseContext, labData: labDataToUse, intent: intent, mode: chatMode)
         LumaContextInspector.shared.record(finalContext, intent: intent, mode: chatMode)
 
@@ -847,6 +855,12 @@ final class ChatService: ObservableObject {
         let existing = base ?? AIChatContext()
 
         var blocks = existing.contextBlocks ?? []
+        // The backend reads only contextBlocks, so memory travels as a block too.
+        if let memory = existing.memory ?? memoryCapsule, !blocks.contains(where: { $0.type == "memory" }) {
+            let draw = LabContextService.shared.currentContext()?.bloodwork?.reportDate
+            blocks.append(ContextBlock(type: "memory",
+                                       content: HealthContextBuilder.formatMemory(memory, latestBloodwork: draw)))
+        }
         if let rollingSummary = currentSession.rollingSummary {
             blocks.insert(
                 ContextBlock(type: "session_context",

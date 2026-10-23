@@ -121,7 +121,9 @@ final class LumaLabAccessTests: XCTestCase {
 
     // MARK: - History, regions, medical documents
 
-    func test_repeating_markers_reach_luma_with_their_last_three_values() throws {
+    func test_repeating_markers_reach_luma_with_their_last_five_values() throws {
+        save(.bloodwork(bloodwork(date: "2022-01-10", ldl: 170)), name: "z.pdf")
+        save(.bloodwork(bloodwork(date: "2023-01-10", ldl: 160)), name: "y.pdf")
         save(.bloodwork(bloodwork(date: "2024-01-10", ldl: 150)), name: "a.pdf")
         save(.bloodwork(bloodwork(date: "2025-06-01", ldl: 131)), name: "b.pdf")
         save(.bloodwork(bloodwork(date: "2025-12-01", ldl: 110)), name: "c.pdf")
@@ -129,8 +131,9 @@ final class LumaLabAccessTests: XCTestCase {
 
         let content = try XCTUnwrap(block("labs_trends"), "Luma got no bloodwork history")
         XCTAssertTrue(content.contains(
-            "LDL Cholesterol: 98 mg/dL (2026-05-21) ← 110 mg/dL (2025-12-01) ← 131 mg/dL (2025-06-01)"), content)
-        XCTAssertFalse(content.contains("2024-01-10"), "only the last 3 values per marker")
+            "LDL Cholesterol: 98 mg/dL (2026-05-21) ← 110 mg/dL (2025-12-01) ← 131 mg/dL (2025-06-01) "
+            + "← 150 mg/dL (2024-01-10) ← 160 mg/dL (2023-01-10)"), content)
+        XCTAssertFalse(content.contains("170 mg/dL"), "only the last 5 values per marker")
         XCTAssertTrue(content.contains("HbA1c: 5.2 %"), content)
     }
 
@@ -146,7 +149,7 @@ final class LumaLabAccessTests: XCTestCase {
     }
 
     func test_bloodwork_history_is_capped() throws {
-        let names = (1...80).map { "Very long marker name number \($0) for size testing" }
+        let names = (1...80).map { "Very long marker name number \($0) for size testing of the history cap" }
         save(.bloodwork(bloodwork(date: "2025-01-01", markers: names.map { ($0, 1) })), name: "a.pdf")
         save(.bloodwork(bloodwork(date: "2025-06-01", markers: names.map { ($0, 2) })), name: "b.pdf")
         save(.bloodwork(bloodwork(date: "2026-01-01", markers: names.map { ($0, 3) })), name: "c.pdf")
@@ -156,7 +159,7 @@ final class LumaLabAccessTests: XCTestCase {
         let lines = content.split(separator: "\n").filter { $0.hasPrefix("  - ") }.count
         XCTAssertLessThanOrEqual(lines, LabContextService.maxTrendMarkers)
         XCTAssertTrue(content.contains("more not shown"), content)
-        XCTAssertTrue(content.contains("number 1 for size testing: 3 mg/dL"), "latest report's markers come first")
+        XCTAssertTrue(content.contains("number 1 for size testing of the history cap: 3 mg/dL"), "latest report's markers come first")
     }
 
     func test_dexa_regions_reach_luma_next_to_the_totals() throws {
@@ -177,7 +180,7 @@ final class LumaLabAccessTests: XCTestCase {
                                     summary: MedicalRecordData.noMedicalContentNote)), name: "invoice.pdf")
 
         let content = try XCTUnwrap(block("labs_medical"), "Luma got no medical documents")
-        XCTAssertTrue(content.contains("Lumbar MRI [imaging] (2026-03-02)"), content)
+        XCTAssertTrue(content.contains("Lumbar MRI [imaging] (dated 2026-03-02, "), content)
         XCTAssertTrue(content.contains("Summary: MRI of the lower back."), content)
         XCTAssertTrue(content.contains("Findings: Mild degenerative change at L4-L5"), content)
         XCTAssertTrue(content.contains("Diagnoses: Lumbar spondylosis"), content)

@@ -51,28 +51,76 @@ final class LabContextService: ObservableObject {
     // MARK: - Vault
 
     /// Values kept per repeating marker, including the latest one.
-    static let trendPointsPerMarker = 3
+    static let trendPointsPerMarker = 5
     /// Repeating markers kept; those in the latest report come first.
     static let maxTrendMarkers = 40
     /// Medical documents kept, newest first.
     static let maxMedicalDocuments = 5
 
-    /// Latest bloodwork and DEXA in the vault, plus earlier values of repeating
-    /// bloodwork markers and recent medical documents, in the shape Luma reads.
+    /// When a report was added to the app.
+    static func uploadedAt(_ report: LabReportWithMarkers) -> Date? {
+        report.report.createdAt > 0 ? Date(timeIntervalSince1970: Double(report.report.createdAt) / 1000) : nil
+    }
+
+    /// Newest first by the report's own date, else by when it was added.
+    /// The vault orders by the date text, which misorders dates like "May 14, 2026".
+    static func newestFirst(_ reports: [LabReportWithMarkers]) -> [LabReportWithMarkers] {
+        reports.sorted {
+            LumaDate.sortDate($0.report.reportDate, uploadedAt: uploadedAt($0))
+                > LumaDate.sortDate($1.report.reportDate, uploadedAt: uploadedAt($1))
+        }
+    }
+
+    /// Latest bloodwork, DEXA and gut report in the vault, earlier reports of
+    /// each, earlier values of repeating bloodwork markers, recent medical
+    /// documents and an index of everything, in the shape Luma reads.
     static func context(from vault: VaultDatabase) -> LabResultsContext? {
-        let bloodworkReports = (try? vault.labReports(kind: .bloodwork)) ?? []
-        let dexa = (try? vault.labReports(kind: .dexa))?.first
-        let bw = bloodworkReports.first.flatMap { shared.convertBloodworkReport($0.asBloodwork) }
-        var dx = dexa.flatMap { shared.convertDexaReport($0.asDexa) }
-        if let dexa { dx?.regions = dexaRegions(dexa) }
+        let bloodworkReports = newestFirst((try? vault.labReports(kind: .bloodwork)) ?? [])
+        let dexaReports = newestFirst((try? vault.labReports(kind: .dexa)) ?? [])
+        let bloodwork = bloodworkReports.compactMap(bloodworkContext)
+        let dexa = dexaReports.compactMap(dexaContext)
         let trends = bloodworkTrends(bloodworkReports)
-        let medicalReports = (try? vault.labReports(kind: .medical)) ?? []
+        let medicalReports = newestFirst((try? vault.labReports(kind: .medical)) ?? [])
         let isGut = { (r: LabReportWithMarkers) in r.report.subtype == "gut-health" }
         let medical = medicalDocuments(medicalReports.filter { !isGut($0) })
-        let gut = medicalReports.first(where: isGut).map(gutHealth)
-        guard bw != nil || dx != nil || !trends.isEmpty || !medical.isEmpty || gut != nil else { return nil }
-        return LabResultsContext(bloodwork: bw, dexa: dx, bloodworkTrends: trends,
-                                 medicalDocuments: medical, gutHealth: gut)
+        let gut = medicalReports.filter(isGut).map(gutHealth)
+        let index = labIndex(bloodworkReports + dexaReports + medicalReports)
+        guard !bloodwork.isEmpty || !dexa.isEmpty || !medical.isEmpty || !gut.isEmpty else { return nil }
+        return LabResultsContext(bloodwork: bloodwork.first, dexa: dexa.first, bloodworkTrends: trends,
+                                 medicalDocuments: medical, gutHealth: gut.first, index: index,
+                                 olderBloodwork: Array(bloodwork.dropFirst()), olderDexa: Array(dexa.dropFirst()),
+                                 olderGutHealth: Array(gut.dropFirst()))
+    }
+
+    private static func bloodworkContext(_ report: LabReportWithMarkers) -> LabBloodworkContext? {
+        var bw = shared.convertBloodworkReport(report.asBloodwork)
+        bw?.uploadedAt = uploadedAt(report)
+        return bw
+    }
+
+    private static func dexaContext(_ report: LabReportWithMarkers) -> LabDexaContext? {
+        var dx = shared.convertDexaReport(report.asDexa)
+        dx?.regions = dexaRegions(report)
+        dx?.uploadedAt = uploadedAt(report)
+        return dx
+    }
+
+    /// Every report, newest first, skipping medical documents with no medical content.
+    static func labIndex(_ reports: [LabReportWithMarkers]) -> [LabIndexEntry] {
+        newestFirst(reports).compactMap { r in
+            let kind: String
+            switch r.report.kind {
+            case LabReportRow.Kind.bloodwork.rawValue: kind = "Bloodwork"
+            case LabReportRow.Kind.dexa.rawValue: kind = "DEXA scan"
+            default:
+                if r.report.subtype == "gut-health" { kind = "Gut microbiome"; break }
+                let record = r.asMedicalRecord
+                guard record.summary != MedicalRecordData.noMedicalContentNote else { return nil }
+                kind = record.title ?? r.report.title ?? "Medical document"
+            }
+            return LabIndexEntry(kind: kind, date: r.report.reportDate, uploadedAt: uploadedAt(r),
+                                 source: r.report.laboratory ?? r.report.source, valueCount: r.markers.count)
+        }
     }
 
     /// A gut-health report's markers, split into values and species.
@@ -84,7 +132,8 @@ final class LabContextService: ObservableObject {
         return LabGutHealthContext(
             date: report.report.reportDate, source: report.report.source ?? report.report.laboratory,
             values: all.filter { $0.section != "species" },
-            species: all.filter { $0.section == "species" }.sorted { ($0.value ?? 0) > ($1.value ?? 0) }
+            species: all.filter { $0.section == "species" }.sorted { ($0.value ?? 0) > ($1.value ?? 0) },
+            uploadedAt: uploadedAt(report)
         )
     }
 
@@ -136,12 +185,13 @@ final class LabContextService: ObservableObject {
     /// Recent medical documents, skipping ones the parser found no medical content in.
     static func medicalDocuments(_ reports: [LabReportWithMarkers]) -> [LabMedicalDocumentContext] {
         reports.lazy
-            .map(\.asMedicalRecord)
-            .filter { $0.summary != MedicalRecordData.noMedicalContentNote }
-            .map { r in
+            .map { ($0.asMedicalRecord, uploadedAt($0)) }
+            .filter { $0.0.summary != MedicalRecordData.noMedicalContentNote }
+            .map { r, uploaded in
                 LabMedicalDocumentContext(
                     title: r.title, date: r.reportDate, documentType: r.documentType, summary: r.summary,
-                    findings: r.keyFindings ?? [], diagnoses: r.diagnoses ?? [], medications: r.medications ?? []
+                    findings: r.keyFindings ?? [], diagnoses: r.diagnoses ?? [], medications: r.medications ?? [],
+                    uploadedAt: uploaded
                 )
             }
             .filter { $0.summary != nil || !$0.findings.isEmpty || !$0.diagnoses.isEmpty || !$0.medications.isEmpty }

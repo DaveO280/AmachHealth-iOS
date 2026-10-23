@@ -125,7 +125,7 @@ struct HealthContextBuilder {
             .reduce(into: [String: Double]()) { $0[$1.key] = $1.value }
         let additionalMetrics = limitedAdditional.isEmpty ? nil : limitedAdditional
 
-        let dateStr = ctx.reportDate ?? formatter.string(from: Date())
+        let dateStr = ctx.reportDate ?? "date unknown"
 
         return LabResultSummary(
             date: dateStr,
@@ -158,7 +158,7 @@ struct HealthContextBuilder {
         }
 
         return DexaResultSummary(
-            date: ctx.scanDate ?? formatter.string(from: Date()),
+            date: ctx.scanDate ?? "date unknown",
             bodyFatPercent: ctx.bodyFatPercent,
             leanMassKg: ctx.leanMassKg,
             boneDensityTScore: ctx.boneDensityTScore,
@@ -238,7 +238,7 @@ struct HealthContextBuilder {
         }
         func find(_ keys: String...) -> Double? { keys.compactMap { v[$0] }.first }
 
-        let dateStr = report.reportDate ?? formatter.string(from: Date())
+        let dateStr = report.reportDate ?? "date unknown"
 
         // Named fields cover the most common markers
         let namedKeys: Set<String> = [
@@ -273,7 +273,7 @@ struct HealthContextBuilder {
     }
 
     private static func dexaResultSummary(fromReport report: RemoteDexaReport, formatter: DateFormatter) -> DexaResultSummary {
-        let dateStr = report.scanDate ?? formatter.string(from: Date())
+        let dateStr = report.scanDate ?? "date unknown"
         return DexaResultSummary(
             date: dateStr,
             bodyFatPercent: report.totalBodyFatPercent,
@@ -286,15 +286,30 @@ struct HealthContextBuilder {
         )
     }
 
-    private static let dataNote = """
-        Metrics reflect completed calendar days only. \
-        'latest' is yesterday's full-day value; \
-        'sevenDayAvg' is the 7-day rolling average of completed days. \
-        Today's running totals (partial day) are provided separately in the 'today_partial' block — \
-        reference those when the user asks about today specifically. \
-        For time-sensitive questions like comparing a workout HRV to similar workouts, \
-        use the trend data the user provides in their message.
-        """
+    /// How to read the context, in time: what each block covers and how old
+    /// point-in-time reports are. Always the first block.
+    static func dataGuide(now: Date = Date(), calendar: Calendar = .current) -> String {
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now)) ?? now
+        let monthStart = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        return """
+            \(clockLine(now: now, timeZone: calendar.timeZone))
+            How to read the data below, by time:
+            - Wearable metrics are daily values from Apple Health. "Latest" values are the most recent completed day \
+            (each is labeled with its day); 7-day and 30-day figures run \(LumaDate.day(monthStart, calendar: calendar)) to \
+            \(LumaDate.day(yesterday, calendar: calendar)). Today's partial totals are a separate block; use them only for \
+            questions about today.
+            - Long-term history (monthly and yearly averages) and any period the user names come from the phone's vault.
+            - Lab reports (bloodwork, DEXA, gut microbiome, medical documents) are point-in-time snapshots. Each is labeled \
+            with its date and age. Quote that age; never estimate how old a report is.
+            - A snapshot describes the body on its date. Don't use it to explain the last few weeks unless it was taken in \
+            that time. A report older than about 3 months is background: you may bring it in, but say how old it is \
+            ("your DEXA from November 2025, 11 months ago") and don't present it as current.
+            - When the same kind of report exists from different dates, compare by date and say which is the newest.
+            - Keep events in order: something dated after a report (a conversation, a supplement, a habit) can't explain \
+            that report's values.
+            - If the user asks about a period or report that isn't below, say you don't have it rather than estimating.
+            """
+    }
 
     /// Build chat context from the dashboard's cached today data + trends.
     /// Returns nil if no meaningful data is available.
@@ -302,74 +317,43 @@ struct HealthContextBuilder {
         let dashboard = DashboardService.shared
         let today = dashboard.today
 
-        // If nothing is loaded yet, return nil — Luma will work without context
-        guard today.steps > 0 || today.heartRateAvg > 0 || today.sleepHours > 0 else {
+        // Nothing loaded yet: return nil and Luma works without metrics. Recent
+        // days count even when today has no data yet (early morning, watch off).
+        let hasRecentDays = [dashboard.stepsTrend, dashboard.heartRateTrend, dashboard.hrvTrend, dashboard.sleepTrend]
+            .contains { !($0[.month] ?? []).isEmpty }
+        guard hasRecentDays || today.steps > 0 || today.heartRateAvg > 0 || today.sleepHours > 0 else {
             return nil
         }
 
+        /// A metric's 30-day summary; `latest` is the most recent completed day
+        /// (or `todayValue` for readings that are complete once taken), with its day.
+        func metric(_ trend: [TrendPeriod: [TrendPoint]], range: Bool = true, todayValue: Double = 0) -> MetricContext? {
+            let previous = previousDay(trend)
+            let latest: (value: Double, date: Date)? = todayValue > 0 ? (todayValue, Date()) : previous.map { ($0.value, $0.date) }
+            guard latest != nil || !(trend[.month] ?? []).isEmpty else { return nil }
+            return MetricContext(
+                average: monthAverage(trend),
+                min: range ? monthMin(trend) : nil,
+                max: range ? monthMax(trend) : nil,
+                latest: latest?.value,
+                sevenDayAvg: weekAverage(trend),
+                trend: computeTrend(trend),
+                latestDate: latest?.date
+            )
+        }
+
         let metrics = AIChatMetrics(
-            steps: MetricContext(
-                average: monthAverage(dashboard.stepsTrend),
-                min: monthMin(dashboard.stepsTrend),
-                max: monthMax(dashboard.stepsTrend),
-                latest: previousDayValue(dashboard.stepsTrend),
-                sevenDayAvg: weekAverage(dashboard.stepsTrend),
-                trend: computeTrend(dashboard.stepsTrend)
-            ),
-            heartRate: MetricContext(
-                average: monthAverage(dashboard.heartRateTrend),
-                min: monthMin(dashboard.heartRateTrend),
-                max: monthMax(dashboard.heartRateTrend),
-                latest: previousDayValue(dashboard.heartRateTrend),
-                sevenDayAvg: weekAverage(dashboard.heartRateTrend),
-                trend: computeTrend(dashboard.heartRateTrend)
-            ),
-            hrv: MetricContext(
-                average: monthAverage(dashboard.hrvTrend),
-                min: monthMin(dashboard.hrvTrend),
-                max: monthMax(dashboard.hrvTrend),
-                latest: previousDayValue(dashboard.hrvTrend),
-                sevenDayAvg: weekAverage(dashboard.hrvTrend),
-                trend: computeTrend(dashboard.hrvTrend)
-            ),
-            sleep: MetricContext(
-                average: monthAverage(dashboard.sleepTrend),
-                min: monthMin(dashboard.sleepTrend),
-                max: monthMax(dashboard.sleepTrend),
-                // Sleep is already last night's completed data — use directly
-                latest: today.sleepHours > 0 ? today.sleepHours : previousDayValue(dashboard.sleepTrend),
-                sevenDayAvg: weekAverage(dashboard.sleepTrend),
-                trend: computeTrend(dashboard.sleepTrend)
-            ),
-            exercise: MetricContext(
-                average: monthAverage(dashboard.exerciseTrend),
-                min: nil,
-                max: nil,
-                latest: previousDayValue(dashboard.exerciseTrend),
-                sevenDayAvg: weekAverage(dashboard.exerciseTrend),
-                trend: computeTrend(dashboard.exerciseTrend)
-            ),
-            restingHeartRate: today.restingHeartRate > 0 ? MetricContext(
-                average: monthAverage(dashboard.rhrTrend),
-                min: nil,
-                max: nil,
-                // RHR is a resting/morning measurement — today's reading is valid
-                latest: today.restingHeartRate,
-                sevenDayAvg: weekAverage(dashboard.rhrTrend),
-                trend: computeTrend(dashboard.rhrTrend)
-            ) : nil,
-            vo2Max: today.vo2Max > 0 ? MetricContext(
-                average: nil, min: nil, max: nil,
-                latest: today.vo2Max,
-                sevenDayAvg: weekAverage(dashboard.vo2Trend),
-                trend: nil
-            ) : nil,
-            respiratoryRate: today.respiratoryRate > 0 ? MetricContext(
-                average: nil, min: nil, max: nil,
-                latest: previousDayValue(dashboard.rrTrend) ?? today.respiratoryRate,
-                sevenDayAvg: weekAverage(dashboard.rrTrend),
-                trend: nil
-            ) : nil,
+            steps: metric(dashboard.stepsTrend),
+            heartRate: metric(dashboard.heartRateTrend),
+            hrv: metric(dashboard.hrvTrend),
+            // Sleep is last night's completed data once it ends
+            sleep: metric(dashboard.sleepTrend, todayValue: today.sleepHours),
+            exercise: metric(dashboard.exerciseTrend, range: false),
+            // RHR is a resting/morning measurement — today's reading is valid
+            restingHeartRate: metric(dashboard.rhrTrend, range: false, todayValue: today.restingHeartRate),
+            // VO2 max isn't measured daily: the latest reading is whenever it was
+            vo2Max: metric(dashboard.vo2Trend, range: false, todayValue: today.vo2Max),
+            respiratoryRate: metric(dashboard.rrTrend, range: false),
             recoveryScore: today.recoveryScore?.score,
             sleepDeepHours: sleepStageMetric(
                 from: dashboard.sleepStagesTrend,
@@ -393,7 +377,7 @@ struct HealthContextBuilder {
         var blocks: [ContextBlock] = []
 
         // 1. data_note — partial-day instruction (always first)
-        blocks.append(ContextBlock(type: "data_note", content: clockLine() + " " + dataNote))
+        blocks.append(ContextBlock(type: "data_note", content: dataGuide()))
 
         // 2. metrics — formatted health metrics text
         blocks.append(ContextBlock(type: "metrics", content: formatMetrics(metrics, dateRange: dateRange)))
@@ -422,14 +406,6 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "memory", content: formatMemory(mem)))
         }
 
-        // 6. today_partial — running totals for today (steps + active cal only, trimmed to stay under context budget)
-        if today.steps > 0 || today.activeCalories > 0 {
-            var parts: [String] = []
-            if today.steps > 0 { parts.append(String(format: "%.0f steps", today.steps)) }
-            if today.activeCalories > 0 { parts.append(String(format: "%.0f active cal", today.activeCalories)) }
-            blocks.append(ContextBlock(type: "today_partial", content: "Today so far: " + parts.joined(separator: ", ")))
-        }
-
         // 7. timeline — active meds, conditions, allergies, recent anomalies
         let timelineContent = formatTimeline(TimelineService.shared.events)
         if !timelineContent.isEmpty {
@@ -454,7 +430,9 @@ struct HealthContextBuilder {
     /// and layers in intent-specific extras (hr_zones, workouts, anomalies).
     /// Goals and memory blocks are excluded here since enrichContext() injects them
     /// via the AIChatMemoryCapsule to avoid duplication.
-    static func buildContext(for intent: ChatIntent, mode: ChatMode) -> AIChatContext? {
+    static func buildContext(for intent: ChatIntent, mode: ChatMode, message: String? = nil,
+                             intents: Set<ChatIntent>? = nil) -> AIChatContext? {
+        let intents = intents ?? [intent]
         let full = buildCurrentContext()
         let formatter = ISO8601DateFormatter()
         let now = Date()
@@ -471,43 +449,57 @@ struct HealthContextBuilder {
         // Labs don't depend on today's health metrics: include them even when
         // nothing has loaded yet (early morning, no HealthKit, cold start).
         if full == nil {
-            blocks = [ContextBlock(type: "data_note", content: clockLine())] + labBlocks()
+            blocks = [ContextBlock(type: "data_note", content: dataGuide())] + labBlocks()
         }
 
-        // In quick mode, prune blocks not relevant to the intent
+        let periods = message.map { LumaPeriodResolver.resolve($0) } ?? []
+        let labs = intents.contains { $0.includesLabData }
+        let timeline = intents.contains { $0.includesTimelineEvents }
+
+        // In quick mode, prune blocks not relevant to the intents
         if mode == .quick {
-            if !intent.includesLabData {
+            if !labs {
                 blocks.removeAll { $0.type == "labs_bloodwork" || $0.type == "labs_dexa" || $0.type == "labs_gut" }
             }
             // Bloodwork history is for lab questions; body-comp questions only need the DEXA.
-            if !intent.includesLabData || intent == .bodyComp {
+            if !intents.contains(where: { $0.includesLabData && $0 != .bodyComp }) {
                 blocks.removeAll { $0.type == "labs_trends" }
             }
             // Medical documents also carry medications and diagnoses.
-            if !intent.includesLabData && !intent.includesTimelineEvents {
+            if !labs && !timeline {
                 blocks.removeAll { $0.type == "labs_medical" }
             }
-            if !intent.includesTimelineEvents {
+            // A period reaching back past the last month may be about an older report, so the index stays.
+            let monthAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+            if !labs && !timeline && !periods.contains(where: { $0.start < monthAgo }) {
+                blocks.removeAll { $0.type == "labs_index" }
+            }
+            if !timeline {
                 blocks.removeAll { $0.type == "timeline" }
             }
         }
 
         // Layer in intent-specific extras
-        if mode == .deep || intent.includesHRZones {
+        if mode == .deep || intents.contains(where: \.includesHRZones) {
             if let hr = buildHRZonesBlock() { blocks.append(hr) }
         }
-        if mode == .deep || intent.includesWorkouts {
+        if mode == .deep || intents.contains(where: \.includesWorkouts) {
             if let w = buildWorkoutsBlock() { blocks.append(w) }
         }
-        if mode == .deep || intent.includesAnomalies {
+        if mode == .deep || intents.contains(where: \.includesAnomalies) {
             if let a = buildAnomaliesBlock() { blocks.append(a) }
         }
+
+        // Older data: monthly/yearly history, and any period the user named.
+        let keys: Set<String>? = mode == .deep ? nil : historyKeys(for: intents)
+        blocks += historyBlocks(periods: periods, keys: keys)
 
         let metricsToUse: AIChatMetrics?
         if mode == .deep {
             metricsToUse = full?.metrics
         } else {
-            metricsToUse = full?.metrics.flatMap { filterMetrics($0, to: intent.metricKeys) }
+            let metricKeys = intents.reduce(into: Set<String>()) { $0.formUnion($1.metricKeys) }
+            metricsToUse = full?.metrics.flatMap { filterMetrics($0, to: metricKeys) }
         }
 
         return AIChatContext(
@@ -515,6 +507,54 @@ struct HealthContextBuilder {
             dateRange: dateRange,
             contextBlocks: blocks.isEmpty ? nil : blocks
         )
+    }
+
+    /// History series for these intents: their metrics, plus body measurements
+    /// for body-composition and general questions. Medication questions get none.
+    static func historyKeys(for intents: Set<ChatIntent>) -> Set<String> {
+        var keys = intents.reduce(into: Set<String>()) { $0.formUnion($1.metricKeys) }
+        if intents.contains(.bodyComp) || intents.contains(.general) { keys.insert("body") }
+        return keys
+    }
+
+    /// The vault's long-term history and the user's named periods, plus any
+    /// older report dated within a named period, shown in full.
+    static func historyBlocks(periods: [LumaPeriodResolver.Period], keys: Set<String>?, now: Date = Date()) -> [ContextBlock] {
+        guard let vault = LocalVault.shared.database else { return [] }
+        var blocks: [ContextBlock] = []
+        let history = LumaHistoryBuilder(vault: vault, now: now)
+        if keys.map({ !$0.isEmpty }) ?? true, let monthly = history.monthlyHistory(keys: keys) {
+            blocks.append(ContextBlock(type: "history", content: monthly))
+        }
+        for period in periods {
+            // A named period gets every series: "how was March" isn't about one metric.
+            blocks.append(ContextBlock(type: "period", content: history.periodDetail(period, keys: nil)))
+        }
+        if let labs = LabContextService.shared.currentContext() {
+            for period in periods {
+                // Reports dated within two weeks of the period count as from it.
+                let pad: TimeInterval = 14 * 86_400
+                let from = period.start.addingTimeInterval(-pad), to = period.end.addingTimeInterval(pad + 86_399)
+                func inPeriod(_ raw: String?) -> Bool {
+                    guard let d = LumaDate.parse(raw) else { return false }
+                    return d >= from && d <= to
+                }
+                for bw in labs.olderBloodwork where inPeriod(bw.reportDate) {
+                    blocks.append(ContextBlock(type: "labs_period", content: formatBloodwork(bw, latest: false, now: now)))
+                }
+                for dx in labs.olderDexa where inPeriod(dx.scanDate) {
+                    blocks.append(ContextBlock(type: "labs_period", content: formatDexa(dx, latest: false, now: now)))
+                }
+                for gut in labs.olderGutHealth where inPeriod(gut.date) {
+                    if let content = formatGutHealth(gut, now: now) {
+                        blocks.append(ContextBlock(type: "labs_period", content: content))
+                    }
+                }
+            }
+        }
+        // The same report can match two periods.
+        var seen = Set<String>()
+        return blocks.filter { $0.type != "labs_period" || seen.insert($0.content).inserted }
     }
 
     /// Filter metrics to only include the given keys (e.g. sleep, hrv, restingHeartRate for .sleep).
@@ -604,71 +644,61 @@ struct HealthContextBuilder {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let lines = ["Recent auto-detected anomalies:"] + anomalies.map { e in
-            "  \(formatter.string(from: e.timestamp)): \(e.titleText)\(e.subtitleText.map { " — \($0)" } ?? "")"
+            "  \(formatter.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp))): \(e.titleText)\(e.subtitleText.map { " — \($0)" } ?? "")"
         }
         return ContextBlock(type: "anomalies", content: lines.joined(separator: "\n"))
     }
 
     // MARK: - Block Formatters (used by buildCurrentContext)
-    private static func formatMetrics(_ m: AIChatMetrics, dateRange: AIChatDateRange) -> String {
-        var parts: [String] = []
-        parts.append("Health metrics (latest = previous full day, sevenDayAvg = 7-day rolling average):")
+    /// "yesterday", "last night", or the day and how long ago ("Sat 17 Oct, 4 days ago").
+    static func latestLabel(_ date: Date?, night: Bool = false, now: Date = Date(), calendar: Calendar = .current) -> String {
+        guard let date else { return night ? "last night" : "yesterday" }
+        if calendar.isDate(date, inSameDayAs: now) { return night ? "last night" : "today" }
+        if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: y) {
+            return night ? "night ending yesterday" : "yesterday"
+        }
+        let f = DateFormatter()
+        f.calendar = calendar
+        f.timeZone = calendar.timeZone
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE d MMM"
+        return "\(f.string(from: date)), \(LumaDate.age(of: date, now: now, calendar: calendar))"
+    }
 
-        if let s = m.steps {
-            let latest = s.latest.map { String(format: "%.0f", $0) } ?? "N/A"
-            let avg = (s.sevenDayAvg ?? s.average).map { String(format: "%.0f", $0) } ?? "N/A"
-            parts.append("- Steps: \(latest) (yesterday), 7-day avg \(avg)/day (trend: \(s.trend ?? "N/A"))")
+    static func formatMetrics(_ m: AIChatMetrics, dateRange: AIChatDateRange, now: Date = Date()) -> String {
+        var parts: [String] = []
+        parts.append("Health metrics (latest = most recent completed day, labeled; 7-day avg = last 7 completed days; "
+                     + "trend = last 15 days vs the 15 before):")
+
+        func line(_ name: String, _ ctx: MetricContext?, format: String, unit: String, perDay: String = "",
+                  night: Bool = false, showTrend: Bool = true) {
+            guard let ctx else { return }
+            let latest = ctx.latest.map { String(format: format, $0) } ?? "N/A"
+            var out = "- \(name): \(latest)\(unit) (\(latestLabel(ctx.latestDate, night: night, now: now)))"
+            if let avg = ctx.sevenDayAvg { out += ", 7-day avg " + String(format: format, avg) + unit + perDay }
+            if let avg = ctx.average { out += ", 30-day avg " + String(format: format, avg) + unit + perDay }
+            if showTrend, let trend = ctx.trend { out += " (trend: \(trend))" }
+            parts.append(out)
         }
-        if let hr = m.heartRate {
-            let latest = hr.latest.map { String(format: "%.0f", $0) } ?? "N/A"
-            let avg = (hr.sevenDayAvg ?? hr.average).map { String(format: "%.0f", $0) } ?? "N/A"
-            parts.append("- Heart Rate: \(latest) bpm (yesterday), 7-day avg \(avg) bpm")
-        }
-        if let hrv = m.hrv {
-            let latest = hrv.latest.map { String(format: "%.0f", $0) } ?? "N/A"
-            let avg = (hrv.sevenDayAvg ?? hrv.average).map { String(format: "%.0f", $0) } ?? "N/A"
-            parts.append("- HRV: \(latest) ms (yesterday), 7-day avg \(avg) ms (trend: \(hrv.trend ?? "N/A"))")
-        }
-        if let sleep = m.sleep {
-            let latest = sleep.latest.map { String(format: "%.1f", $0) } ?? "N/A"
-            let avg = (sleep.sevenDayAvg ?? sleep.average).map { String(format: "%.1f", $0) } ?? "N/A"
-            parts.append("- Sleep: \(latest) hrs last night, 7-day avg \(avg) hrs/night (trend: \(sleep.trend ?? "N/A"))")
-        }
-        if let deep = m.sleepDeepHours {
-            let latest = deep.latest.map { String(format: "%.1f", $0) } ?? "N/A"
-            let avg = (deep.sevenDayAvg ?? deep.average).map { String(format: "%.1f", $0) } ?? "N/A"
-            parts.append("- Deep sleep: \(latest) hrs last night, avg \(avg) hrs")
-        }
-        if let rem = m.sleepRemHours {
-            let latest = rem.latest.map { String(format: "%.1f", $0) } ?? "N/A"
-            let avg = (rem.sevenDayAvg ?? rem.average).map { String(format: "%.1f", $0) } ?? "N/A"
-            parts.append("- REM sleep: \(latest) hrs last night, avg \(avg) hrs")
-        }
-        if let ex = m.exercise {
-            let latest = ex.latest.map { String(format: "%.0f", $0) } ?? "N/A"
-            let avg = (ex.sevenDayAvg ?? ex.average).map { String(format: "%.0f", $0) } ?? "N/A"
-            parts.append("- Exercise: \(latest) mins yesterday, 7-day avg \(avg) mins/day")
-        }
-        if let rhr = m.restingHeartRate {
-            let latest = rhr.latest.map { String(format: "%.0f", $0) } ?? "N/A"
-            let avg = (rhr.sevenDayAvg ?? rhr.average).map { String(format: "%.0f", $0) } ?? "N/A"
-            parts.append("- Resting Heart Rate: \(latest) bpm, 7-day avg \(avg) bpm")
-        }
-        if let vo2 = m.vo2Max {
-            parts.append("- VO2 Max: \(vo2.latest.map { String(format: "%.1f", $0) } ?? "N/A") mL/kg/min")
-        }
-        if let rr = m.respiratoryRate {
-            parts.append("- Respiratory Rate: \(rr.latest.map { String(format: "%.1f", $0) } ?? "N/A") breaths/min")
-        }
+        line("Steps", m.steps, format: "%.0f", unit: "", perDay: "/day")
+        line("Heart Rate", m.heartRate, format: "%.0f", unit: " bpm")
+        line("HRV", m.hrv, format: "%.0f", unit: " ms")
+        line("Sleep", m.sleep, format: "%.1f", unit: " hrs", perDay: "/night", night: true)
+        line("Deep sleep", m.sleepDeepHours, format: "%.1f", unit: " hrs", night: true, showTrend: false)
+        line("REM sleep", m.sleepRemHours, format: "%.1f", unit: " hrs", night: true, showTrend: false)
+        line("Exercise", m.exercise, format: "%.0f", unit: " mins", perDay: "/day")
+        line("Resting Heart Rate", m.restingHeartRate, format: "%.0f", unit: " bpm")
+        line("VO2 Max", m.vo2Max, format: "%.1f", unit: " mL/kg/min", showTrend: false)
+        line("Respiratory Rate", m.respiratoryRate, format: "%.1f", unit: " breaths/min", showTrend: false)
         if let rs = m.recoveryScore {
-            parts.append("- Recovery Score: \(rs)/100")
+            parts.append("- Recovery Score: \(rs)/100 (today)")
         }
         parts.append("Data range: \(dateRange.start) to \(dateRange.end)")
         return parts.joined(separator: "\n")
     }
 
     /// Size caps for the lab history blocks, in characters.
-    static let maxTrendsChars = 3_000
+    static let maxTrendsChars = 5_000
     static let maxMedicalChars = 4_000
     private static let maxMedicalItemChars = 300
 
@@ -676,25 +706,81 @@ struct HealthContextBuilder {
     /// repeating markers, and recent medical documents, as context blocks.
     /// Included even when specific values are nil: the structure still helps
     /// and avoids "empty response" failures.
-    static func labBlocks() -> [ContextBlock] {
+    static func labBlocks(now: Date = Date()) -> [ContextBlock] {
         guard let labs = LabContextService.shared.currentContext() else { return [] }
         var blocks: [ContextBlock] = []
-        if let bw = labs.bloodwork {
-            blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw)))
+        if let index = formatLabIndex(labs.index, now: now) {
+            blocks.append(ContextBlock(type: "labs_index", content: index))
         }
-        if let trends = formatTrends(labs.bloodworkTrends) {
+        if let bw = labs.bloodwork {
+            blocks.append(ContextBlock(type: "labs_bloodwork", content: formatBloodwork(bw, now: now)))
+        }
+        if let trends = formatTrends(labs.bloodworkTrends, now: now) {
             blocks.append(ContextBlock(type: "labs_trends", content: trends))
         }
         if let dx = labs.dexa {
-            blocks.append(ContextBlock(type: "labs_dexa", content: formatDexa(dx)))
+            var content = formatDexa(dx, now: now)
+            if let history = formatDexaHistory(labs.olderDexa, now: now) { content += "\n" + history }
+            blocks.append(ContextBlock(type: "labs_dexa", content: content))
         }
-        if let medical = formatMedicalDocuments(labs.medicalDocuments) {
+        if let medical = formatMedicalDocuments(labs.medicalDocuments, now: now) {
             blocks.append(ContextBlock(type: "labs_medical", content: medical))
         }
-        if let gut = labs.gutHealth, let content = formatGutHealth(gut) {
+        if let gut = labs.gutHealth, var content = formatGutHealth(gut, now: now) {
+            if let history = formatGutHistory(labs.olderGutHealth, now: now) { content += "\n" + history }
             blocks.append(ContextBlock(type: "labs_gut", content: content))
         }
         return blocks
+    }
+
+    /// Every report in the vault with its date and age, so Luma knows what
+    /// exists, including reports older than the ones shown in full.
+    static let maxIndexEntries = 30
+
+    static func formatLabIndex(_ entries: [LabIndexEntry], now: Date = Date()) -> String? {
+        guard !entries.isEmpty else { return nil }
+        let lines = entries.prefix(maxIndexEntries).map { e -> String in
+            var line = "  - \(e.kind): " + LumaDate.reportWhen(e.date, verb: "dated", uploadedAt: e.uploadedAt, now: now)
+            if let source = e.source, !source.isEmpty { line += " — \(source)" }
+            if e.valueCount > 0 { line += " (\(e.valueCount) value\(e.valueCount == 1 ? "" : "s"))" }
+            return line
+        }
+        var out = "Reports in the user's vault, newest first (\(entries.count) total):\n" + lines.joined(separator: "\n")
+        if entries.count > maxIndexEntries { out += "\n  (\(entries.count - maxIndexEntries) older not listed)" }
+        return out
+    }
+
+    /// Earlier DEXA scans' whole-body values, newest first.
+    static func formatDexaHistory(_ scans: [LabDexaContext], now: Date = Date()) -> String? {
+        guard !scans.isEmpty else { return nil }
+        let lines = scans.map { dx -> String in
+            var values: [String] = []
+            if let v = dx.bodyFatPercent { values.append("body fat \(v)%") }
+            if let v = dx.leanMassKg { values.append("lean mass \(v) kg") }
+            if let v = dx.visceralFatRating { values.append("visceral fat \(v)") }
+            if let v = dx.androidGynoidRatio { values.append("A/G ratio \(v)") }
+            if let v = dx.boneDensityTScore { values.append("T-score \(v)") }
+            return "  - " + LumaDate.reportWhen(dx.scanDate, verb: "scanned", uploadedAt: dx.uploadedAt, now: now)
+                + ": " + (values.isEmpty ? "no whole-body values" : values.joined(separator: ", "))
+        }
+        return "Earlier DEXA scans (newest first):\n" + lines.joined(separator: "\n")
+    }
+
+    /// Earlier gut reports' summary values, newest first.
+    static func formatGutHistory(_ reports: [LabGutHealthContext], now: Date = Date()) -> String? {
+        guard !reports.isEmpty else { return nil }
+        let lines = reports.map { gut -> String in
+            let summary = gut.values.filter { $0.section == "summary" }.map { v -> String in
+                var out = v.name.replacingOccurrences(of: "_", with: " ")
+                if let n = v.value { out += " " + String(format: "%g", n) }
+                else if let t = v.text { out += ": \(t)" }
+                return out
+            }
+            return "  - " + LumaDate.reportWhen(gut.date, verb: "collected", uploadedAt: gut.uploadedAt, now: now)
+                + (gut.source.map { " — \($0)" } ?? "") + ": "
+                + (summary.isEmpty ? "\(gut.values.count + gut.species.count) values" : summary.joined(separator: "; "))
+        }
+        return "Earlier gut microbiome reports (newest first):\n" + lines.joined(separator: "\n")
     }
 
     /// Gut reports carry hundreds of values: summary and flagged values come
@@ -702,7 +788,7 @@ struct HealthContextBuilder {
     static let maxGutChars = 6_000
     static let gutTopSpecies = 25
 
-    static func formatGutHealth(_ gut: LabGutHealthContext) -> String? {
+    static func formatGutHealth(_ gut: LabGutHealthContext, now: Date = Date()) -> String? {
         guard !gut.values.isEmpty || !gut.species.isEmpty else { return nil }
         func entry(_ v: LabGutHealthContext.Value) -> String {
             var out = v.name.replacingOccurrences(of: "_", with: " ")
@@ -738,8 +824,8 @@ struct HealthContextBuilder {
             lines.append("  \(title.prefix(1).uppercased() + title.dropFirst()): "
                          + (bySection[section] ?? []).map(entry).joined(separator: "; "))
         }
-        var header = "Gut microbiome report"
-        if let date = gut.date { header += " (\(date))" }
+        var header = "Gut microbiome report ("
+            + LumaDate.reportWhen(gut.date, verb: "collected", uploadedAt: gut.uploadedAt, now: now) + ")"
         if let source = gut.source { header += " — \(source)" }
         return capped(header: header + ":", lines, limit: maxGutChars)
     }
@@ -757,18 +843,25 @@ struct HealthContextBuilder {
         return out
     }
 
-    private static func formatTrends(_ trends: [LabMarkerTrend]) -> String? {
+    private static func formatTrends(_ trends: [LabMarkerTrend], now: Date = Date()) -> String? {
         guard !trends.isEmpty else { return nil }
+        // Ages once per draw date, so each value doesn't repeat them.
+        var drawDates: [String] = []
+        for t in trends { for p in t.points { if let d = p.date, !drawDates.contains(d) { drawDates.append(d) } } }
+        let legend = drawDates
+            .sorted { LumaDate.sortDate($0, uploadedAt: nil) > LumaDate.sortDate($1, uploadedAt: nil) }
+            .compactMap { LumaDate.stamp($0, now: now) }
+            .joined(separator: "; ")
         let lines = trends.map { t in
             "  - \(t.name): " + t.points.map { p in
                 "\(LabReportWithMarkers.format(p.value))\(p.unit.map { " \($0)" } ?? "")\(p.date.map { " (\($0))" } ?? "")"
             }.joined(separator: " ← ")
         }
-        return capped(header: "Bloodwork history for markers measured more than once (newest first):",
-                      lines, limit: maxTrendsChars)
+        return capped(header: "Bloodwork history for markers measured more than once (newest first). "
+                      + "Draw dates: \(legend).", lines, limit: maxTrendsChars)
     }
 
-    private static func formatMedicalDocuments(_ docs: [LabMedicalDocumentContext]) -> String? {
+    private static func formatMedicalDocuments(_ docs: [LabMedicalDocumentContext], now: Date = Date()) -> String? {
         guard !docs.isEmpty else { return nil }
         func clip(_ text: String) -> String {
             text.count > maxMedicalItemChars ? String(text.prefix(maxMedicalItemChars)) + "…" : text
@@ -777,7 +870,7 @@ struct HealthContextBuilder {
         for doc in docs {
             var header = "  - \(doc.title ?? "Medical document")"
             if let type = doc.documentType, !type.isEmpty { header += " [\(type)]" }
-            if let date = doc.date { header += " (\(date))" }
+            header += " (" + LumaDate.reportWhen(doc.date, verb: "dated", uploadedAt: doc.uploadedAt, now: now) + ")"
             lines.append(header)
             if let summary = doc.summary, !summary.isEmpty { lines.append("    Summary: " + clip(summary)) }
             if !doc.findings.isEmpty { lines.append("    Findings: " + clip(doc.findings.joined(separator: "; "))) }
@@ -787,10 +880,10 @@ struct HealthContextBuilder {
         return capped(header: "Medical documents (newest first):", lines, limit: maxMedicalChars)
     }
 
-    private static func formatBloodwork(_ bw: LabBloodworkContext) -> String {
+    static func formatBloodwork(_ bw: LabBloodworkContext, latest: Bool = true, now: Date = Date()) -> String {
         var lines: [String] = []
-        var header = "Bloodwork lab results"
-        if let date = bw.reportDate { header += " (\(date))" }
+        var header = (latest ? "Latest bloodwork lab results (" : "Bloodwork lab results (")
+            + LumaDate.reportWhen(bw.reportDate, verb: "drawn", uploadedAt: bw.uploadedAt, now: now) + ")"
         if let lab = bw.laboratory { header += " — \(lab)" }
         lines.append(header + ":")
         for m in bw.metrics {
@@ -807,10 +900,10 @@ struct HealthContextBuilder {
         return lines.joined(separator: "\n")
     }
 
-    private static func formatDexa(_ dx: LabDexaContext) -> String {
+    static func formatDexa(_ dx: LabDexaContext, latest: Bool = true, now: Date = Date()) -> String {
         var lines: [String] = []
-        var header = "DEXA body composition scan"
-        if let date = dx.scanDate { header += " (\(date))" }
+        let header = (latest ? "Latest DEXA body composition scan (" : "DEXA body composition scan (")
+            + LumaDate.reportWhen(dx.scanDate, verb: "scanned", uploadedAt: dx.uploadedAt, now: now) + ")"
         lines.append(header + ":")
         if let v = dx.bodyFatPercent     { lines.append("  • Body fat: \(v)%") }
         if let v = dx.leanMassKg         { lines.append("  • Lean mass: \(v) kg") }
@@ -856,8 +949,13 @@ struct HealthContextBuilder {
         return lines.joined(separator: "\n")
     }
 
-    private static func formatMemory(_ mem: AIChatMemoryCapsule) -> String {
-        var parts: [String] = ["User memory (from prior conversations):"]
+    static func formatMemory(_ mem: AIChatMemoryCapsule, latestBloodwork: String? = nil) -> String {
+        var parts: [String] = ["User memory (from prior conversations; dated where known — older notes may no longer hold):"]
+        // The model doesn't reliably compare dates itself, so say which way round they are.
+        if let draw = LumaDate.normalizedDay(latestBloodwork) {
+            parts.append("Latest bloodwork was drawn \(draw). Anything noted after that date (a supplement, a change, "
+                         + "a conversation) can't have affected it and hasn't been tested yet.")
+        }
         if !mem.activeGoals.isEmpty     { parts.append("Goals: " + mem.activeGoals.joined(separator: "; ")) }
         if !mem.activeConcerns.isEmpty  { parts.append("Concerns: " + mem.activeConcerns.joined(separator: "; ")) }
         if !mem.medications.isEmpty     { parts.append("Medications/supplements: " + mem.medications.joined(separator: "; ")) }
@@ -892,6 +990,7 @@ struct HealthContextBuilder {
             for e in activeMeds.prefix(10) {
                 var line = "  • \(e.data["name"] ?? "unknown")"
                 if let dose = e.data["dosage"], !dose.isEmpty { line += " \(dose)" }
+                line += " (since \(LumaDate.day(e.timestamp)), \(LumaDate.age(of: e.timestamp, now: now)))"
                 lines.append(line)
             }
         }
@@ -908,6 +1007,7 @@ struct HealthContextBuilder {
             for e in activeSupps.prefix(10) {
                 var line = "  • \(e.data["name"] ?? "unknown")"
                 if let dose = e.data["dosage"], !dose.isEmpty { line += " \(dose)" }
+                line += " (since \(LumaDate.day(e.timestamp)), \(LumaDate.age(of: e.timestamp, now: now)))"
                 lines.append(line)
             }
         }
@@ -922,7 +1022,7 @@ struct HealthContextBuilder {
         if !activeConditions.isEmpty {
             lines.append("Active conditions:")
             for e in activeConditions.prefix(10) {
-                lines.append("  • \(e.data["condition"] ?? "unknown")")
+                lines.append("  • \(e.data["condition"] ?? "unknown") (diagnosed \(LumaDate.day(e.timestamp)), \(LumaDate.age(of: e.timestamp, now: now)))")
             }
         }
 
@@ -950,7 +1050,7 @@ struct HealthContextBuilder {
                 let metric = e.metricType ?? "unknown metric"
                 let dir = e.direction.map { " (\($0))" } ?? ""
                 let dev = e.deviationPct.map { String(format: " %.0f%% vs baseline", $0) } ?? ""
-                lines.append("  • \(dateFmt.string(from: e.timestamp)): \(metric) anomaly\(dir)\(dev)")
+                lines.append("  • \(dateFmt.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp, now: now))): \(metric) anomaly\(dir)\(dev)")
             }
         }
 
@@ -970,9 +1070,9 @@ struct HealthContextBuilder {
             for e in recentSignificant.prefix(5) {
                 let title = e.titleText
                 if let detail = e.subtitleText, !detail.isEmpty, detail != title {
-                    lines.append("  • \(dateFmt.string(from: e.timestamp)): \(title) — \(detail)")
+                    lines.append("  • \(dateFmt.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp, now: now))): \(title) — \(detail)")
                 } else {
-                    lines.append("  • \(dateFmt.string(from: e.timestamp)): \(title)")
+                    lines.append("  • \(dateFmt.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp, now: now))): \(title)")
                 }
             }
         }
@@ -985,7 +1085,8 @@ struct HealthContextBuilder {
     // MARK: - Trend Computation
 
     /// Compare recent half of 30-day data to prior half.
-    /// Returns "improving", "stable", or "declining".
+    /// Returns "rising (+8%)", "stable", or "falling (-6%)". Direction only:
+    /// a rising resting heart rate is not an improvement.
     private static func computeTrend(_ trendData: [TrendPeriod: [TrendPoint]]) -> String? {
         guard let monthData = trendData[.month], monthData.count >= 10 else {
             return nil
@@ -1004,20 +1105,25 @@ struct HealthContextBuilder {
         guard priorAvg > 0 else { return "stable" }
         let changePct = ((recentAvg - priorAvg) / priorAvg) * 100
 
-        if changePct > 5 { return "improving" }
-        if changePct < -5 { return "declining" }
+        if changePct > 5 { return String(format: "rising (+%.0f%%)", changePct) }
+        if changePct < -5 { return String(format: "falling (%.0f%%)", changePct) }
         return "stable"
     }
 
     // MARK: - Helpers
 
-    /// Last complete day's value — excludes today's partial accumulation.
-    private static func previousDayValue(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
-        guard let data = trendData[.week] ?? trendData[.month], !data.isEmpty else { return nil }
+    /// Last complete day's point within 90 days — excludes today's partial
+    /// accumulation. Not always yesterday: the watch may not have been worn,
+    /// and VO2 max is only measured now and then.
+    private static func previousDay(_ trendData: [TrendPeriod: [TrendPoint]]) -> TrendPoint? {
         let today = Calendar.current.startOfDay(for: Date())
-        let completedDays = data.filter { !Calendar.current.isDate($0.date, inSameDayAs: today) }
-        return completedDays.sorted { $0.date < $1.date }.last?.value
+        for period in [TrendPeriod.week, .month, .threeMonths] {
+            let completed = (trendData[period] ?? []).filter { !Calendar.current.isDate($0.date, inSameDayAs: today) }
+            if let last = completed.max(by: { $0.date < $1.date }) { return last }
+        }
+        return nil
     }
+
 
     /// 7-day rolling average of completed days only (excludes today).
     private static func weekAverage(_ trendData: [TrendPeriod: [TrendPoint]]) -> Double? {
@@ -1053,8 +1159,9 @@ struct HealthContextBuilder {
         let min = values.min()
         let max = values.max()
 
-        // Latest = last night's stage data (already a completed night)
-        let latest = data.last?[keyPath: keyPath]
+        // Latest = the most recent night with stage data (already a completed night)
+        let lastNight = data.max { $0.date < $1.date }
+        let latest = lastNight?[keyPath: keyPath]
 
         // 7-day avg from week trend, excluding today
         let weekAvg: Double? = {
@@ -1074,7 +1181,8 @@ struct HealthContextBuilder {
             sevenDayAvg: weekAvg,
             trend: computeTrend(
                 [.month: data.map { TrendPoint(date: $0.date, value: $0[keyPath: keyPath]) }]
-            )
+            ),
+            latestDate: lastNight?.date
         )
     }
 }
