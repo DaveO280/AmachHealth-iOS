@@ -1,7 +1,9 @@
 # Venice E2EE: phone-to-enclave encryption for Luma and report parsing
 
-Status: design + working spike (2026-10-23). Branches `spike/venice-e2ee`
-(iOS) and `spike/venice-e2ee-relay` (website). Nothing merged.
+Status: spike merged; Phase 4a (Luma chat over E2EE, behind the off-by-default
+`LumaE2EEChat` flag) on `luma/e2ee-chat` (iOS) and `luma/e2ee-relay-auth`
+(website), 2026-10-23. The relay stays off in production
+(`AMACH_E2EE_RELAY_ENABLED`). See "Phase 4a" below.
 
 ## TL;DR / recommendation
 
@@ -31,9 +33,10 @@ Status: design + working spike (2026-10-23). Branches `spike/venice-e2ee`
    becomes its own short relay request, which removes the 300 s Vercel
    ceiling as a concern.
 6. **Chat fallback changes:** `e2ee-kimi-k2-6` can't take phone-encrypted
-   requests today. Chat becomes **GLM 5.3 (phala) → GLM 5.3 Flash
-   (near-ai)**. These are different enclave providers, so the failure domains
-   stay independent.
+   requests today. E2EE chat is **GLM 5.3 (phala) → Qwen 3.8 27B (near-ai)
+   → GLM 5.3 Flash (near-ai)** (decided 2026-10-23). Different enclave
+   providers, so the failure domains stay independent; Qwen and Flash share
+   the near-ai key, so the phone still encrypts two copies.
 
 **What this buys:** neither Vercel nor Venice's API layer can read prompts,
 health context or replies, as long as both behave honestly. Logs,
@@ -61,6 +64,8 @@ being detected. Venice's response signatures don't close this gap (see
 | REPORTDATA = `signing_address(20) ‖ 0×12 ‖ nonce(32)`, address = keccak256(pubkey)[12:] | phala (`aci/1`) and near-ai formats both |
 | Enclave keys are per gateway, not per model: phala `04943c…` serves glm-5-3-p, glm-5-2-p, gpt-oss-120b-p; near-ai `0442d4…` serves deepseek-v4-flash, glm-5-3-flash | attestation survey |
 | TD attributes debug bit is 0 on every attested model | quote parse |
+| **At most one system message.** Venice merges system messages before the enclave, which corrupts ciphertext: two encrypted system messages (adjacent or not) → `400 E2EE decryption failed` (phala) / `Encrypted field is not valid hex` (near-ai). One → 200. Field size isn't the limit (4 KB plaintext → 200). The phone merges its system parts into one before encrypting | live probe + simulator run, Phase 4a |
+| Qwen 3.8 27B (`e2ee-qwen3-8-27b`, near-ai): E2EE chat, encrypted history recall and `strip_thinking_response` work; replies open with a stray `"\n\n"` (trimmed on the phone) | live |
 | Kimi K2.6 / K3: `verified: false`, attested by chutes/near-ai with an `e2e_pubkey` (1580 b64 chars, probably ML-KEM-768), no `signing_key`; K2.6 attestation sometimes 502 | survey |
 
 ### Q5: which models report `supportsE2EE` today
@@ -305,26 +310,31 @@ plaintext replies.
 
 ```
 GET  /api/ai/e2ee?tier=chat|parseText|parseLong|memory|agent
-  → 200 {"tier":"chat","models":["e2ee-glm-5-3-p","e2ee-glm-5-3-flash"]}
+  → 200 {"tier":"chat","models":["e2ee-glm-5-3-p","e2ee-qwen3-8-27b","e2ee-glm-5-3-flash"]}
 
-POST /api/ai/e2ee?tier=chat
+POST /api/ai/e2ee?tier=chat        Authorization: Bearer <backup session token>
   {"clientPubKey":"04…(130 hex)","stream":true,"maxTokens":600,"temperature":0.7,
    "attempts":[{"model":"e2ee-glm-5-3-p","modelPubKey":"04…","messages":[{"role":"system","content":"<hex>"},…]}, …]}
   → 200 text/event-stream (Venice's encrypted SSE, unread), x-amach-model, x-amach-tee(-provider)
-  → 400 {code: plaintext_refused | model_not_allowed | bad_client_key | bad_model_key | bad_role | bad_attempts}
-  → 503 enclave_busy | ai_credit_exhausted
+  → 400 {code: plaintext_refused | model_not_allowed | bad_client_key | bad_model_key | bad_role | bad_attempts | multiple_system_messages}
+  → 401 auth_required | session_expired     (phone signs a new challenge, retries once)
+  → 429 rate_limited                         (per wallet)
+  → 503 enclave_busy (+ staleKeyModels when an enclave couldn't decrypt) | ai_credit_exhausted | relay_not_configured
+  a success served after a stale-key failure carries x-amach-e2ee-stale-key
+
+GET /api/ai/prompts → {sha256, config}       (Luma's prompt text; public, no health data)
 ```
 
 It refuses any message that isn't ≥186 hex chars, for every role. A client
 bug therefore fails closed instead of leaking plaintext to the server.
 The route is **off (404) unless `AMACH_E2EE_RELAY_ENABLED=true`**. Because
 the relay can't see content, an open one would let anyone run arbitrary
-prompts on Amach's Venice key without a trace. POST is limited to 30
-requests per minute per client IP. The limit lives in memory, so it's per
-Vercel instance: a brake on one client, not a global quota. Bodies are
-capped at 2 MB (413). Before enabling it in production, it needs
-auth-bound limits, for example the backup signed-challenge session.
-`/api/ai/chat` has no auth today either.
+prompts on Amach's Venice key without a trace. POST needs the wallet's
+encrypted-backup session token (signed "Amach backup access" challenge from
+`/api/backup/credentials`, 2 h) and is limited per wallet: 20 per minute and
+500 per day. The limits live in memory, so they're per Vercel instance: a
+brake on one wallet, not a global quota. Bodies are capped at 2 MB (413).
+`/api/ai/chat` has no auth today.
 
 ## The spike
 
@@ -394,9 +404,35 @@ through Amach). Captures and scan scripts are in the session notes folder.
 | 4c | Parse pipeline in JavaScriptCore (`amach-parsers.js` built in website CI, `ReportParseEngine`). Then retire `/api/health/parse-report` for the app. Memory/agent tiers through the relay. Inventory of the remaining server Venice callers | ~1–1.5 wk |
 | 4d | Remove the plaintext routes for the app (server refuses plaintext AI). mitmproxy regression capture in CI-style script (as for Phase 3) | 2 d |
 
-Decisions needed from Dave: the residual-risk option (1/2/3 above), and
-whether losing Kimi as the chat backup is acceptable (GLM Flash is
-lower quality; `e2ee-qwen3-8-27b` is a possible third).
+Decided 2026-10-23: residual-risk option 1 for v1 (product copy: "Amach's
+servers only relay encrypted data"; reasoning stripped), and Qwen 3.8 27B
+replaces Kimi as the E2EE chat fallback.
+
+### Phase 4a (2026-10-23)
+
+Done, behind `LumaE2EEChat` (off by default; `-LumaE2EEChat YES` in Debug):
+
+- Website: relay auth = backup session token + per-wallet limits
+  (`src/lib/venice/e2eeAuth.ts`); `AMACH_E2EE_RELAY_ENABLED` stays the master
+  switch. Prompt assembly moved to `src/lib/luma/chatPrompt.ts` (shared by
+  `/api/ai/chat`, `GET /api/ai/prompts` and the fixture). Stale-key
+  reporting. Refuses >1 system message.
+- iOS: `LumaPromptAssembler` reproduces `/api/ai/chat` exactly
+  (`LumaPromptAssemblerTests` replays the website's fixture; copy it with
+  `scripts/sync-luma-prompts.py`). Bundled prompt config; served configs must
+  hash-match, and release builds accept only hashes they ship with.
+  `LumaPrivateChat` sends every ChatService call (chat, proactive insight,
+  rolling summary, health summary, memory extraction) through
+  `VeniceE2EEClient`, streaming. Failures map to Luma's "enclave busy" /
+  "out of credit" notes (all attestations failing included); no plaintext
+  fallback while the flag is on. `VeniceE2EEClient` adds the bearer token
+  (one refresh on 401) and re-attests + retries once on stale enclave keys.
+- Simulator capture of both hops: no plaintext (report in the session notes).
+
+Not done / next: Privy-signed relay auth wasn't exercised on the simulator
+(no wallet session there; a DEBUG `AMACH_E2EE_RELAY_TOKEN` override was
+used); rate limits are per instance; memory extraction still uses the chat
+tier (as `/api/ai/chat` does today).
 
 ## Side findings
 

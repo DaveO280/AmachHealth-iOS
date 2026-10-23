@@ -85,6 +85,10 @@ final class BackupCredentialsClient {
 
     var walletAddress: String { signer.address }
 
+    /// Forget the session so the next `currentToken()` signs a new challenge
+    /// (after another route, such as the E2EE AI relay, refused the token).
+    func resetSession() { session = nil }
+
     /// A session token with at least ten minutes left, signing a new
     /// challenge when needed.
     func currentToken() async throws -> String {
