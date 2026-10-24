@@ -27,6 +27,12 @@ final class TimelineService: ObservableObject {
 
     // MARK: - Public API
 
+    /// Events as the vault holds them now, for Luma's context. Read fresh,
+    /// not from `events`, so anything written since the feed loaded counts.
+    func contextEvents() -> [TimelineEvent] {
+        loadFromCache()
+    }
+
     func loadEvents() async {
         events = loadFromCache()
         error = nil

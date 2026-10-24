@@ -41,6 +41,7 @@ final class LumaTemporalContextTests: XCTestCase {
 
     override func tearDown() async throws {
         LocalVault.shared.close(forget: true)
+        DashboardService.shared.sleepTrend = [:]
         BackupService.autoRunEnabled = true
         StorjImportService.autoRunEnabled = true
         service.reset()
@@ -312,6 +313,134 @@ final class LumaTemporalContextTests: XCTestCase {
         let intents = ChatIntentClassifier.classifyAll("how does my gut health relate to my sleep?")
         let ctx = HealthContextBuilder.buildContext(for: intents[0], mode: .quick, message: nil, intents: Set(intents))
         XCTAssertTrue((ctx?.contextBlocks ?? []).contains { $0.type == "labs_gut" })
+    }
+
+    // MARK: - Timeline
+
+    private func event(_ type: TimelineEventType, _ date: Date, _ data: [String: String]) -> TimelineEvent {
+        TimelineEvent(id: UUID().uuidString, eventType: type, timestamp: date, data: data,
+                      metadata: TimelineEventMetadata(platform: "ios", version: "1", source: .userEntered))
+    }
+
+    /// A timeline like the seeded test wallet's: most events are months old.
+    private func seedTimeline(now: Date = Date()) throws {
+        func ago(_ days: Int) -> Date { calendar.date(byAdding: .day, value: -days, to: now)! }
+        let vault = try XCTUnwrap(LocalVault.shared.database)
+        try vault.saveTimelineEvents([
+            event(.conditionDiagnosed, ago(380), ["condition": "Mild Sleep Apnea (AHI 8)", "diagnosedBy": "Sleep study"]),
+            event(.illnessStarted, ago(310), ["illness": "Flu", "severity": "Moderate", "symptoms": "Fatigue, Sinus Congestion"]),
+            event(.illnessResolved, ago(300), ["illness": "Flu", "duration": "10 days"]),
+            event(.medicationStarted, ago(260), ["name": "Magnesium Glycinate", "dosage": "400mg", "notes": "For sleep and recovery"]),
+            event(.supplementStarted, ago(245), ["name": "Creatine Monohydrate", "dosage": "5g daily"]),
+            event(.dietChange, ago(245), ["change": "Time-restricted eating (16:8)"]),
+            event(.medicationDosageChanged, ago(225), ["name": "Magnesium Glycinate", "newDosage": "600mg"]),
+            event(.sleepChange, ago(225), ["change": "Consistent 10:30pm bedtime"]),
+            event(.injuryOccurred, ago(218), ["injury": "Right knee strain", "notes": "During trail run"]),
+            event(.stressEvent, ago(208), ["event": "High work stress week — product launch"]),
+            event(.injuryResolved, ago(205), ["injury": "Right knee strain"]),
+            event(.generalNote, ago(9), ["notes": "Energy levels consistent, no afternoon crash"]),
+        ], origin: "device")
+        // No TimelineService refresh: context reads the vault as it is now.
+    }
+
+    /// A month of sleep on the dashboard, so the context has metrics.
+    private func loadSleepMetrics() {
+        DashboardService.shared.sleepTrend[.month] = (1...30).map {
+            TrendPoint(date: calendar.date(byAdding: .day, value: -$0, to: Date())!, value: 7)
+        }
+    }
+
+    private func timeline(_ ctx: AIChatContext?) -> String? {
+        ctx?.contextBlocks?.first { $0.type == "timeline" }?.content
+    }
+
+    func test_a_sleep_question_in_quick_mode_gets_the_timeline() throws {
+        try seedTimeline()
+        loadSleepMetrics()
+        let message = "How has my sleep been since I started magnesium?"
+        let intents = ChatIntentClassifier.classifyAll(message)
+        let ctx = HealthContextBuilder.buildContext(for: intents[0], mode: .quick, message: message, intents: Set(intents))
+        let block = try XCTUnwrap(timeline(ctx), "no timeline block: \(ctx?.contextBlocks?.map(\.type) ?? [])")
+        XCTAssertTrue(block.contains("Magnesium Glycinate 600mg"), block)
+        XCTAssertTrue(block.contains("Consistent 10:30pm bedtime"), block)
+    }
+
+    func test_the_timeline_carries_injuries_illnesses_and_older_events_with_dates() throws {
+        try seedTimeline()
+        loadSleepMetrics()
+        let ctx = HealthContextBuilder.buildContext(for: .general, mode: .deep, message: "what's on my timeline?")
+        let block = try XCTUnwrap(timeline(ctx))
+        for needle in ["Right knee strain", "Flu", "High work stress week", "Time-restricted eating (16:8)",
+                       "Mild Sleep Apnea (AHI 8)", "Creatine Monohydrate 5g daily", "months ago"] {
+            XCTAssertTrue(block.contains(needle), "missing \(needle):\n\(block)")
+        }
+        let dayPattern = #"\d{4}-\d{2}-\d{2}, \d+ months ago: Injury Occurred"#
+        XCTAssertNotNil(block.range(of: dayPattern, options: .regularExpression), block)
+    }
+
+    func test_the_timeline_reaches_luma_before_any_metrics_load() throws {
+        try seedTimeline()
+        XCTAssertNil(HealthContextBuilder.buildCurrentContext(), "this test needs no dashboard data")
+        let ctx = HealthContextBuilder.buildContext(for: .medications, mode: .quick, message: "what meds am I on?")
+        let block = try XCTUnwrap(timeline(ctx))
+        XCTAssertTrue(block.contains("Magnesium Glycinate"), block)
+    }
+
+    func test_what_holds_now_follows_dose_changes_and_resolutions() throws {
+        try seedTimeline(now: now)
+        let events = TimelineService.shared.contextEvents()
+        let block = HealthContextBuilder.formatTimeline(events, now: now, calendar: calendar)
+        let current = try XCTUnwrap(block.components(separatedBy: "Events, newest first:").first)
+        XCTAssertTrue(current.contains("Magnesium Glycinate 600mg (since 2026-02-03, 8 months ago; dose changed 2026-03-10)"), current)
+        XCTAssertTrue(current.contains("Mild Sleep Apnea (AHI 8) (diagnosed 2025-10-06, 12 months ago)"), current)
+        XCTAssertFalse(current.contains("Right knee strain"), "the knee strain resolved:\n\(current)")
+        XCTAssertFalse(current.contains("Flu"), "the flu resolved:\n\(current)")
+        XCTAssertTrue(block.contains("2026-03-17, 7 months ago: Injury Occurred — Right knee strain; During trail run"), block)
+        XCTAssertTrue(block.contains("Dosage Changed — Magnesium Glycinate; now 600mg"), block)
+    }
+
+    func test_the_summary_keeps_what_holds_now_and_the_last_month() throws {
+        try seedTimeline(now: now)
+        let events = TimelineService.shared.contextEvents()
+        let summary = HealthContextBuilder.formatTimeline(events, summary: true, now: now, calendar: calendar)
+        XCTAssertTrue(summary.contains("Creatine Monohydrate 5g daily"), summary)
+        XCTAssertTrue(summary.contains("Energy levels consistent"), "last month's note: \(summary)")
+        XCTAssertFalse(summary.contains("Time-restricted eating"), "older events stay out: \(summary)")
+        XCTAssertTrue(summary.contains("logged events, back to 2025-10-06, aren't listed here."), summary)
+    }
+
+    func test_a_long_timeline_stays_under_the_cap_and_says_what_it_left_out() {
+        let events = (0..<200).map {
+            event(.generalNote, calendar.date(byAdding: .day, value: -$0, to: now)!,
+                  ["notes": String(repeating: "Felt fine after the morning run, slept well. ", count: 5)])
+        }
+        let block = HealthContextBuilder.formatTimeline(events, now: now, calendar: calendar)
+        XCTAssertLessThanOrEqual(block.count, HealthContextBuilder.timelineCharCap)
+        XCTAssertTrue(block.contains("earlier logged events, back to"), block)
+        XCTAssertTrue(block.contains("2026-10-21, today: General Note"), "newest first: \(block)")
+    }
+
+    func test_timeline_topics_and_logged_names_reach_the_full_timeline() {
+        let names = ["Magnesium Glycinate", "Right knee strain"]
+        XCTAssertTrue(ChatIntentClassifier.mentionsTimeline("has my HRV changed since I got sick?"))
+        XCTAssertTrue(ChatIntentClassifier.mentionsTimeline("is magnesium helping my sleep?", names: names))
+        XCTAssertTrue(ChatIntentClassifier.mentionsTimeline("how's the knee?", names: names) == false,
+                      "'knee' is under five letters, so only timeline words catch it")
+        XCTAssertFalse(ChatIntentClassifier.mentionsTimeline("how many steps did I do today?", names: names))
+        XCTAssertFalse(ChatIntentClassifier.mentionsTimeline("did I sleep well last night on my right side?",
+                                                             names: names + ["Mild Sleep Apnea"]),
+                       "'right' is a stopword and 'sleep' a topic word")
+    }
+
+    func test_a_quick_question_off_the_timeline_gets_the_summary() throws {
+        try seedTimeline()
+        loadSleepMetrics()
+        let message = "How did I sleep last night?"
+        let intents = ChatIntentClassifier.classifyAll(message)
+        let ctx = HealthContextBuilder.buildContext(for: intents[0], mode: .quick, message: message, intents: Set(intents))
+        let block = try XCTUnwrap(timeline(ctx))
+        XCTAssertTrue(block.contains("Current medications:"), block)
+        XCTAssertFalse(block.contains("Right knee strain"), block)
     }
 
     // MARK: - Live evaluation fixture (opt-in)
