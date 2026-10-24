@@ -45,7 +45,7 @@ final class TimelineService: ObservableObject {
         // Memory drawn from the old version may no longer hold; the timeline
         // block carries the edited event.
         if let previous, previous != event {
-            ConversationMemoryStore.shared.retireFacts(fromTimelineEvent: event.id)
+            ConversationMemoryStore.shared.forgetTimelineEvent(event.id)
         }
     }
 
@@ -53,7 +53,7 @@ final class TimelineService: ObservableObject {
         error = nil
         events.removeAll { $0.id == id }
         try vault?.deleteTimelineEvent(id: id)
-        ConversationMemoryStore.shared.retireFacts(fromTimelineEvent: id)
+        ConversationMemoryStore.shared.forgetTimelineEvent(id)
         timelineDebug("Removed timeline event \(id)")
     }
 

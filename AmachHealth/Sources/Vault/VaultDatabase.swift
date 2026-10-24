@@ -235,9 +235,12 @@ extension VaultDatabase {
             """ + v2BackedUpTables.map { triggers(table: $0.table, idExpr: $0.idExpr) }.joined(separator: "\n")
         }
 
-        /// v3: a memory fact drawn from a timeline entry names it, so deleting
-        /// or editing the entry retires the fact.
-        static let v3 = "ALTER TABLE memory_facts ADD COLUMN source_event_id TEXT;"
+        /// v3: memory facts and summaries name the timeline entries they were
+        /// drawn from, so deleting or editing an entry forgets them.
+        static let v3 = """
+            ALTER TABLE memory_facts ADD COLUMN source_event_id TEXT;
+            ALTER TABLE memory_summaries ADD COLUMN source_event_ids TEXT;
+            """
 
         private static func triggers(table: String, idExpr: @escaping (String) -> String) -> String {
             let bump = { (row: String) in

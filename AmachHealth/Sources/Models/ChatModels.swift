@@ -345,6 +345,9 @@ struct SessionSummary: Codable, Identifiable {
     let topics: [String]
     let importance: MemoryImportance
     let messageCount: Int
+    /// Timeline events the conversation discussed. Deleting or editing one
+    /// drops the summary, as for facts drawn from it.
+    var sourceEventIds: [String] = []
 }
 
 /// Storj-compatible payload for conversation memory sync.
@@ -466,14 +469,15 @@ final class ConversationMemoryStore: ObservableObject {
         saveToDisk()
     }
 
-    /// Retire the active facts drawn from this timeline event, after the
-    /// event was deleted or edited. Returns how many were retired.
-    @discardableResult
-    func retireFacts(fromTimelineEvent eventId: String, at date: Date = Date()) -> Int {
+    /// After a timeline event was deleted or edited: retire the facts drawn
+    /// from it and drop the summaries of chats that discussed it, so memory
+    /// keeps no copy of the event that can go stale. The timeline is the record.
+    func forgetTimelineEvent(_ eventId: String, at date: Date = Date()) {
         let ids = Set(facts.filter { $0.isActive && $0.sourceEventId == eventId }.map(\.id))
-        guard !ids.isEmpty else { return 0 }
+        let summaryCount = summaries.count
+        summaries.removeAll { $0.sourceEventIds.contains(eventId) }
+        guard !ids.isEmpty || summaries.count != summaryCount else { return }
         upsert(facts: [], summary: nil, retiring: ids, at: date)
-        return ids.count
     }
 
     // Storj sync removed in Phase 3: memory lives in the vault and in the encrypted backup.

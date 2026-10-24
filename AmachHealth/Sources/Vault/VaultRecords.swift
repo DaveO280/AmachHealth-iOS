@@ -267,11 +267,13 @@ struct MemorySummaryRow: Codable, FetchableRecord, PersistableRecord {
     var topicsJson: String
     var importance: String
     var messageCount: Int
+    var sourceEventIdsJson: String?
 
     enum CodingKeys: String, CodingKey {
         case id, date, summary, importance
         case topicsJson = "topics_json"
         case messageCount = "message_count"
+        case sourceEventIdsJson = "source_event_ids"
     }
 }
 

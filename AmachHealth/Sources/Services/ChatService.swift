@@ -725,12 +725,19 @@ final class ChatService: ObservableObject {
         - Highlight key health insights shared
         - Be concise (1–3 sentences)
         - Focus on what would be useful context for future conversations
+        - Don't say whether an entry is on the user's timeline: the timeline itself is sent to Luma
         \(summarySoFar)
+        The user's timeline entries:
+        \(timelineList)
+
+        List in "events" the timeline entries this conversation discussed, by reference, so the summary is dropped if the user deletes or edits one.
+
         Return JSON with this structure:
         {
           "summary": "Brief summary of the conversation",
           "topics": ["topic1", "topic2"],
-          "importance": "critical|high|medium|low"
+          "importance": "critical|high|medium|low",
+          "events": ["T1"]
         }
 
         Conversation:
@@ -750,10 +757,14 @@ final class ChatService: ObservableObject {
                 let norm = ConversationMemoryStore.normalizeFactValue(ref)
                 return known.first { ConversationMemoryStore.normalizeFactValue($0.value) == norm }?.id
             })
-            var summary = parseSessionSummary(from: summaryResult.content, messageCount: session.messages.count)
+            var summary = parseSessionSummary(from: summaryResult.content, messageCount: session.messages.count,
+                                              timelineRefs: timelineRefs)
             if let parsed = summary {
+                // Entries discussed earlier in the session still count.
+                let events = (previousSummary?.sourceEventIds ?? []) + parsed.sourceEventIds
                 summary = SessionSummary(id: session.id, date: Date(), summary: parsed.summary, topics: parsed.topics,
-                                         importance: parsed.importance, messageCount: parsed.messageCount)
+                                         importance: parsed.importance, messageCount: parsed.messageCount,
+                                         sourceEventIds: events.reduce(into: []) { if !$0.contains($1) { $0.append($1) } })
             }
 
             memory.upsert(facts: facts, summary: summary, retiring: retiredIds)
@@ -817,11 +828,7 @@ final class ChatService: ObservableObject {
                     context: raw.context,
                     dateIdentified: now,
                     isActive: true,
-                    sourceEventId: raw.event.flatMap { ref in
-                        let key = ref.trimmingCharacters(in: .whitespaces).uppercased()
-                        // "T1", or the event's own id.
-                        return timelineRefs[key] ?? timelineRefs.values.first { $0 == ref }
-                    }
+                    sourceEventId: raw.event.flatMap { Self.timelineEventId(for: $0, in: timelineRefs) }
                 )
             }
             return (facts, (payload.retire ?? []).compactMap(\.ref))
@@ -830,12 +837,14 @@ final class ChatService: ObservableObject {
         }
     }
 
-    private func parseSessionSummary(from response: String, messageCount: Int) -> SessionSummary? {
+    private func parseSessionSummary(from response: String, messageCount: Int,
+                                     timelineRefs: [String: String] = [:]) -> SessionSummary? {
         guard let jsonData = extractFirstJSONObject(from: response) else { return nil }
         struct RawSummary: Decodable {
             let summary: String
             let topics: [String]?
             let importance: String?
+            let events: [String]?
         }
 
         do {
@@ -851,11 +860,17 @@ final class ChatService: ObservableObject {
                 summary: trimmed,
                 topics: raw.topics ?? [],
                 importance: importance,
-                messageCount: messageCount
+                messageCount: messageCount,
+                sourceEventIds: (raw.events ?? []).compactMap { Self.timelineEventId(for: $0, in: timelineRefs) }
             )
         } catch {
             return nil
         }
+    }
+
+    /// "T1", or the event's own id, as listed to the memory extractor.
+    private static func timelineEventId(for ref: String, in timelineRefs: [String: String]) -> String? {
+        timelineRefs[ref.trimmingCharacters(in: .whitespaces).uppercased()] ?? timelineRefs.values.first { $0 == ref }
     }
 
     private func extractFirstJSONObject(from response: String) -> Data? {

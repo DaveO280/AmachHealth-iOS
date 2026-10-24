@@ -27,7 +27,7 @@ The on-device vault is the start of the protocol's data format. Names are Amach'
 - **Current version:** 3.
   - **v1:** Phase 2, the base schema.
   - **v2:** Phase 3. Adds `lab_pdfs` and `backup_objects`, and backup triggers on `lab_pdfs` and `storj_imports` (existing `storj_imports` rows are queued once).
-  - **v3:** Adds `memory_facts.source_event_id`, the timeline event a memory fact was drawn from.
+  - **v3:** Adds `memory_facts.source_event_id` and `memory_summaries.source_event_ids`, the timeline events memory was drawn from.
 
 ## vault_meta
 
@@ -182,12 +182,12 @@ The vault keeps every session; the chat list shows the 30 most recent. Website s
 | Table | Columns |
 |---|---|
 | memory_facts | id, category (`medication`, `condition`, `goal`, `concern`, `preference`), value, context, identified_at, last_confirmed_at, is_active, source_event_id (v3) |
-| memory_summaries | id, date, summary, topics_json, importance (`critical`, `high`, `medium`, `low`), message_count |
+| memory_summaries | id, date, summary, topics_json, importance (`critical`, `high`, `medium`, `low`), message_count, source_event_ids (v3) |
 
 Retention is the same as before: 200 facts and 40 summaries.
 
 - A fact the user says no longer holds (stopped a medication, goal reached, concern resolved) is retired: `is_active` = 0 and `last_confirmed_at` = when it was retired. Retired facts are not sent to Luma.
-- `source_event_id` is the `timeline_events.id` a fact was drawn from, or null. Deleting that event, or editing it, retires the fact: the timeline is the record of events, and memory doesn't keep a copy that can go stale.
+- `memory_facts.source_event_id` is the `timeline_events.id` a fact was drawn from, or null. `memory_summaries.source_event_ids` is a JSON array of the timeline events the chat discussed, or null. Deleting or editing one of those events retires the fact and deletes the summary: the timeline is the record of events, and memory doesn't keep a copy that can go stale.
 - A summary written since memory is read mid-session has the chat session's id and is rewritten as the session grows; older summaries have their own ids.
 
 ## merkle_leaves / merkle_roots

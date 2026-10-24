@@ -1,8 +1,9 @@
 // LumaMemoryTimelineTests.swift
 // AmachHealthTests
 //
-// Memory facts drawn from a timeline entry name it, and are retired when the
-// entry is deleted or edited, so Luma doesn't keep treating a removed event as real.
+// Memory facts and chat summaries drawn from a timeline entry name it, and are
+// forgotten when the entry is deleted or edited, so Luma doesn't keep treating a
+// removed event as real.
 
 import XCTest
 import GRDB
@@ -53,7 +54,7 @@ final class LumaMemoryTimelineTests: XCTestCase {
                     + #"{"category":"goal","value":"Sleep 8 hours a night","context":"chat"}]}"#
             }
             if prompt.contains("Create a brief summary") {
-                return #"{"summary":"Talked about fatigue.","topics":["fatigue"],"importance":"medium"}"#
+                return #"{"summary":"Talked about fatigue.","topics":["fatigue"],"importance":"medium","events":["T1"]}"#
             }
             return nil
         }
@@ -62,6 +63,10 @@ final class LumaMemoryTimelineTests: XCTestCase {
 
     /// Add the event, discuss it, and read the chat for memory.
     private func rememberChatAboutFatigue() async throws -> (ChatService, MockAmachAPIClient) {
+        // An earlier chat, not about the entry.
+        memory.upsert(facts: [], summary: SessionSummary(id: UUID(), date: Date().addingTimeInterval(-3600),
+                                                         summary: "Planned a zone 2 cardio block.", topics: ["training"],
+                                                         importance: .medium, messageCount: 4))
         try await timeline.addEvent(fatigueEvent())
         let api = memoryAPI()
         let sut = ChatService(injectedAPI: api, injectedWallet: MockWalletService(), injectedVault: LocalVault.shared.database)
@@ -83,18 +88,24 @@ final class LumaMemoryTimelineTests: XCTestCase {
         XCTAssertTrue(prompt.contains("T1 Condition Improved: QA check fatigue ("), prompt)
         XCTAssertTrue(prompt.contains("Do not store a fact that only restates a timeline entry"), prompt)
 
+        let summaryPrompt = try XCTUnwrap(api.sentChatMessages.first { $0.contains("Create a brief summary") })
+        XCTAssertTrue(summaryPrompt.contains("T1 Condition Improved: QA check fatigue ("), summaryPrompt)
+
         let fatigue = try XCTUnwrap(memory.facts.first { $0.value == Self.fatigueFact })
         XCTAssertEqual(fatigue.sourceEventId, "evt_qa_fatigue")
         XCTAssertNil(memory.facts.first { $0.value == "Sleep 8 hours a night" }?.sourceEventId)
+        XCTAssertEqual(memory.summaries.first { $0.summary == "Talked about fatigue." }?.sourceEventIds, ["evt_qa_fatigue"])
 
-        // The link is kept in the vault.
+        // The links are kept in the vault.
         memory.vaultDidChange()
         XCTAssertEqual(memory.facts.first { $0.value == Self.fatigueFact }?.sourceEventId, "evt_qa_fatigue")
+        XCTAssertEqual(memory.summaries.first { $0.summary == "Talked about fatigue." }?.sourceEventIds, ["evt_qa_fatigue"])
     }
 
     func test_deleting_the_event_keeps_its_fact_out_of_lumas_context() async throws {
         let (sut, api) = try await rememberChatAboutFatigue()
         XCTAssertTrue(try memoryBlock().contains("Experienced fatigue"))
+        XCTAssertTrue(try memoryBlock().contains("Talked about fatigue."))
 
         try await timeline.deleteEvent(id: "evt_qa_fatigue")
 
@@ -103,17 +114,21 @@ final class LumaMemoryTimelineTests: XCTestCase {
         XCTAssertNotNil(fatigue.retiredAt)
         let block = try memoryBlock()
         XCTAssertFalse(block.contains("Experienced fatigue"), block)
+        XCTAssertFalse(block.contains("Talked about fatigue."), "the chat about it is forgotten too: \(block)")
         XCTAssertTrue(block.contains("Sleep 8 hours a night"), "facts not from the entry stay")
+        XCTAssertTrue(block.contains("Planned a zone 2 cardio block."), "other chats stay")
 
         // What reaches the backend in a new chat.
         sut.startNewSession()
         await sut.send("Is my fatigue still on my timeline?")
         let sent = try XCTUnwrap(api.lastChatContext?.contextBlocks?.first { $0.type == "memory" }?.content)
         XCTAssertFalse(sent.contains("Experienced fatigue"), sent)
+        XCTAssertFalse(sent.contains("Talked about fatigue."), sent)
 
-        // Retirement survives a reload from the vault.
+        // Survives a reload from the vault.
         memory.vaultDidChange()
         XCTAssertEqual(memory.facts.first { $0.value == Self.fatigueFact }?.isActive, false)
+        XCTAssertFalse(memory.summaries.contains { $0.summary == "Talked about fatigue." })
     }
 
     func test_editing_the_event_retires_facts_drawn_from_the_old_version() async throws {
@@ -123,6 +138,7 @@ final class LumaMemoryTimelineTests: XCTestCase {
 
         XCTAssertEqual(memory.facts.first { $0.value == Self.fatigueFact }?.isActive, false)
         XCTAssertFalse(try memoryBlock().contains("Experienced fatigue"))
+        XCTAssertFalse(try memoryBlock().contains("Talked about fatigue."))
         XCTAssertTrue(timeline.events.contains { $0.data["notes"] == "Actually back to feeling tired" },
                       "the edited event is what the timeline block carries")
     }
@@ -131,6 +147,7 @@ final class LumaMemoryTimelineTests: XCTestCase {
         _ = try await rememberChatAboutFatigue()
         try await timeline.updateEvent(try XCTUnwrap(timeline.events.first { $0.id == "evt_qa_fatigue" }))
         XCTAssertEqual(memory.facts.first { $0.value == Self.fatigueFact }?.isActive, true)
+        XCTAssertTrue(memory.summaries.contains { $0.summary == "Talked about fatigue." })
     }
 
     func test_memory_block_says_the_timeline_is_the_record_of_events() throws {
@@ -139,7 +156,7 @@ final class LumaMemoryTimelineTests: XCTestCase {
         XCTAssertTrue(HealthContextBuilder.formatMemory(mem).contains("the timeline is the record"))
     }
 
-    func test_v3_adds_the_source_column_and_keeps_existing_facts() throws {
+    func test_v3_adds_the_source_columns_and_keeps_existing_memory() throws {
         let queue = try DatabaseQueue()
         var upToV2 = DatabaseMigrator()
         upToV2.registerMigration("v1") { db in
@@ -156,10 +173,17 @@ final class LumaMemoryTimelineTests: XCTestCase {
                 INSERT INTO memory_facts (id, category, value, identified_at, is_active)
                 VALUES ('\(UUID().uuidString)', 'goal', 'Run a 10k', 1, 1)
                 """)
+            try db.execute(sql: """
+                INSERT INTO memory_summaries (id, date, summary, topics_json, importance, message_count)
+                VALUES ('\(UUID().uuidString)', 1, 'Talked about running.', '[]', 'low', 2)
+                """)
         }
         try VaultDatabase.migrator.migrate(queue)
         let row = try queue.read { db in try MemoryFactRow.fetchOne(db) }
         XCTAssertEqual(row?.value, "Run a 10k")
         XCTAssertNil(row?.sourceEventId)
+        let summary = try queue.read { db in try MemorySummaryRow.fetchOne(db) }
+        XCTAssertEqual(summary?.summary, "Talked about running.")
+        XCTAssertNil(summary?.sourceEventIdsJson)
     }
 }
