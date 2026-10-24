@@ -28,8 +28,8 @@ final class VaultMigrationTests: XCTestCase {
 
     func test_migrations_create_every_table_and_record_version() throws {
         let vault = try VaultDatabase.inMemory()
-        XCTAssertEqual(try vault.schemaVersion(), 2)
-        XCTAssertEqual(VaultDatabase.currentSchemaVersion, 2)
+        XCTAssertEqual(try vault.schemaVersion(), 3)
+        XCTAssertEqual(VaultDatabase.currentSchemaVersion, 3)
         let tables = try vault.dbQueue.read { db in
             try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table'")
         }
@@ -48,10 +48,10 @@ final class VaultMigrationTests: XCTestCase {
         let vault = try VaultDatabase.inMemory()
         try vault.migrate()
         try vault.migrate()
-        XCTAssertEqual(try vault.schemaVersion(), 2)
+        XCTAssertEqual(try vault.schemaVersion(), 3)
         let applied = try vault.dbQueue.read { db in try VaultDatabase.migrator.appliedIdentifiers(db) }
-        XCTAssertEqual(applied, ["v1", "v2"])
-        XCTAssertEqual(try vault.dbQueue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM schema_version") }, 2)
+        XCTAssertEqual(applied, ["v1", "v2", "v3"])
+        XCTAssertEqual(try vault.dbQueue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM schema_version") }, 3)
     }
 
     func test_v2_on_a_v1_vault_queues_existing_storj_imports_for_backup() throws {
@@ -141,7 +141,7 @@ final class VaultMigrationTests: XCTestCase {
 
         let reopened = try VaultDatabase.open(key: key, directory: tempDir)
         XCTAssertEqual(try reopened.dailyMetric(metric: "steps", day: "2025-10-01")?.total, 5)
-        XCTAssertEqual(try reopened.schemaVersion(), 2)
+        XCTAssertEqual(try reopened.schemaVersion(), 3)
     }
 
     func test_vault_file_with_wrong_key_check_refuses_to_open() throws {

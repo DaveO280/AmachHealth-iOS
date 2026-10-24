@@ -247,12 +247,14 @@ struct MemoryFactRow: Codable, FetchableRecord, PersistableRecord {
     var identifiedAt: Int64
     var lastConfirmedAt: Int64?
     var isActive: Bool
+    var sourceEventId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, category, value, context
         case identifiedAt = "identified_at"
         case lastConfirmedAt = "last_confirmed_at"
         case isActive = "is_active"
+        case sourceEventId = "source_event_id"
     }
 }
 

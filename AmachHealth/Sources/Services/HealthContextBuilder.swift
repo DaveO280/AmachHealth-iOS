@@ -950,7 +950,10 @@ struct HealthContextBuilder {
     }
 
     static func formatMemory(_ mem: AIChatMemoryCapsule, latestBloodwork: String? = nil) -> String {
-        var parts: [String] = ["User memory (from prior conversations; dated where known — older notes may no longer hold):"]
+        var parts: [String] = ["User memory (from prior conversations; dated where known — older notes may no longer hold):",
+                                 "Facts and notes are what was said in past chats, not a record of what is on the timeline now. "
+                                 + "For events (started, stopped, diagnosed, improved), the timeline is the record: when the "
+                                 + "timeline is shown and a fact or note mentions an event that isn't on it, the user removed it."]
         // The model doesn't reliably compare dates itself, so say which way round they are.
         if let draw = LumaDate.normalizedDay(latestBloodwork) {
             parts.append("Latest bloodwork was drawn \(draw). Anything noted after that date (a supplement, a change, "

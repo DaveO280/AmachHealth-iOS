@@ -650,6 +650,16 @@ final class ChatService: ObservableObject {
             .map { "F\($0.offset + 1) [\($0.element.category.rawValue)] \($0.element.value)" }
             .joined(separator: "\n")
 
+        // Timeline entries by reference, so a fact drawn from one names it and
+        // is retired when the entry is deleted or edited.
+        let timeline = Array(TimelineService.shared.events.prefix(Self.memoryTimelineEventLimit))
+        let timelineRefs = Dictionary(uniqueKeysWithValues: timeline.enumerated().map { ("T\($0.offset + 1)", $0.element.id) })
+        let timelineList = timeline.isEmpty ? "(none)" : timeline.enumerated()
+            .map { ref, event in
+                "T\(ref + 1) \(event.titleText)\(event.subtitleText.map { ": \($0)" } ?? "") (\(LumaDate.day(event.timestamp)))"
+            }
+            .joined(separator: "\n")
+
         let factPrompt = """
         You are a health assistant memory system. Analyze the conversation and extract important facts about the user that should be remembered for future conversations.
 
@@ -673,13 +683,19 @@ final class ChatService: ObservableObject {
 
         Retire a remembered fact only if the user says it no longer holds: they stopped a medication or supplement, reached or dropped a goal, a concern resolved, a preference changed. A changed dose retires the old fact and adds the new one. List retired facts by their reference (e.g. "F2").
 
+        The user's timeline entries (Luma already sees these, with their dates):
+        \(timelineList)
+
+        The timeline is the record of events. Do not store a fact that only restates a timeline entry (the event, its date or its status). If a fact is about a timeline entry, set "event" to its reference (e.g. "T1"), so the fact is dropped when the user deletes or edits that entry.
+
         Return a JSON object with this structure:
         {
           "facts": [
             {
               "category": "goal|concern|condition|preference|medication",
               "value": "the fact statement",
-              "context": "brief context about when/why this was mentioned"
+              "context": "brief context about when/why this was mentioned",
+              "event": "T1, only if the fact is about that timeline entry"
             }
           ],
           "retire": ["F2"]
@@ -727,7 +743,7 @@ final class ChatService: ObservableObject {
 
             let (factsResult, summaryResult) = try await (factsResponse, summaryResponse)
 
-            let (facts, retire) = parseFacts(from: factsResult.content)
+            let (facts, retire) = parseFacts(from: factsResult.content, timelineRefs: timelineRefs)
             let retiredIds = Set(retire.compactMap { ref -> UUID? in
                 if let fact = knownRefs[ref.trimmingCharacters(in: .whitespaces).uppercased()] { return fact.id }
                 // Some replies name the fact instead of its reference.
@@ -759,12 +775,16 @@ final class ChatService: ObservableObject {
         return totalLength >= 20
     }
 
-    private func parseFacts(from response: String) -> (facts: [CriticalFact], retire: [String]) {
+    /// Timeline entries listed to the memory extractor, newest first.
+    static let memoryTimelineEventLimit = 40
+
+    private func parseFacts(from response: String, timelineRefs: [String: String] = [:]) -> (facts: [CriticalFact], retire: [String]) {
         guard let jsonData = extractFirstJSONObject(from: response) else { return ([], []) }
         struct RawFact: Decodable {
             let category: String
             let value: String
             let context: String?
+            let event: String?
         }
         /// "F2", or an object naming it.
         struct RetireRef: Decodable {
@@ -796,7 +816,12 @@ final class ChatService: ObservableObject {
                     value: raw.value,
                     context: raw.context,
                     dateIdentified: now,
-                    isActive: true
+                    isActive: true,
+                    sourceEventId: raw.event.flatMap { ref in
+                        let key = ref.trimmingCharacters(in: .whitespaces).uppercased()
+                        // "T1", or the event's own id.
+                        return timelineRefs[key] ?? timelineRefs.values.first { $0 == ref }
+                    }
                 )
             }
             return (facts, (payload.retire ?? []).compactMap(\.ref))

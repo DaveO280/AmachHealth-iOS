@@ -329,6 +329,9 @@ struct CriticalFact: Codable, Identifiable {
     var isActive: Bool
     /// When last confirmed. For a retired fact (isActive false), when it was retired.
     var lastConfirmed: Date?
+    /// The timeline event the fact was drawn from, if any. Deleting or editing
+    /// that event retires the fact: the timeline is the record of events.
+    var sourceEventId: String? = nil
 
     var retiredAt: Date? { isActive ? nil : lastConfirmed }
 }
@@ -461,6 +464,16 @@ final class ConversationMemoryStore: ObservableObject {
 
         applyRetentionCaps()
         saveToDisk()
+    }
+
+    /// Retire the active facts drawn from this timeline event, after the
+    /// event was deleted or edited. Returns how many were retired.
+    @discardableResult
+    func retireFacts(fromTimelineEvent eventId: String, at date: Date = Date()) -> Int {
+        let ids = Set(facts.filter { $0.isActive && $0.sourceEventId == eventId }.map(\.id))
+        guard !ids.isEmpty else { return 0 }
+        upsert(facts: [], summary: nil, retiring: ids, at: date)
+        return ids.count
     }
 
     // Storj sync removed in Phase 3: memory lives in the vault and in the encrypted backup.

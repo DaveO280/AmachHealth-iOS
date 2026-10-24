@@ -144,11 +144,13 @@ extension VaultDatabase {
                 let row = MemoryFactRow(
                     id: fact.id.uuidString, category: fact.category.rawValue, value: fact.value,
                     context: fact.context, identifiedAt: fact.dateIdentified.unixMillis,
-                    lastConfirmedAt: fact.lastConfirmed?.unixMillis, isActive: fact.isActive
+                    lastConfirmedAt: fact.lastConfirmed?.unixMillis, isActive: fact.isActive,
+                    sourceEventId: fact.sourceEventId
                 )
                 if let existing = try MemoryFactRow.fetchOne(db, key: row.id),
                    existing.value == row.value, existing.context == row.context,
-                   existing.lastConfirmedAt == row.lastConfirmedAt, existing.isActive == row.isActive {
+                   existing.lastConfirmedAt == row.lastConfirmedAt, existing.isActive == row.isActive,
+                   existing.sourceEventId == row.sourceEventId {
                     continue
                 }
                 try row.save(db)
@@ -180,7 +182,8 @@ extension VaultDatabase {
                 return CriticalFact(
                     id: id, category: category, value: row.value, context: row.context,
                     dateIdentified: Date(unixMillis: row.identifiedAt), isActive: row.isActive,
-                    lastConfirmed: row.lastConfirmedAt.map(Date.init(unixMillis:))
+                    lastConfirmed: row.lastConfirmedAt.map(Date.init(unixMillis:)),
+                    sourceEventId: row.sourceEventId
                 )
             }
             let summaries = try MemorySummaryRow.order(Column("date")).fetchAll(db).compactMap { row -> SessionSummary? in

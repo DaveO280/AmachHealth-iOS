@@ -23,7 +23,7 @@ final class VaultDatabase {
     let filesDirectory: URL
 
     /// Highest schema version the migrations below produce.
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     private init(dbQueue: DatabaseQueue, walletAddress: String, filesDirectory: URL) {
         self.dbQueue = dbQueue
@@ -154,7 +154,11 @@ final class VaultDatabase {
             try db.execute(sql: Schema.v2)
             try VaultDatabase.recordSchemaVersion(2, in: db)
         }
-        // Future: migrator.registerMigration("v3") { db in ...; recordSchemaVersion(3, in: db) }
+        migrator.registerMigration("v3") { db in
+            try db.execute(sql: Schema.v3)
+            try VaultDatabase.recordSchemaVersion(3, in: db)
+        }
+        // Future: migrator.registerMigration("v4") { db in ...; recordSchemaVersion(4, in: db) }
         return migrator
     }
 
@@ -230,6 +234,10 @@ extension VaultDatabase {
 
             """ + v2BackedUpTables.map { triggers(table: $0.table, idExpr: $0.idExpr) }.joined(separator: "\n")
         }
+
+        /// v3: a memory fact drawn from a timeline entry names it, so deleting
+        /// or editing the entry retires the fact.
+        static let v3 = "ALTER TABLE memory_facts ADD COLUMN source_event_id TEXT;"
 
         private static func triggers(table: String, idExpr: @escaping (String) -> String) -> String {
             let bump = { (row: String) in
