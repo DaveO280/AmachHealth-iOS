@@ -350,6 +350,22 @@ struct SessionSummary: Codable, Identifiable {
     var sourceEventIds: [String] = []
 }
 
+extension SessionSummary {
+    private enum CodingKeys: String, CodingKey {
+        case id, date, summary, topics, importance, messageCount, sourceEventIds
+    }
+
+    /// Summaries written before timeline links (imports, replays) have no `sourceEventIds`.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try c.decode(UUID.self, forKey: .id), date: try c.decode(Date.self, forKey: .date),
+                  summary: try c.decode(String.self, forKey: .summary), topics: try c.decode([String].self, forKey: .topics),
+                  importance: try c.decode(MemoryImportance.self, forKey: .importance),
+                  messageCount: try c.decode(Int.self, forKey: .messageCount),
+                  sourceEventIds: try c.decodeIfPresent([String].self, forKey: .sourceEventIds) ?? [])
+    }
+}
+
 /// Storj-compatible payload for conversation memory sync.
 /// Used for both local persistence and cross-platform sync via `dataType: "conversation-memory"`.
 struct ConversationMemoryStorjPayload: Codable {

@@ -156,6 +156,15 @@ final class LumaMemoryTimelineTests: XCTestCase {
         XCTAssertTrue(HealthContextBuilder.formatMemory(mem).contains("the timeline is the record"))
     }
 
+    func test_memory_written_before_timeline_links_still_decodes() throws {
+        let json = #"{"facts":[{"id":"\#(UUID().uuidString)","category":"goal","value":"Run a 10k","dateIdentified":0,"isActive":true}],"#
+            + #""summaries":[{"id":"\#(UUID().uuidString)","date":0,"summary":"Talked about running.","topics":[],"#
+            + #""importance":"low","messageCount":2}]}"#
+        let payload = try JSONDecoder().decode(ConversationMemoryStorjPayload.self, from: Data(json.utf8))
+        XCTAssertNil(payload.facts.first?.sourceEventId)
+        XCTAssertEqual(payload.summaries.first?.sourceEventIds, [])
+    }
+
     func test_v3_adds_the_source_columns_and_keeps_existing_memory() throws {
         let queue = try DatabaseQueue()
         var upToV2 = DatabaseMigrator()
