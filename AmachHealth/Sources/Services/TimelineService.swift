@@ -46,13 +46,20 @@ final class TimelineService: ObservableObject {
 
     func updateEvent(_ event: TimelineEvent) async throws {
         error = nil
+        let previous = events.first { $0.id == event.id }
         replaceLocalEvent(with: event)
+        // Memory drawn from the old version may no longer hold; the timeline
+        // block carries the edited event.
+        if let previous, previous != event {
+            ConversationMemoryStore.shared.forgetTimelineEvent(event.id)
+        }
     }
 
     func deleteEvent(id: String) async throws {
         error = nil
         events.removeAll { $0.id == id }
         try vault?.deleteTimelineEvent(id: id)
+        ConversationMemoryStore.shared.forgetTimelineEvent(id)
         timelineDebug("Removed timeline event \(id)")
     }
 

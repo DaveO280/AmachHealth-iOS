@@ -41,6 +41,7 @@
 		5BABE2FA78A5DE02FD06E7FB /* VaultIngestionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */; };
 		5BABE232140E4B1AB5BD01AF /* StorjImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE259E1C6CFBF77535235 /* StorjImportTests.swift */; };
 		5BABE2B7305459B119D5C615 /* VaultMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2A8D0EB99BCF1BD1450 /* VaultMigrationTests.swift */; };
+		LM0000000000000000000002 /* LumaMemoryTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = LM0000000000000000000001 /* LumaMemoryTimelineTests.swift */; };
 		5BABE2D2CD6A91B61814DBE0 /* WalletPayloadDecryptorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */; };
 		5BABE207745533791E8E4732 /* WalletDecryptorFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */; };
 		5BABE2C99FB104BE6C321398 /* VaultViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2722AEC406FA4FFB80F /* VaultViews.swift */; };
@@ -191,6 +192,7 @@
 		5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultIngestionTests.swift; path = AmachHealth/Tests/VaultIngestionTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE259E1C6CFBF77535235 /* StorjImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StorjImportTests.swift; path = AmachHealth/Tests/StorjImportTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2A8D0EB99BCF1BD1450 /* VaultMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultMigrationTests.swift; path = AmachHealth/Tests/VaultMigrationTests.swift; sourceTree = SOURCE_ROOT; };
+		LM0000000000000000000001 /* LumaMemoryTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaMemoryTimelineTests.swift; path = AmachHealth/Tests/LumaMemoryTimelineTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletPayloadDecryptorTests.swift; path = AmachHealth/Tests/WalletPayloadDecryptorTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WalletDecryptorFixtures.swift; path = AmachHealth/Tests/Fixtures/WalletDecryptorFixtures.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2722AEC406FA4FFB80F /* VaultViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VaultViews.swift; path = AmachHealth/Sources/Vault/VaultViews.swift; sourceTree = SOURCE_ROOT; };
@@ -421,6 +423,7 @@
 				5BABE2E98BBDACA9C0AE0459 /* WalletDecryptorFixtures.swift */,
 				5BABE26689BBE4708EB4878A /* WalletPayloadDecryptorTests.swift */,
 				5BABE2A8D0EB99BCF1BD1450 /* VaultMigrationTests.swift */,
+				LM0000000000000000000001 /* LumaMemoryTimelineTests.swift */,
 				5BABE259E1C6CFBF77535235 /* StorjImportTests.swift */,
 				5BABE2D3A560B162B89336CF /* VaultIngestionTests.swift */,
 				5BABE2BE42C3C8966CE8410E /* VaultServicesTests.swift */,
@@ -850,6 +853,7 @@
 				5BABE207745533791E8E4732 /* WalletDecryptorFixtures.swift in Sources */,
 				5BABE2D2CD6A91B61814DBE0 /* WalletPayloadDecryptorTests.swift in Sources */,
 				5BABE2B7305459B119D5C615 /* VaultMigrationTests.swift in Sources */,
+				LM0000000000000000000002 /* LumaMemoryTimelineTests.swift in Sources */,
 				5BABE232140E4B1AB5BD01AF /* StorjImportTests.swift in Sources */,
 				5BABE2FA78A5DE02FD06E7FB /* VaultIngestionTests.swift in Sources */,
 				5BABE2923A783FED0924D45C /* VaultServicesTests.swift in Sources */,

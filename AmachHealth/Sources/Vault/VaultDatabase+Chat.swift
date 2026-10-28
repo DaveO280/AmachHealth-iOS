@@ -144,11 +144,13 @@ extension VaultDatabase {
                 let row = MemoryFactRow(
                     id: fact.id.uuidString, category: fact.category.rawValue, value: fact.value,
                     context: fact.context, identifiedAt: fact.dateIdentified.unixMillis,
-                    lastConfirmedAt: fact.lastConfirmed?.unixMillis, isActive: fact.isActive
+                    lastConfirmedAt: fact.lastConfirmed?.unixMillis, isActive: fact.isActive,
+                    sourceEventId: fact.sourceEventId
                 )
                 if let existing = try MemoryFactRow.fetchOne(db, key: row.id),
                    existing.value == row.value, existing.context == row.context,
-                   existing.lastConfirmedAt == row.lastConfirmedAt, existing.isActive == row.isActive {
+                   existing.lastConfirmedAt == row.lastConfirmedAt, existing.isActive == row.isActive,
+                   existing.sourceEventId == row.sourceEventId {
                     continue
                 }
                 try row.save(db)
@@ -160,12 +162,14 @@ extension VaultDatabase {
                 let row = MemorySummaryRow(
                     id: summary.id.uuidString, date: summary.date.unixMillis, summary: summary.summary,
                     topicsJson: (try? String(decoding: JSONEncoder().encode(summary.topics), as: UTF8.self)) ?? "[]",
-                    importance: summary.importance.rawValue, messageCount: summary.messageCount
+                    importance: summary.importance.rawValue, messageCount: summary.messageCount,
+                    sourceEventIdsJson: summary.sourceEventIds.isEmpty ? nil
+                        : (try? String(decoding: JSONEncoder().encode(summary.sourceEventIds), as: UTF8.self))
                 )
                 // A session's summary is rewritten as the session grows.
                 if let existing = try MemorySummaryRow.fetchOne(db, key: row.id),
                    existing.date == row.date, existing.summary == row.summary,
-                   existing.messageCount == row.messageCount {
+                   existing.messageCount == row.messageCount, existing.sourceEventIdsJson == row.sourceEventIdsJson {
                     continue
                 }
                 try row.save(db)
@@ -180,7 +184,8 @@ extension VaultDatabase {
                 return CriticalFact(
                     id: id, category: category, value: row.value, context: row.context,
                     dateIdentified: Date(unixMillis: row.identifiedAt), isActive: row.isActive,
-                    lastConfirmed: row.lastConfirmedAt.map(Date.init(unixMillis:))
+                    lastConfirmed: row.lastConfirmedAt.map(Date.init(unixMillis:)),
+                    sourceEventId: row.sourceEventId
                 )
             }
             let summaries = try MemorySummaryRow.order(Column("date")).fetchAll(db).compactMap { row -> SessionSummary? in
@@ -189,7 +194,9 @@ extension VaultDatabase {
                 let topics = (try? JSONDecoder().decode([String].self, from: Data(row.topicsJson.utf8))) ?? []
                 return SessionSummary(
                     id: id, date: Date(unixMillis: row.date), summary: row.summary,
-                    topics: topics, importance: importance, messageCount: row.messageCount
+                    topics: topics, importance: importance, messageCount: row.messageCount,
+                    sourceEventIds: row.sourceEventIdsJson
+                        .flatMap { try? JSONDecoder().decode([String].self, from: Data($0.utf8)) } ?? []
                 )
             }
             return ConversationMemoryStorjPayload(facts: facts, summaries: summaries)
