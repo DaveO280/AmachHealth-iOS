@@ -148,6 +148,34 @@ enum ChatIntentClassifier {
         }
     }
 
+    /// Words that point at the user's timeline: a change over time, an
+    /// illness or injury, a procedure.
+    private static let timelineKeywords = [
+        "since", "start", "started", "stopped", "began", "begin", "quit", "timeline", "history",
+        "sick", "ill", "illness", "flu", "cold", "covid", "infection", "virus", "symptom",
+        "injury", "injured", "hurt", "pain", "sprain", "strain", "surgery", "procedure", "operation",
+        "diagnosed", "diagnosis", "diet", "fasting", "stress", "stressed", "travel", "lifestyle"
+    ]
+
+    private static let topicWords = Set(ordered.flatMap(\.1))
+
+    /// Words in logged names too common to mean the user is naming that item.
+    private static let nameStopwords: Set<String> = [
+        "right", "left", "daily", "chronic", "acute", "severe", "moderate", "minor", "other"
+    ]
+
+    /// Whether the message is about something on the timeline: a timeline
+    /// word, or a word (5+ letters) from something the user logged by name,
+    /// such as "magnesium" from "Magnesium Glycinate". Topic words ("sleep"
+    /// in "Sleep Apnea") don't count: the intents already route those.
+    static func mentionsTimeline(_ message: String, names: [String] = []) -> Bool {
+        let lower = message.lowercased()
+        if hits(timelineKeywords, in: lower) > 0 { return true }
+        let words = Set(names.flatMap { $0.lowercased().components(separatedBy: CharacterSet.letters.inverted) })
+            .filter { $0.count >= 5 && !nameStopwords.contains($0) && !topicWords.contains($0) }
+        return hits(Array(words), in: lower) > 0
+    }
+
     /// Every intent the message touches, strongest first. `.general` when none.
     static func classifyAll(_ message: String) -> [ChatIntent] {
         let lower = message.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)

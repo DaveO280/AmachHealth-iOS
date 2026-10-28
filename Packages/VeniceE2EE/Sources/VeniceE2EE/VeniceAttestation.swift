@@ -37,6 +37,17 @@ public struct AttestedModelKey: Sendable, Equatable {
     public let verifiedAt: Date
 
     public var publicKeyHex: String { publicKey.hexString }
+
+    public init(model: String, publicKey: Data, signingAddress: String, teeProvider: String?,
+                mrTD: String, rtmrs: [String], verifiedAt: Date) {
+        self.model = model
+        self.publicKey = publicKey
+        self.signingAddress = signingAddress
+        self.teeProvider = teeProvider
+        self.mrTD = mrTD
+        self.rtmrs = rtmrs
+        self.verifiedAt = verifiedAt
+    }
 }
 
 public struct VeniceAttestationVerifier: Sendable {

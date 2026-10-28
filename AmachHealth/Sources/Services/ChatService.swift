@@ -30,6 +30,9 @@ final class ChatService: ObservableObject {
     // Production code always uses the shared singletons via private init().
     private let api: any AmachAPIClientProtocol
     private let wallet: any WalletServiceProtocol
+    /// End-to-end-encrypted Luma (LumaPrivateChat.swift), or nil for the
+    /// /api/ai/chat path. Off by default.
+    private let privateChat: () -> (any LumaChatTransport)?
 
     /// Sessions shown in the history list. The vault keeps every session.
     static let visibleRecentSessions = 30
@@ -42,6 +45,7 @@ final class ChatService: ObservableObject {
         self.api = AmachAPIClient.shared
         self.wallet = WalletService.shared
         self.vaultProvider = { LocalVault.shared.database }
+        self.privateChat = { LumaPrivateChat.isEnabled ? LumaE2EEChatTransport.shared : nil }
         // Sessions load when the vault opens (vaultDidChange).
     }
 
@@ -51,11 +55,13 @@ final class ChatService: ObservableObject {
     init(
         injectedAPI: any AmachAPIClientProtocol,
         injectedWallet: any WalletServiceProtocol,
-        injectedVault: VaultDatabase? = nil
+        injectedVault: VaultDatabase? = nil,
+        injectedPrivateChat: (any LumaChatTransport)? = nil
     ) {
         self.api = injectedAPI
         self.wallet = injectedWallet
         self.vaultProvider = { injectedVault }
+        self.privateChat = { injectedPrivateChat }
         loadFromVault()
     }
     #endif
@@ -186,9 +192,9 @@ final class ChatService: ObservableObject {
                 .suffix(limit)
                 .map { AIChatHistoryMessage(role: $0.role.rawValue, content: $0.content) }
 
-            let response = try await api.sendChatMessage(trimmed, history: Array(historyForSend), context: finalContext, mode: chatMode)
+            let reply = try await lumaReply(trimmed, history: Array(historyForSend), context: finalContext, mode: chatMode)
 
-            let assistantMsg = ChatMessage(role: .assistant, content: response.content)
+            let assistantMsg = ChatMessage(role: .assistant, content: reply)
             currentSession.messages.append(assistantMsg)
             currentSession.updatedAt = .now
             saveToDisk()
@@ -299,7 +305,7 @@ final class ChatService: ObservableObject {
         var didRetryAfterEmptyContent = false
 
         do {
-            let stream = api.streamLumaChat(
+            let stream = lumaStream(
                 trimmed,
                 history: historyMessages,
                 context: finalContext,
@@ -351,7 +357,7 @@ final class ChatService: ObservableObject {
                 let retryIdx = currentSession.messages.lastIndex(where: { $0.role == .assistant }) ?? assistantIdx
 
                 do {
-                    let stream = api.streamLumaChat(
+                    let stream = lumaStream(
                         trimmed,
                         history: historyMessages,
                         context: finalContext,
@@ -409,6 +415,47 @@ final class ChatService: ObservableObject {
 
         isSending = false
         sendingTask = nil
+    }
+
+    // MARK: - Luma transport
+
+    /// Every Luma call goes through these two: end to end encrypted when
+    /// LumaPrivateChat is on (the phone assembles the prompt), else
+    /// /api/ai/chat. `screen` and `metric` aren't part of either prompt.
+    private func lumaStream(
+        _ message: String,
+        history: [AIChatHistoryMessage],
+        context: AIChatContext? = nil,
+        screen: String? = nil,
+        metric: String? = nil,
+        mode: ChatMode = .quick
+    ) -> AsyncThrowingStream<String, Error> {
+        if let privateChat = privateChat() {
+            return privateChat.stream(LumaPromptInput(message: message,
+                                                      contextBlocks: context?.contextBlocks,
+                                                      history: history))
+        }
+        return api.streamLumaChat(message, history: history, context: context,
+                                  screen: screen, metric: metric, mode: mode)
+    }
+
+    /// The whole reply (summaries, memory extraction, non-streaming send).
+    private func lumaReply(
+        _ message: String,
+        history: [AIChatHistoryMessage],
+        context: AIChatContext? = nil,
+        mode: ChatMode = .quick
+    ) async throws -> String {
+        guard let privateChat = privateChat() else {
+            return try await api.sendChatMessage(message, history: history, context: context, mode: mode).content
+        }
+        var reply = ""
+        for try await text in privateChat.stream(LumaPromptInput(message: message,
+                                                                 contextBlocks: context?.contextBlocks,
+                                                                 history: history)) {
+            reply += text
+        }
+        return reply
     }
 
     // MARK: - Session Management
@@ -480,7 +527,7 @@ final class ChatService: ObservableObject {
         error = nil
 
         do {
-            let stream = api.streamLumaChat(
+            let stream = lumaStream(
                 message,
                 history: [],
                 context: veniceContext,
@@ -568,8 +615,8 @@ final class ChatService: ObservableObject {
         }
 
         do {
-            let response = try await api.sendChatMessage(summaryPrompt, history: history)
-            let summary = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let summary = try await lumaReply(summaryPrompt, history: history)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             guard summary.lowercased() != "null", !summary.isEmpty else { return }
 
             // Update the archived session with the health summary
@@ -745,19 +792,19 @@ final class ChatService: ObservableObject {
         """
 
         do {
-            async let factsResponse = api.sendChatMessage(factPrompt, history: [])
-            async let summaryResponse = api.sendChatMessage(summaryPrompt, history: [])
+            async let factsResponse = lumaReply(factPrompt, history: [])
+            async let summaryResponse = lumaReply(summaryPrompt, history: [])
 
             let (factsResult, summaryResult) = try await (factsResponse, summaryResponse)
 
-            let (facts, retire) = parseFacts(from: factsResult.content, timelineRefs: timelineRefs)
+            let (facts, retire) = parseFacts(from: factsResult, timelineRefs: timelineRefs)
             let retiredIds = Set(retire.compactMap { ref -> UUID? in
                 if let fact = knownRefs[ref.trimmingCharacters(in: .whitespaces).uppercased()] { return fact.id }
                 // Some replies name the fact instead of its reference.
                 let norm = ConversationMemoryStore.normalizeFactValue(ref)
                 return known.first { ConversationMemoryStore.normalizeFactValue($0.value) == norm }?.id
             })
-            var summary = parseSessionSummary(from: summaryResult.content, messageCount: session.messages.count,
+            var summary = parseSessionSummary(from: summaryResult, messageCount: session.messages.count,
                                               timelineRefs: timelineRefs)
             if let parsed = summary {
                 // Entries discussed earlier in the session still count.
@@ -913,8 +960,8 @@ final class ChatService: ObservableObject {
             """
 
             do {
-                let response = try await api.sendChatMessage(prompt, history: [])
-                let summary = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                let summary = try await lumaReply(prompt, history: [])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !summary.isEmpty else { return }
                 currentSession.rollingSummary = summary
                 saveToDisk()

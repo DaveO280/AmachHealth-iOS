@@ -307,6 +307,8 @@ struct HealthContextBuilder {
             - When the same kind of report exists from different dates, compare by date and say which is the newest.
             - Keep events in order: something dated after a report (a conversation, a supplement, a habit) can't explain \
             that report's values.
+            - Timeline events (medications, illnesses, injuries, procedures, lifestyle changes, notes) are what the user \
+            logged, each with its date and age. Line them up with the metrics by date ("since you started creatine on …").
             - If the user asks about a period or report that isn't below, say you don't have it rather than estimating.
             """
     }
@@ -406,12 +408,6 @@ struct HealthContextBuilder {
             blocks.append(ContextBlock(type: "memory", content: formatMemory(mem)))
         }
 
-        // 7. timeline — active meds, conditions, allergies, recent anomalies
-        let timelineContent = formatTimeline(TimelineService.shared.events)
-        if !timelineContent.isEmpty {
-            blocks.append(ContextBlock(type: "timeline", content: timelineContent))
-        }
-
         #if DEBUG
         print("🧠 HealthContextBuilder: assembled \(blocks.count) context blocks: \(blocks.map(\.type).joined(separator: ", "))")
         #endif
@@ -426,8 +422,8 @@ struct HealthContextBuilder {
     // MARK: - Intent-aware context (smart routing)
 
     /// Build context for the given intent and mode.
-    /// Starts from buildCurrentContext()'s blocks — data_note, metrics, labs, timeline —
-    /// and layers in intent-specific extras (hr_zones, workouts, anomalies).
+    /// Starts from buildCurrentContext()'s blocks — data_note, metrics, labs —
+    /// adds the timeline, and layers in intent-specific extras (hr_zones, workouts, anomalies).
     /// Goals and memory blocks are excluded here since enrichContext() injects them
     /// via the AIChatMemoryCapsule to avoid duplication.
     static func buildContext(for intent: ChatIntent, mode: ChatMode, message: String? = nil,
@@ -456,6 +452,17 @@ struct HealthContextBuilder {
         let labs = intents.contains { $0.includesLabData }
         let timeline = intents.contains { $0.includesTimelineEvents }
 
+        // The timeline doesn't depend on metrics either. Every question gets
+        // what holds now; the full list goes with deep mode, timeline topics
+        // ("since I started…", an illness, a logged item by name) and named periods.
+        let events = TimelineService.shared.contextEvents()
+        let fullTimeline = mode == .deep || timeline || !periods.isEmpty
+            || message.map { ChatIntentClassifier.mentionsTimeline($0, names: timelineNames(events)) } == true
+        let timelineContent = formatTimeline(events, summary: !fullTimeline)
+        if !timelineContent.isEmpty {
+            blocks.append(ContextBlock(type: "timeline", content: timelineContent))
+        }
+
         // In quick mode, prune blocks not relevant to the intents
         if mode == .quick {
             if !labs {
@@ -473,9 +480,6 @@ struct HealthContextBuilder {
             let monthAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
             if !labs && !timeline && !periods.contains(where: { $0.start < monthAgo }) {
                 blocks.removeAll { $0.type == "labs_index" }
-            }
-            if !timeline {
-                blocks.removeAll { $0.type == "timeline" }
             }
         }
 
@@ -970,120 +974,178 @@ struct HealthContextBuilder {
         return parts.joined(separator: "\n")
     }
 
-    /// Formats timeline events relevant to Luma: active medications, supplements,
-    /// conditions, allergies, recent anomalies, and significant recent events.
-    /// Capped at ~20 items to keep token footprint reasonable.
-    private static func formatTimeline(_ events: [TimelineEvent]) -> String {
+    // MARK: - Timeline
+
+    /// Upper bound on the timeline block, in characters (~1k tokens).
+    static let timelineCharCap = 4_000
+
+    /// The user's health timeline, every entry dated with its day and age:
+    /// what holds now (medications and supplements at their latest dose,
+    /// open conditions, illnesses and injuries, allergies), anomalies from the
+    /// last 30 days, then logged events newest first. `summary` keeps what holds
+    /// now and the last 30 days' events, for questions that aren't about the timeline.
+    static func formatTimeline(_ events: [TimelineEvent], summary: Bool = false,
+                               now: Date = Date(), calendar: Calendar = .current) -> String {
         guard !events.isEmpty else { return "" }
-        let calendar = Calendar.current
-        let now = Date()
-        let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: now)!
-        let ninetyDaysAgo = calendar.date(byAdding: .day, value: -90, to: now)!
+        func when(_ date: Date) -> String {
+            "\(LumaDate.day(date, calendar: calendar)), \(LumaDate.age(of: date, now: now, calendar: calendar))"
+        }
+        let logged = events.filter { !$0.isAnomaly }.sorted { $0.timestamp < $1.timestamp }
 
+        // --- What holds now: replay starts, changes and stops in order ---
+        struct Open {
+            let name: String
+            var dose: String?
+            let since: Date
+            var notes: [String] = []
+        }
+        enum Kind: CaseIterable { case medication, supplement, condition, illness, injury, allergy }
+        var open: [Kind: [Open]] = [:]
+        func same(_ a: String, _ b: String) -> Bool {
+            let a = a.lowercased(), b = b.lowercased()
+            return a.contains(b) || b.contains(a)
+        }
+        func start(_ kind: Kind, _ name: String?, _ event: TimelineEvent, dose: String? = nil, notes: [String] = []) {
+            guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return }
+            open[kind, default: []].removeAll { same($0.name, name) }
+            open[kind, default: []].append(Open(name: name, dose: dose, since: event.timestamp, notes: notes))
+        }
+        func close(_ kinds: [Kind], _ name: String?) {
+            guard let name, !name.isEmpty else { return }
+            for kind in kinds { open[kind]?.removeAll { same($0.name, name) } }
+        }
+        for e in logged {
+            let d = e.data
+            switch e.eventType {
+            case .medicationStarted: start(.medication, d["name"], e, dose: d["dosage"])
+            case .supplementStarted: start(.supplement, d["name"], e, dose: d["dosage"])
+            case .medicationStopped, .supplementStopped: close([.medication, .supplement], d["name"])
+            case .medicationDosageChanged:
+                guard let name = d["name"], !name.isEmpty else { break }
+                let note = "dose changed \(LumaDate.day(e.timestamp, calendar: calendar))"
+                if let kind = [Kind.medication, .supplement].first(where: { open[$0]?.contains { same($0.name, name) } ?? false }),
+                   let i = open[kind]?.firstIndex(where: { same($0.name, name) }) {
+                    open[kind]![i].dose = d["newDosage"] ?? open[kind]![i].dose
+                    open[kind]![i].notes.append(note)
+                } else {
+                    start(.medication, name, e, dose: d["newDosage"], notes: [note])
+                }
+            case .conditionDiagnosed: start(.condition, d["condition"], e)
+            case .conditionResolved: close([.condition], d["condition"])
+            case .conditionImproved:
+                if let c = d["condition"], let i = open[.condition]?.firstIndex(where: { same($0.name, c) }) {
+                    open[.condition]![i].notes.append("improved \(LumaDate.day(e.timestamp, calendar: calendar))")
+                }
+            case .illnessStarted: start(.illness, d["illness"], e, dose: d["severity"])
+            case .illnessResolved: close([.illness], d["illness"])
+            case .injuryOccurred: start(.injury, d["injury"], e, dose: d["severity"])
+            case .injuryResolved, .injuryHealed: close([.injury], d["injury"])
+            case .allergyAdded: start(.allergy, d["allergen"], e, dose: d["severity"].map { "(\($0))" })
+            default: break
+            }
+        }
+        let headings: [Kind: (title: String, verb: String)] = [
+            .medication: ("Current medications", "since"), .supplement: ("Current supplements", "since"),
+            .condition: ("Ongoing conditions", "diagnosed"), .illness: ("Ongoing illnesses", "since"),
+            .injury: ("Ongoing injuries", "since"), .allergy: ("Allergies", "logged"),
+        ]
         var lines: [String] = []
-
-        // --- Active medications (started, not stopped) ---
-        let stoppedMedNames = Set(
-            events.filter { $0.eventType == .medicationStopped }.compactMap { $0.data["name"] }
-        )
-        let activeMeds = events
-            .filter { $0.eventType == .medicationStarted }
-            .filter { guard let name = $0.data["name"] else { return false }; return !stoppedMedNames.contains(name) }
-        if !activeMeds.isEmpty {
-            lines.append("Active medications:")
-            for e in activeMeds.prefix(10) {
-                var line = "  • \(e.data["name"] ?? "unknown")"
-                if let dose = e.data["dosage"], !dose.isEmpty { line += " \(dose)" }
-                line += " (since \(LumaDate.day(e.timestamp)), \(LumaDate.age(of: e.timestamp, now: now)))"
-                lines.append(line)
-            }
-        }
-
-        // --- Active supplements (started, not stopped) ---
-        let stoppedSuppNames = Set(
-            events.filter { $0.eventType == .supplementStopped }.compactMap { $0.data["name"] }
-        )
-        let activeSupps = events
-            .filter { $0.eventType == .supplementStarted }
-            .filter { guard let name = $0.data["name"] else { return false }; return !stoppedSuppNames.contains(name) }
-        if !activeSupps.isEmpty {
-            lines.append("Active supplements:")
-            for e in activeSupps.prefix(10) {
-                var line = "  • \(e.data["name"] ?? "unknown")"
-                if let dose = e.data["dosage"], !dose.isEmpty { line += " \(dose)" }
-                line += " (since \(LumaDate.day(e.timestamp)), \(LumaDate.age(of: e.timestamp, now: now)))"
-                lines.append(line)
-            }
-        }
-
-        // --- Active conditions (diagnosed, not resolved) ---
-        let resolvedConditions = Set(
-            events.filter { $0.eventType == .conditionResolved }.compactMap { $0.data["condition"] }
-        )
-        let activeConditions = events
-            .filter { $0.eventType == .conditionDiagnosed }
-            .filter { guard let c = $0.data["condition"] else { return false }; return !resolvedConditions.contains(c) }
-        if !activeConditions.isEmpty {
-            lines.append("Active conditions:")
-            for e in activeConditions.prefix(10) {
-                lines.append("  • \(e.data["condition"] ?? "unknown") (diagnosed \(LumaDate.day(e.timestamp)), \(LumaDate.age(of: e.timestamp, now: now)))")
-            }
-        }
-
-        // --- Allergies ---
-        let allergies = events.filter { $0.eventType == .allergyAdded }
-        if !allergies.isEmpty {
-            lines.append("Allergies:")
-            for e in allergies.prefix(10) {
-                var line = "  • \(e.data["allergen"] ?? "unknown")"
-                if let sev = e.data["severity"], !sev.isEmpty { line += " (\(sev))" }
-                lines.append(line)
+        for kind in Kind.allCases {
+            guard let items = open[kind], !items.isEmpty, let heading = headings[kind] else { continue }
+            lines.append("\(heading.title):")
+            for item in items.suffix(10) {
+                let label = [item.name, item.dose].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ")
+                let notes = item.notes.isEmpty ? "" : "; " + item.notes.joined(separator: "; ")
+                lines.append("  • \(label) (\(heading.verb) \(when(item.since))\(notes))")
             }
         }
 
         // --- Recent anomalies (last 30 days) ---
-        let recentAnomalies = events
-            .filter { $0.isAnomaly && $0.timestamp >= thirtyDaysAgo }
-            .sorted { $0.timestamp > $1.timestamp }
-        if !recentAnomalies.isEmpty {
-            lines.append("Recent health anomalies (last 30 days):")
-            let dateFmt = DateFormatter()
-            dateFmt.dateStyle = .medium
-            dateFmt.timeStyle = .none
-            for e in recentAnomalies.prefix(5) {
+        let monthAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+        let anomalies = events.filter { $0.isAnomaly && $0.timestamp >= monthAgo }.sorted { $0.timestamp > $1.timestamp }
+        if !anomalies.isEmpty {
+            lines.append("Health anomalies, last 30 days:")
+            for e in anomalies.prefix(summary ? 3 : 5) {
                 let metric = e.metricType ?? "unknown metric"
                 let dir = e.direction.map { " (\($0))" } ?? ""
                 let dev = e.deviationPct.map { String(format: " %.0f%% vs baseline", $0) } ?? ""
-                lines.append("  • \(dateFmt.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp, now: now))): \(metric) anomaly\(dir)\(dev)")
+                lines.append("  • \(when(e.timestamp)): \(metric) anomaly\(dir)\(dev)")
             }
         }
 
-        // --- Recent significant events (last 90 days) ---
-        let significantTypes: Set<TimelineEventType> = [
-            .labResults, .surgeryProcedure, .surgeryCompleted, .procedureCompleted,
-            .lifestyleChange, .dietChange, .exerciseChange, .custom, .generalNote
-        ]
-        let recentSignificant = events
-            .filter { significantTypes.contains($0.eventType) && $0.timestamp >= ninetyDaysAgo }
-            .sorted { $0.timestamp > $1.timestamp }
-        if !recentSignificant.isEmpty {
-            lines.append("Recent significant events (last 90 days):")
-            let dateFmt = DateFormatter()
-            dateFmt.dateStyle = .medium
-            dateFmt.timeStyle = .none
-            for e in recentSignificant.prefix(5) {
-                let title = e.titleText
-                if let detail = e.subtitleText, !detail.isEmpty, detail != title {
-                    lines.append("  • \(dateFmt.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp, now: now))): \(title) — \(detail)")
-                } else {
-                    lines.append("  • \(dateFmt.string(from: e.timestamp)) (\(LumaDate.age(of: e.timestamp, now: now))): \(title)")
-                }
-            }
+        // --- Logged events, newest first, up to the cap ---
+        let newestFirst = logged.reversed().filter { !timelineDetail($0).isEmpty || $0.eventType != .custom }
+        let listed = summary ? newestFirst.filter { $0.timestamp >= monthAgo } : Array(newestFirst)
+        let header = "User health timeline (events the user logged, each with its date and age):"
+        // Room for the header, a section title and the "not listed" line.
+        var used = lines.reduce(header.count + 160) { $0 + $1.count + 1 }
+        var shown = 0
+        var eventLines: [String] = []
+        for e in listed.prefix(summary ? 5 : 30) {
+            let detail = timelineDetail(e)
+            let line = "  • \(when(e.timestamp)): \(timelineLabel(e))\(detail.isEmpty ? "" : " — \(detail)")"
+            guard used + line.count + 1 <= timelineCharCap else { break }
+            eventLines.append(line)
+            used += line.count + 1
+            shown += 1
+        }
+        if !eventLines.isEmpty {
+            lines.append(summary ? "Events, last 30 days:" : "Events, newest first:")
+            lines += eventLines
+        }
+        let omitted = newestFirst.count - shown
+        if omitted > 0, let oldest = newestFirst.last {
+            lines.append("(\(omitted) \(shown > 0 ? "earlier " : "")logged events, back to \(LumaDate.day(oldest.timestamp, calendar: calendar)), aren't listed here.)")
         }
 
         guard !lines.isEmpty else { return "" }
-        lines.insert("User health timeline:", at: 0)
+        lines.insert(header, at: 0)
         return lines.joined(separator: "\n")
+    }
+
+    /// The things the user logged by name (medications, conditions, injuries…),
+    /// so a question naming one ("since the creatine") reaches the full timeline.
+    static func timelineNames(_ events: [TimelineEvent]) -> [String] {
+        let keys = ["name", "condition", "injury", "illness", "procedure", "allergen"]
+        return Array(Set(events.flatMap { e in keys.compactMap { e.data[$0] } }))
+    }
+
+    /// "Injury Occurred", or a custom event's own title.
+    private static func timelineLabel(_ e: TimelineEvent) -> String {
+        e.eventType == .custom ? e.titleText : e.eventType.displayName
+    }
+
+    /// What the user logged for an event, in a line: the thing itself, its
+    /// details, then notes, plus any field this app doesn't know.
+    static func timelineDetail(_ e: TimelineEvent) -> String {
+        var data = e.data.compactMapValues { v -> String? in
+            let t = v.trimmingCharacters(in: .whitespacesAndNewlines)
+            return t.isEmpty ? nil : t
+        }
+        if e.eventType == .custom, e.titleText != e.eventType.displayName {
+            data = data.filter { $0.value != e.titleText }
+        }
+        var parts: [String] = []
+        func take(_ key: String) -> String? { data.removeValue(forKey: key) }
+        switch e.eventType {
+        case .bloodPressureRecorded:
+            if let s = take("systolic"), let d = take("diastolic") { parts.append("\(s)/\(d) mmHg") }
+        case .weightRecorded:
+            if let w = take("weight") { parts.append([w, take("unit")].compactMap { $0 }.joined(separator: " ")) }
+        case .medicationDosageChanged:
+            if let name = take("name") { parts.append(name) }
+            let previous = take("previousDosage"), next = take("newDosage")
+            if let next { parts.append(previous.map { "\($0) → \(next)" } ?? "now \(next)") }
+        default: break
+        }
+        let ordered = ["title", "name", "condition", "injury", "illness", "procedure", "allergen", "panel",
+                       "change", "event", "height", "dosage", "severity", "symptoms", "reaction", "highlight",
+                       "diagnosedBy", "provider", "reason", "duration", "details"]
+        parts += ordered.compactMap { take($0) }
+        let notes = take("notes")
+        parts += data.keys.sorted().map { "\($0): \(data[$0]!)" }
+        if let notes { parts.append(notes.count > 160 ? String(notes.prefix(157)) + "…" : notes) }
+        return parts.joined(separator: "; ")
     }
 
     // MARK: - Trend Computation
