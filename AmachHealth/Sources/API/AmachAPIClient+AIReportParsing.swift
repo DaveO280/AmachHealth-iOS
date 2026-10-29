@@ -21,6 +21,9 @@ extension AmachAPIClient {
         let success: Bool
         let reports: [ParsedReportSummary]?
         let error: String?
+        /// On failure: enclave_busy, ai_credit_exhausted, e2ee_failed, ...
+        let code: String?
+        let resetsAt: String?
         let diagnostics: ParseDiagnostics?
     }
 
@@ -130,22 +133,33 @@ extension AmachAPIClient {
     /// Parse PDF text using the website's AI pipeline (private enclave
     /// models, with the server's own parser as its fallback). Uses the long
     /// parse session; a big lab report takes about three minutes.
+    ///
+    /// With `PrivateReportParsing.isEnabled` the same pipeline runs on the
+    /// phone instead (DeviceReportParser) and every model call is end to end
+    /// encrypted; the text never goes to the website. No server fallback.
+    /// Gut reports still go to the website (`serverOnlyTiers`).
     func parseReportWithAI(
         text: String,
         reportType: String? = nil,
         sourceName: String? = nil
     ) async throws -> AIParseOutcome {
-        let request = ParseReportRequest(
-            text: text,
-            reportType: reportType,
-            sourceName: sourceName
-        )
-
-        let response: ParseReportResponse = try await post(
-            path: "/api/health/parse-report",
-            body: request,
-            using: parseSession
-        )
+        let response: ParseReportResponse
+        if try await Self.parsesOnDevice(text: text, reportType: reportType) {
+            let data = try await DeviceReportParser.shared.parse(
+                text: text, reportType: reportType, sourceName: sourceName)
+            response = try Self.decodeDeviceParse(data)
+        } else {
+            let request = ParseReportRequest(
+                text: text,
+                reportType: reportType,
+                sourceName: sourceName
+            )
+            response = try await post(
+                path: "/api/health/parse-report",
+                body: request,
+                using: parseSession
+            )
+        }
 
         guard response.success, let reports = response.reports, let first = reports.first else {
             if let error = response.error {
@@ -168,5 +182,29 @@ extension AmachAPIClient {
             report = nil
         }
         return AIParseOutcome(report: report, diagnostics: response.diagnostics)
+    }
+
+    /// Encrypted on the phone, unless the flag is off or the report needs a
+    /// tier the encrypted path can't serve yet (gut reports, for now).
+    private static func parsesOnDevice(text: String, reportType: String?) async throws -> Bool {
+        guard PrivateReportParsing.isEnabled else { return false }
+        let tiers = try await DeviceReportParser.shared.tiers(text: text, reportType: reportType)
+        return tiers.isDisjoint(with: PrivateReportParsing.serverOnlyTiers)
+    }
+
+    /// The device parser answers with the route's body but no HTTP status:
+    /// its failures become the errors post() throws for the route's.
+    private static func decodeDeviceParse(_ data: Data) throws -> ParseReportResponse {
+        let response = try JSONDecoder().decode(ParseReportResponse.self, from: data)
+        guard !response.success else { return response }
+        switch response.code {
+        case APIError.enclaveBusyCode:
+            throw APIError.enclaveBusy
+        case APIError.aiCreditExhaustedCode:
+            throw APIError.aiCreditExhausted(
+                resetsAt: response.resetsAt.flatMap { ISO8601DateFormatter.withFractionalSeconds.date(from: $0) })
+        default:
+            throw APIError.requestFailed(response.error ?? "Parse failed")
+        }
     }
 }

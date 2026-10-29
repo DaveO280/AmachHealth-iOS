@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5BABE2CEFBEFEE746E8CF797 /* ReportParseGoldenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE28DB5FF16ACB3DD4CCD /* ReportParseGoldenTests.swift */; };
+		5BABE2B71554D27DE0408A0E /* DeviceReportParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2837943B8620716EBFA /* DeviceReportParserTests.swift */; };
+		5BABE2E24050D05B5869306A /* ReportParserBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2CB9ADAD37B0B3AE74C /* ReportParserBundle.swift */; };
+		5BABE2BAD45885FF249C9DB5 /* DeviceReportParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2F95CB814F37093FEE7 /* DeviceReportParser.swift */; };
 		5BABE2EAFD96CCBA8E4547FD /* LumaPromptCases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE22E480D44BA3FBF4543 /* LumaPromptCases.swift */; };
 		5BABE2E70A177AACA822BBF1 /* LumaPrivateChatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2439D0A9226AF40282F /* LumaPrivateChatTests.swift */; };
 		5BABE2FB19BFC0AD5F053F4B /* LumaPromptAssemblerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BABE2E9624CE1CD6E5EE105 /* LumaPromptAssemblerTests.swift */; };
@@ -159,6 +163,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		5BABE28DB5FF16ACB3DD4CCD /* ReportParseGoldenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ReportParseGoldenTests.swift; path = AmachHealth/Tests/ReportParseGoldenTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2837943B8620716EBFA /* DeviceReportParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeviceReportParserTests.swift; path = AmachHealth/Tests/DeviceReportParserTests.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2CB9ADAD37B0B3AE74C /* ReportParserBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ReportParserBundle.swift; path = AmachHealth/Sources/Services/ReportParsing/ReportParserBundle.swift; sourceTree = SOURCE_ROOT; };
+		5BABE2F95CB814F37093FEE7 /* DeviceReportParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeviceReportParser.swift; path = AmachHealth/Sources/Services/ReportParsing/DeviceReportParser.swift; sourceTree = SOURCE_ROOT; };
 		5BABE22E480D44BA3FBF4543 /* LumaPromptCases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaPromptCases.swift; path = AmachHealth/Tests/Fixtures/LumaPromptCases.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2439D0A9226AF40282F /* LumaPrivateChatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaPrivateChatTests.swift; path = AmachHealth/Tests/LumaPrivateChatTests.swift; sourceTree = SOURCE_ROOT; };
 		5BABE2E9624CE1CD6E5EE105 /* LumaPromptAssemblerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LumaPromptAssemblerTests.swift; path = AmachHealth/Tests/LumaPromptAssemblerTests.swift; sourceTree = SOURCE_ROOT; };
@@ -440,6 +448,8 @@
 				5BABE2E9624CE1CD6E5EE105 /* LumaPromptAssemblerTests.swift */,
 				5BABE2439D0A9226AF40282F /* LumaPrivateChatTests.swift */,
 				5BABE22E480D44BA3FBF4543 /* LumaPromptCases.swift */,
+				5BABE2837943B8620716EBFA /* DeviceReportParserTests.swift */,
+				5BABE28DB5FF16ACB3DD4CCD /* ReportParseGoldenTests.swift */,
 			);
 			name = Tests;
 			path = AmachHealth/Tests;
@@ -475,6 +485,8 @@
 				5BABE2F5C1D0661E794C4B8C /* LumaPromptAssembler.swift */,
 				5BABE2579C54792EE1024D61 /* LumaPromptConfig+Bundled.swift */,
 				5BABE275582ECB599BEBEB18 /* LumaPrivateChat.swift */,
+				5BABE2F95CB814F37093FEE7 /* DeviceReportParser.swift */,
+				5BABE2CB9ADAD37B0B3AE74C /* ReportParserBundle.swift */,
 			);
 			name = Sources;
 			sourceTree = "<group>";
@@ -824,6 +836,8 @@
 				5BABE2899468CDDA662BD5E1 /* LumaPromptAssembler.swift in Sources */,
 				5BABE26A3CDC27E7B67366D5 /* LumaPromptConfig+Bundled.swift in Sources */,
 				5BABE2B14B6E65EED6FD573D /* LumaPrivateChat.swift in Sources */,
+				5BABE2BAD45885FF249C9DB5 /* DeviceReportParser.swift in Sources */,
+				5BABE2E24050D05B5869306A /* ReportParserBundle.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -870,6 +884,8 @@
 				5BABE2FB19BFC0AD5F053F4B /* LumaPromptAssemblerTests.swift in Sources */,
 				5BABE2E70A177AACA822BBF1 /* LumaPrivateChatTests.swift in Sources */,
 				5BABE2EAFD96CCBA8E4547FD /* LumaPromptCases.swift in Sources */,
+				5BABE2B71554D27DE0408A0E /* DeviceReportParserTests.swift in Sources */,
+				5BABE2CEFBEFEE746E8CF797 /* ReportParseGoldenTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
