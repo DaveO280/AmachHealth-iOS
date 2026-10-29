@@ -177,7 +177,7 @@ The wallet encryption key and its derivation signature never leave the phone (`O
 | `POST /api/storj` | `storage/list-raw`, `storage/download-raw` | Keyless reads of the legacy bucket (one-time import) |
 | `POST /api/storj` | `storage/delete-raw` | Legacy cleanup after a verified backup (backup session token, owner-checked) |
 | `POST /api/ai/chat` | — | Luma chat (health context goes to private enclave models) |
-| `POST /api/health/parse-report` | — | AI parsing of uploaded PDF text |
+| `POST /api/health/parse-report` | — | AI parsing of uploaded PDF text (with `LumaE2EEParse` on, DEXA and lab reports parse on the phone instead: `DeviceReportParser`, encrypted through `/api/ai/e2ee`) |
 | `POST /api/attestations` | — | User's attestations (address only) |
 
 `/api/merkle/genesis` and `/api/proofs/*` are off (`FeatureFlags.zkServerFlowsDisabled`) until Phase 6.

@@ -68,6 +68,9 @@ public actor VeniceE2EEClient {
     private let session: URLSession
     private let attestationTTL: TimeInterval
     private var cache: [String: AttestedModelKey] = [:]
+    /// Attestations in progress, so parallel requests (a report's sections)
+    /// share one per model instead of each attesting it again.
+    private var attesting: [String: Task<AttestedModelKey, Error>] = [:]
 
     /// Diagnostics from the last request (counts only, no content).
     public private(set) var lastStats = Stats()
@@ -110,7 +113,12 @@ public actor VeniceE2EEClient {
         if let cached = cache[model], Date().timeIntervalSince(cached.verifiedAt) < attestationTTL {
             return cached
         }
-        let key = try await verifier.attest(model: model, session: session)
+        if let pending = attesting[model] { return try await pending.value }
+        let verifier = self.verifier, session = self.session
+        let task = Task { try await verifier.attest(model: model, session: session) }
+        attesting[model] = task
+        defer { attesting[model] = nil }
+        let key = try await task.value
         cache[model] = key
         return key
     }

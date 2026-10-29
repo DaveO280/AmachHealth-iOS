@@ -401,7 +401,7 @@ through Amach). Captures and scan scripts are in the session notes folder.
 |---|---|---|
 | 4a | Relay hardened (auth, rate limit, size caps, metrics). `LumaPromptAssembler` + prompt config endpoint. `ChatService` on `VeniceE2EEClient` behind a flag. Key-rotation retry. Stream rendering in the chat UI | ~1 wk |
 | 4b | Intel PCS collateral (CRL/TCB) on device. Measurement change alerting. Settings "Private AI: verified enclave" detail view | 3–4 d |
-| 4c | Parse pipeline in JavaScriptCore (`amach-parsers.js` built in website CI, `ReportParseEngine`). Then retire `/api/health/parse-report` for the app. Memory/agent tiers through the relay. Inventory of the remaining server Venice callers | ~1–1.5 wk |
+| 4c | Parse pipeline in JavaScriptCore (`report-parser.js`, `DeviceReportParser`): done for DEXA and lab reports (below); gut reports wait on E2EE capacity for GLM-P. Then retire `/api/health/parse-report` for the app. Memory/agent tiers through the relay. Inventory of the remaining server Venice callers | ~1–1.5 wk |
 | 4d | Remove the plaintext routes for the app (server refuses plaintext AI). mitmproxy regression capture in CI-style script (as for Phase 3) | 2 d |
 
 Decided 2026-10-23: residual-risk option 1 for v1 (product copy: "Amach's
@@ -433,6 +433,59 @@ Not done / next: Privy-signed relay auth wasn't exercised on the simulator
 (no wallet session there; a DEBUG `AMACH_E2EE_RELAY_TOKEN` override was
 used); rate limits are per instance; memory extraction still uses the chat
 tier (as `/api/ai/chat` does today).
+
+### Phase 4c, report parsing (2026-10-28)
+
+Done for DEXA and lab reports, behind `LumaE2EEParse` (off by default;
+`-LumaE2EEParse YES` in Debug):
+
+- Website: `src/utils/reportParsers` gets a pluggable model transport
+  (`setReportParseTransport`). `scripts/build-device-parser.mjs` bundles the
+  parser with `device/entry.ts` (esbuild, 160 KB IIFE, no Node globals),
+  which routes every model call to the native bridge. The relay sends the
+  parse path's `disable_thinking` for parse tiers (reasoning_effort "low" on
+  gpt-oss and GLM-P), counts parsing against its own per-wallet budget
+  (40/min, 300/day), and now cancels the Venice call when the phone
+  disconnects.
+- iOS: `DeviceReportParser` runs the bundle in JavaScriptCore (shipped as
+  `ReportParserBundle.swift` via `scripts/sync-report-parser.py`, hash
+  checked, never loaded from the network). `E2EEReportParseTransport`
+  encrypts each call with `VeniceE2EEClient`, streaming. `VeniceE2EEClient`
+  now shares one attestation per model across parallel requests.
+- An encrypted call that fails for any reason other than a busy enclave or
+  used-up credit is fatal (`e2ee_failed`): no regex fallback, no server
+  fallback.
+- Same code as the server, proven: `scripts/device-parser-replay.ts`
+  (website) recorded the server path's model replies for a real DEXA, lab
+  panel and gut report, then replayed them through the source and through
+  the bundle in a bare VM context. All three results were byte-identical.
+- Golden runs on the simulator (`ReportParseGoldenTests`, the app's own
+  PDFKit text, 3 runs per path, local relay): DEXA 49 values per run, phone
+  vs server pairs differ by 0-2 values, same as server vs server. Lab panel:
+  68 markers every run on both paths, every numeric value identical in all
+  6 runs; the differences are flag / range / unit text that varies within
+  each path too (`scripts/compare-report-parses.py`). DEXA 17-24 s per parse
+  on the phone (server 8 s), lab panel 30-43 s (server 15-20 s).
+- Capture of both hops (app→relay, relay→Venice, decompressed): no report
+  text on either; only envelope matches (venice_parameters, cost, token
+  signature, header versions). The same scan finds thousands of hits on the
+  server path.
+
+**Gut reports stay on `/api/health/parse-report`** (`serverOnlyTiers`,
+chosen up front from the report's type with the parser's own detector, not
+as a retry). They use the parseLong tier (e2ee-glm-5-3-p), and encrypted
+calls to it don't fit the relay's 300 s limit: alone a call took 30-131 s,
+but the enclave serves about one call at a time (three in flight: 370 s
+each; all 14 sections at once: up to 512 s, six past 300 s), and the
+species section, which writes hundreds of rows, ran past 10 minutes even
+alone. The server path does all 14 in under 2 minutes, because plaintext
+requests spread over Venice's pool while an encrypted request goes to the
+one enclave whose key it was sealed to. Revisit when Venice adds E2EE
+capacity for GLM-P, or try another ECDSA-E2EE model for long tables.
+
+Still open: a real-device run (background suspension mid-parse, memory);
+backgrounding is unchanged from today's server path (a parse needs the app
+in the foreground).
 
 ## Side findings
 

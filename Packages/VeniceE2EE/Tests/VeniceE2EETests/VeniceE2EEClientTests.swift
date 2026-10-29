@@ -103,6 +103,17 @@ final class VeniceE2EEClientTests: XCTestCase {
         }
     }
 
+    func testParallelRequestsShareOneAttestationPerModel() async throws {
+        let attester = FakeAttester(delay: 0.05)
+        let c = client(attester: attester)
+        try await withThrowingTaskGroup(of: AttestedModelKey.self) { group in
+            for _ in 0 ..< 8 { group.addTask { try await c.attestedKey(for: "e2ee-glm-5-3-p") } }
+            for try await _ in group {}
+        }
+        let attestations = await attester.count("e2ee-glm-5-3-p")
+        XCTAssertEqual(attestations, 1)
+    }
+
     func testEveryAttestationFailingSendsNothing() async throws {
         do {
             _ = try await reply(client(attester: FakeAttester(failing: true)))
@@ -152,12 +163,14 @@ private actor FakeAuthorizer: VeniceRelayAuthorizing {
 /// Flash on the other.
 final actor FakeAttester: VeniceModelAttesting {
     private let failing: Bool
+    private let delay: Double
     private var counts: [String: Int] = [:]
     private let phala: Data
     private let nearAI: Data
 
-    init(failing: Bool = false) {
+    init(failing: Bool = false, delay: Double = 0) {
         self.failing = failing
+        self.delay = delay
         phala = try! P256K.KeyAgreement.PrivateKey(format: .uncompressed).publicKey.uncompressedRepresentation
         nearAI = try! P256K.KeyAgreement.PrivateKey(format: .uncompressed).publicKey.uncompressedRepresentation
     }
@@ -166,6 +179,7 @@ final actor FakeAttester: VeniceModelAttesting {
 
     func attest(model: String, session: URLSession) async throws -> AttestedModelKey {
         counts[model, default: 0] += 1
+        if delay > 0 { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
         if failing { throw VeniceAttestationError.http(502) }
         return AttestedModelKey(model: model, publicKey: model == "e2ee-glm-5-3-p" ? phala : nearAI,
                                 signingAddress: "0x", teeProvider: nil, mrTD: "", rtmrs: [], verifiedAt: Date())
